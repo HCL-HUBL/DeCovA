@@ -1,4 +1,4 @@
-package CNV_tool;
+package Bio::NGS::HCL::DeCovA::CNV_tool;
 
 ##version1.3
 

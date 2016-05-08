@@ -11,6 +11,7 @@
 #This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
+our $VERSION="1.4.1d";
 
 use warnings;
 use strict;
@@ -19,7 +20,7 @@ use File::Basename;
 use File::Find;
 use Cwd 'abs_path';
 use lib dirname(abs_path($0));
-use CNV_tool;
+use Bio::NGS::HCL::DeCovA::CNV_tool;
 
 
 ############
@@ -97,7 +98,7 @@ unless(%opt) { usage(); }
 
 if (exists $opt{help}) { usage(); }
 
-if (exists $opt{version}) { die "1.4.1d\n"; }
+if (exists $opt{version}) { die "$VERSION\n"; }
 
 if(@ARGV) {
 	print"Invalid parameters:\n";
@@ -1560,14 +1561,14 @@ if ($CNV_tool) {
 
 
 	if ($fichier_cov) {
-		CNV_tool::CNV_reAnalyse($fichier_cov,$outdir,$nGraf,$fichier_sexe,\%CNV_opt);
+		Bio::NGS::HCL::DeCovA::CNV_tool::CNV_reAnalyse($fichier_cov,$outdir,$nGraf,$fichier_sexe,\%CNV_opt);
 		}
 	
 	else {
 	
 		mkdir "$outdir/CNV_analysis";
 
-		@hashSub = CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$mbq,$mmq,$refBedLines,\@ChromOrder,\%fai);
+		@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$mbq,$mmq,$refBedLines,\@ChromOrder,\%fai);
 		%cnv_Patients = %{$hashSub[0]};
 		%cnv_Results = %{$hashSub[1]};
 
