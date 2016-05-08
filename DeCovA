@@ -1,0 +1,4681 @@
+#!/usr/bin/perl
+
+#analyses bam files
+#at regions defined by a bed file
+#for genes overlappoing these regions, print depth line and not covered domains, at different thresholds
+#makes R graph
+
+#thomas Simonet, 2014
+
+
+
+use warnings;
+use strict;
+
+
+use File::Basename;
+use Getopt::Std;
+use File::Find;
+
+
+
+############
+#parameters:
+my%opts;
+getopt('fdsoOrbMiNmlLtcSRTXAapPnqgIh', \%opts);
+
+unless(%opts)
+	{ usage(); }
+foreach (keys%opts)
+	{
+	if ($_ =~ /h/)
+		{ usage(); }
+	if ($_ !~ /[fdsoOrbMiNmlLtcSRTXAapPnqgI]/) {
+		print "opt -$_ not recognized\n";
+		usage();
+		} 
+	}
+
+if(@ARGV) {
+	print"Invalid parameters:\n";
+	foreach(@ARGV) { print"\t$_\n"; }
+	die "(forgotten \"-\"?)\n";
+	}
+
+sub usage
+{
+die "usage:
+	-f: list of bam files, either command line (comma separated), or as a file (\".list\")
+	-d: directory where to find bam files (optional)
+	-s: suffix to add before opening bam files (optional)
+	-r: RefSeq file (required)
+	-b: bed file, used to analyse depth coverage
+	-M: mut file, used to plot known mutation: format: chr	pos(1-based)	info
+	-o: text outfile name (optional, default: covBySample.txt)
+	-O: out directory (optional ; default: folder named with date)
+	-i: list of of refseq genes/transcripts id, either command line (comma separated), or as a file (\".list\")
+	-N: enter Y for analysing also Non coding transcripts (default: no)
+	-t: depth thresholds, comma separated (at least 1 required)
+	-c: depth threshold below which graph will be printed (one of the thresholds in opt -t)
+	-m: max cov value when printing graph (optional)
+	-l: length to add out of exons, to inform on intron-exon junction (default: 20)
+	-L: enter Y for expanding length of analysed regions to bed coord, if -l < bed (default: no)
+	-S: enter N for not drawing space between regions (default: yes)
+	-R: enter N for not reversing regions if sens of transcript = (-) (default: yes)
+	-T: enter N for not performing graphSum (default: yes)
+	-X: enter N for not performing graphAllSample (default: yes)
+	-A: enter N for not performing graphBySample (default: yes)
+	-a: enter N for not printing All transcripts on same file, in graphBySample (default: yes)
+	-p: enter N for not printing, foreach file, depth at known mutations provided by opt -M (default: yes)
+	-P: enter N for not performing covPlots (default: yes)
+	-n: bin width for covPlot (default=10)
+	-q: max depth for covPlot (default=100)
+	-g: perform plots for regions extracted from genes coord, not only for bed intervals
+	-I: intersection covPlot (default: no; enter yes to perform)
+	-h: help\n";
+}
+
+unless ($opts{f} || $opts{d}) { die "requires a list of bam files to analysed (opt -f), or a directory where to find such files (opt -d)\n"; }
+#-d: directory
+my@dir = ();
+if ($opts{d}) {
+	if ($opts{d} =~ /.list$/) {
+		open(LIST, $opts{d}) || die "can't open file ".$opts{d}."\n";
+		while (my$line=<LIST>) {
+			unless ($line =~ /^\s*$/) {
+				chomp $line;
+				push (@dir, $line);
+				}
+			}
+		close LIST;
+		}
+	else
+		{ @dir = split(/,/, $opts{d}); }
+	foreach (@dir) {
+		unless( -d $_ ) 
+			{ die "$_ directory not found\n"; }
+		unless ($_ =~ /\/$/) { $_ .= "/"; } 
+		}
+	}
+#-f: files
+my$suff = "";
+if ($opts{s}) { 
+	$suff = $opts{s}; 
+	$suff =~ s/.bam$//;
+	}
+my(@Files);
+if ($opts{f}) {
+	if ($opts{f} =~ /.list$/) {
+		open(LIST, $opts{f}) || die "can't open file ".$opts{f}."\n";
+		while (my$line=<LIST>) {
+			unless ($line =~ /^\s*$/) {
+				chomp $line;
+				push (@Files, $line);
+				}
+			}
+		close LIST;
+		}
+	else
+		{ @Files = split(/,/, $opts{f}); }
+	}
+else { 
+	foreach my$dir(@dir) {
+		find(\&subDir, $dir);
+		}
+	}
+sub subDir
+{
+my$file = $_;
+if ($suff) {
+	if (-f $_ && $_=~/$suff.bam$/) 
+		{ push(@Files, $File::Find::name); }
+	}
+
+else {
+	if (-f $_ && $_=~/.bam$/) 
+		{ push(@Files, $File::Find::name); }
+	}
+}
+print "file(s) to analysed:\n";
+my(%fName,%path);
+my$extenS = "$suff.bam";
+if (@Files) {
+	foreach (@Files) {
+		($fName{$_},$path{$_}) = fileparse($_,$extenS);
+		if ($opts{d} && $opts{f}) {
+			if (scalar@dir>1) { die "not possible to affect path to files if several paths specified\n"; }
+			else { $path{$_} = $dir[0]; }
+			}
+		if ( -f $path{$_}.$fName{$_}.$extenS ) { 
+			print "will process $path{$_}$fName{$_}$extenS\n";
+			}
+		else { die "$path{$_}$fName{$_}$extenS file not found\n"; }
+		}
+	}
+else { die "no .bam files found\n"; }
+	
+my$bedFile=$opts{b};
+unless ($bedFile || $opts{i} ) 
+	{ die ".bed file (opt -b) or list of genes or transcripts id required (opt -i)\n"; }
+my$bedName;
+if($bedFile) 
+	{ ($bedName,my$pathBed) = fileparse($bedFile,".bed"); }
+
+my$mutFile=$opts{M};
+
+my$outfile="cov_";
+if ($opts{o})
+	{ $outfile=$opts{o}; }
+
+my(@IDs,%IDs);
+if ($opts{i}) {
+	if ($opts{i} =~ /.list$/) {
+		open(LIST, $opts{i}) || die "can't open file ".$opts{i}."\n";
+		while (my$line=<LIST>) {
+			unless($line =~ /^\s*$/) {
+				chomp $line;
+				push(@IDs, $line);
+				}
+			}
+		close LIST;
+		}
+	else { @IDs = split(/,/,$opts{i}); }
+	foreach my$id(@IDs) { 
+		if ($id =~ /^NM_/)
+			{ $id =~ s/\.(\d+)$//; }
+		$IDs{$id} = 1;
+		}
+	@IDs=sort(keys%IDs);
+	print "Regions to analyse: \n";
+	foreach my$id(@IDs)
+		{ print "\t".$id."\n"; }
+	}
+
+my$nonCod = 0;
+if ((exists $opts{N}) && ($opts{N}=~/^Y$|^Yes$|^T$|^True$/i))
+	{ $nonCod = 1; }
+
+my$maxD = $opts{m};
+
+my$len=20;
+if ($opts{l})
+	{ $len=$opts{l}; }
+
+my$Expand = 0;
+if ((exists $opts{L}) && ($opts{L}=~/^Y$|^Yes$|^T$|^True$/i))
+	{ $Expand = 1; }
+
+my$spacer = 0;
+
+my$Rev = 1;
+if ((exists $opts{R}) && ($opts{R}=~/^N$|^No$|^F$|^False$/i)) 
+	{ $Rev=0; }
+my$All = 1;
+if ((exists $opts{a}) && ($opts{a}=~/^N$|^No$|^F$|^False$/i)) 
+	{ $All=0; }
+my$Sum = 1;
+if ((exists $opts{T}) && ($opts{T}=~/^N$|^No$|^F$|^False$/i)) 
+	{ $Sum=0; }
+my$allS = 1;
+if ((exists $opts{X}) && ($opts{X}=~/^N$|^No$|^F$|^False$/i)) 
+	{ $allS=0; }
+my$byS = 1;
+if ((exists $opts{A}) && ($opts{A}=~/^N$|^No$|^F$|^False$/i)) 
+	{ $byS=0; }
+
+my@Thresholds;
+if ($Sum || $allS || $byS) {
+	unless ($opts{t}) { die "at least 1 threshold value required (opt -t)\n"; }
+	@Thresholds = split(/,/, $opts{t});
+	@Thresholds = sort{$b<=>$a}@Thresholds;	#decroissant
+	}
+my$pThreshold = $Thresholds[-1];
+if ($opts{c}) {
+	if ($opts{c}=~/^N$|^No$|^F$|^False$/i)
+		{ $pThreshold=""; }
+	else {
+		my$ok=0;
+		foreach (@Thresholds) {
+			if ($opts{c}==$_) {
+				$pThreshold=$opts{c}; 
+				$ok=1;
+				}
+			}
+		unless ($ok) 
+			{ die "opt -c threshold value need to be 1 of those in opt -t\n"; }
+		}
+	}
+
+my$covMut = 1;
+if ((exists $opts{p}) && ($opts{p}=~/^N$|^No$|^F$|^False$/i)) 
+	{ $covMut=0; }
+
+my$covPlot = 1;
+if ((exists $opts{P}) && ($opts{P}=~/^N$|^No$|^F$|^False$/i)) 
+	{ $covPlot=0; }
+
+my$bin=10;
+if ($opts{n})
+	{ $bin = $opts{n}; }
+my$max2=100;
+if ($opts{q})
+	{ $max2 = $opts{q}; }
+my$interS=0;
+if ((exists $opts{I}) && ($opts{I}=~/^Y$|^Yes$|^T$|^True$/i))
+	{ $interS = 1; }
+my$coordPlot=0;
+if ((exists $opts{g}) && ($opts{g}=~/^Y$|^Yes$|^T$|^True$/i))
+	{ $coordPlot = 1; }
+
+my$ref=$opts{r};
+if ($Sum || $allS || $byS || $coordPlot)
+	{ unless ($ref) { die "RefSeq file required (opt -r)\n"; } }
+
+use POSIX qw/strftime/;
+my$outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); 
+if ($opts{O})
+	{ $outdir = $opts{O}; }
+unless ( -d $outdir) { mkdir($outdir); }
+if ($allS || $byS) { 
+	foreach (@Files)
+		{ mkdir("$outdir/cov\_$fName{$_}"); }
+	}
+if ($allS || $Sum)
+	{ mkdir("$outdir/cov_All"); }
+
+###################
+#Job 1:find coordinates (genes, transcripts, bed, mut)
+
+#if bedFile provided:
+my(%Bed);	#$Bed{$chr}{$start} = $end , in 1-based
+if ($bedFile)
+	{ 
+	print "read $bedFile\n"; 
+	%Bed = readBed($bedFile);
+	foreach my$chr (keys%Bed)
+		{ %{ $Bed{$chr} } = merge(\%{ $Bed{$chr} }); }
+	printBed("original",\%Bed);
+	}
+
+#if file of known mutations provided (in 1-based coordinates)
+my(%Mut);
+if ($mutFile) { 
+	print "read $mutFile\n"; 
+	%Mut = readMut($mutFile);		#$Mut{$chr}{$startMut} = $infoMut
+	if($covMut)
+		{ depthMut($mutFile,\%path,$extenS,\@Files,\%fName,\%Mut,$outdir); }
+	}
+
+my%withChr;
+foreach (@Files) 
+	{ $withChr{$_} = "_0Chr.bed"; }
+my(@hashSub,%geneNM,%NMgene,%NMchr,%NMsens,%NMstartCod,%NMendCod,%Regions,%NM_Ex,@Genes,%RegBed,%allInterval,%NMlength,%Reg_00,%NM_Ex00,%NMstartCod00,%NMendCod00,%intron,%UTR,%Cod,%RegMut,%NMbed00,%NMmut00);
+#find and design transcripts:
+if ($Sum || $allS || $byS || !$bedFile || $coordPlot) 
+{
+
+#if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
+my$idFile="$outdir/id_List.txt";
+if ($opts{i})
+	{ gene2Ref($idFile,$ref,\@IDs)}
+else
+	{ @IDs = geneFromBed2($idFile,$ref,\%Bed) ; }
+
+#for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
+#and transform in 1-based coordinates
+#@hashSub = Id2Coord($ref,$len,$nonCod,\@IDs);
+@hashSub = Id2Coord($idFile,$len,$nonCod);
+#return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\@Genes,\%Bed);
+%geneNM = %{$hashSub[0]};		# @{ $geneNM{$gene} } = [$NM1,...]
+%NMgene = %{$hashSub[1]};		# $NMgene{$NM} = $gene;
+%NMchr = %{$hashSub[2]};		# %NMchr : key = NM, value = chr
+%NMsens = %{$hashSub[3]};		# %NMsens : key = NM, value = "+" or "-"
+%NMstartCod = %{$hashSub[4]};		# %NMstartCod : key = NM, value = start of coding sequence
+%NMendCod = %{$hashSub[5]};		# %NMendCod : key = NM, value = end of coding sequence
+%Regions = %{$hashSub[6]};		# $Regions{chr}{NM}{start of region} = end of region
+%NM_Ex = %{$hashSub[7]};		# %NM_Ex{NM}{start of region}{start of exon} = end of exon
+@Genes = @{$hashSub[8]};
+unless ($bedFile) { 
+	%Bed = %{$hashSub[9]};		#$Bed{$chr}{$start} = $end; 
+	foreach my$chr (keys%Bed)
+		{ %{ $Bed{$chr} } = merge(\%{ $Bed{$chr} }); }
+	}
+if ($allS || $byS || $Sum) {
+	my$nG=scalar(keys%geneNM);
+	if ($nG>200) {
+		print "$nG genes to analyse ; continue?(Y/n)\n";
+		my$doIt = <STDIN>; chomp $doIt;
+		if ($doIt =~ /^n$/i)
+			{ die "stop analysis\n"; }
+		}
+	}
+
+#changes Regions{gene} according to each NM (without -A N)
+if ($All) {
+	my%RegionG;
+	foreach my$gene (@Genes) {
+		my@NMs =  @{ $geneNM{$gene} };
+		my$chr = $NMchr{$NMs[0]};
+		print "change intervals for ".$gene." according to:\n\t".$NMs[0];
+		%{ $RegionG{$chr}{$gene} } = %{ $Regions{$chr}{$NMs[0]} };
+		my%geneNM_Ex;
+		%{ $geneNM_Ex{$NMs[0]} } = %{ $NM_Ex{$NMs[0]} };
+		for(my$i=1;$i<scalar@NMs;$i++) {
+			print "\t".$NMs[$i];
+			@hashSub = changeRegion1($NMs[$i],\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ $Regions{$chr}{$NMs[$i]} },\%{ $NM_Ex{$NMs[$i]} });
+			%{ $RegionG{$chr}{$gene} } = %{$hashSub[0]};
+			%geneNM_Ex = %{$hashSub[1]};
+			}
+		print "\n";
+		foreach (@NMs)
+			{ %{ $NM_Ex{$_} } = %{ $geneNM_Ex{$_} }; }
+		}
+	%Regions = %RegionG;
+	}
+
+#links bed intervals to Regions, eventually changes Regions according to bed (with -L Y)
+if ($Expand) {
+	print "change regions intervals according to bed\n";
+	if($All) {
+		foreach my$gene(@Genes)
+			{
+			my@NMs =  @{ $geneNM{$gene} };
+			my$chr = $NMchr{$NMs[0]};
+			@hashSub = changeRegion2G(\@NMs,\%{ $Regions{$chr}{$gene} },\%NM_Ex,\%{ $Bed{$chr} });
+			%{ $Regions{$chr}{$gene} } = %{$hashSub[0]};
+			%NM_Ex = %{$hashSub[1]};
+			%{ $RegBed{$gene} } = %{$hashSub[2]};	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
+			}
+		}
+	else {
+		foreach my$NM (keys%NM_Ex) {
+			@hashSub = changeRegion2N(\%{ $Regions{$NMchr{$NM}}{$NM} },\%{ $NM_Ex{$NM} },\%{ $Bed{$NMchr{$NM}} });
+			%{ $Regions{$NMchr{$NM}}{$NM} } = %{$hashSub[0]};
+			%{ $NM_Ex{$NM} } = %{$hashSub[1]};
+			%{ $RegBed{$NM} } = %{$hashSub[2]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
+			}
+		}
+	}
+else {
+	print "change bed intervals according to genes\n";
+	%RegBed = linkBed(\%Regions,\%Bed);
+	}
+
+#merge intervals from %Regions (for example, if several transcripts for the same gene)
+#% $Regions{chr}{NM}{exonstart} = exonend
+#% $allInterval{chr}{start of region} = end of region
+#print bed corresponding to regions
+%allInterval = mergeIntervals(%Regions);
+printBed("regions",\%allInterval);
+#my%withChr = withChr("regions",\%path,$extenS,\@Files,\%fName,$outdir);
+%withChr = bedToolsCov("regions",\%path,$extenS,\@Files,\%fName,$outdir,\%withChr);
+
+#eliminates $NM with no corresponding cov bed
+if ($All) { @hashSub = notAnalysedG(\@Genes,\%Regions,\%NM_Ex,\%RegBed); }
+else  { @hashSub = notAnalysedN(\@Genes,\%NMgene,\%Regions,\%NM_Ex,\%RegBed); }
+@Genes = @{$hashSub[0]};
+%Regions = %{$hashSub[1]};
+%NM_Ex = %{$hashSub[2]};
+%RegBed = %{$hashSub[3]};
+
+#transposition and splicing, for exons of transcripts: 
+#1st position of 1st exon = 0, 
+#for end of exon = x, start of next exon = x
+@hashSub = transposeReg($spacer,\%Regions);
+$spacer = $hashSub[0];
+%NMlength = %{$hashSub[1]};		#$NMlength{$NM} = $end of region (for start of region = 0)
+%Reg_00 = %{$hashSub[2]};		#$Reg_00{$NM}{start of region} = $end of region (for start of region = 0)
+		
+#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+#$NMstartCod00{$NM} = $start of coding sequence (for start of region = 0)
+#$NMendCod00{$NM} = $end of coding sequence (for start of region = 0)
+if ($All) {
+	foreach my$gene(keys%Reg_00) {
+		foreach my$NM (@{ $geneNM{$gene} }) {
+			@hashSub = transposeNM($NMstartCod{$NM},$NMendCod{$NM},\%{ $Regions{$NMchr{$NM}}{$gene} },\%{ $Reg_00{$gene} },\%{ $NM_Ex{$NM} }); 
+			$NMstartCod00{$NM} = $hashSub[0];
+			$NMendCod00{$NM} = $hashSub[1];
+			%{ $NM_Ex00{$NM} } = %{$hashSub[2]};
+			}
+		}
+	}
+else {
+	foreach my$NM (keys%Reg_00) { 
+		@hashSub = transposeNM($NMstartCod{$NM},$NMendCod{$NM},\%{ $Regions{$NMchr{$NM}}{$NM} },\%{ $Reg_00{$NM} },\%{ $NM_Ex{$NM} });
+		$NMstartCod00{$NM} = $hashSub[0];
+		$NMendCod00{$NM} = $hashSub[1]; 
+		%{ $NM_Ex00{$NM} } = %{$hashSub[2]};
+		}
+	}
+
+#make arrays for starts of non coding exons, before and after coding exons
+#and arrays for starts of extragenic regions, before and after exons
+if ($All)
+	{ @hashSub = designExons1(\@Genes,\%geneNM,\%Reg_00,\%NM_Ex00,\%NMstartCod00,\%NMendCod00); }
+else
+	{ @hashSub = designExons2(\%Reg_00,\%NM_Ex00,\%NMstartCod00,\%NMendCod00); }
+#return(\%introns,\%UTR,\%Cod);
+%intron = %{$hashSub[0]};	# $intron{$NM}{$startIntron} = $endIntron (for start of region = 0)
+%UTR = %{$hashSub[1]};	# $UTR{$NM}{$startUTR} = $endUTR (for start of region = 0)
+%Cod = %{$hashSub[2]};	# $Cod{$NM}{$startCod} = $endCod (for start of region = 0)
+
+if ($mutFile)
+	{ %RegMut = linkMut(\%Regions,\%Mut); }	#$RegMut{$NM}{$startReg}{$startMut} = $infoMut
+
+#$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+@hashSub = transposeBed(\%Regions,\%Reg_00,\%RegBed,\%RegMut);
+%NMbed00 = %{$hashSub[0]};
+%NMmut00 = %{$hashSub[1]};
+
+}
+
+
+###################
+#Job 2: bams analysis:
+
+#graphs:
+if ($allS || $byS || $Sum) {
+
+	#bedToolsCov("regions",\%path,$extenS,\@Files,\%fName,$outdir,\%withChr);
+
+	my%NMnotCov;	#$NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
+	my%NM_UC;	#NM_UC{$NM}{$threshold} = 1 if 1 region not cov
+	#foreach gene:
+	foreach my$gene (sort@Genes) {
+
+		print "analysing cov in $gene\n";
+		my@NMs =  @{ $geneNM{$gene} };
+		my$chr = $NMchr{$NMs[0]};
+		my$sens = $NMsens{$NMs[0]};
+
+		unless ($All) {
+			my%NMinterval;
+			foreach my$NM (@NMs)
+				{ %{ $NMinterval{$chr}{$NM} } = %{ $Regions{$chr}{$NM} }; }
+			my%tmp = mergeIntervals(%NMinterval);
+			%{ $Regions{$chr}{$gene} } = %{ $tmp{$chr} };
+			}
+
+		#initialyzes %NMCov: @{ $NMCov{$threshold}{$NM}{$nReg} } = [0 foreach pos of Regions{$NM}{$startReg}]
+		my%NMCov;
+		if ($Sum) {
+			foreach my$threshold (@Thresholds) {
+				if ($All) {
+					my$r=0; #idx of reg of $NM
+					foreach my$startReg (sort{$a<=>$b}keys%{ $Regions{$chr}{$gene} }) {
+						my$pos=$startReg;
+						while ($pos <= $Regions{$chr}{$gene}{$startReg} ) { 
+							push (@{ $NMCov{$gene}{$threshold}{$r} }, 0);
+							$pos++;
+							}
+						$r++;
+						}
+					}
+				else {
+					foreach my$NM (@NMs) {
+						my$r=0; #idx of reg of $NM
+						foreach my$startReg (sort{$a<=>$b}keys%{ $Regions{$chr}{$NM} }) {
+							my$pos=$startReg;
+							while ($pos <= $Regions{$chr}{$NM}{$startReg} ) { 
+								push (@{ $NMCov{$NM}{$threshold}{$r} }, 0);
+								$pos++;
+								}
+							$r++;
+							}
+						}
+					}
+				}
+			}
+		#foreach depth files from bedtools coveragedepth -d:
+		#intersection hash-intervals and gene-coordinates
+		#scan bedtools files : create a hash : cov foreach position in intervals from %allInterval: #$allCov{$chr}{$loc} = $cov
+		#create a hash : foreach NM, foreach exon, array of values for ordered positions
+		my%NMdepth;	# %NMcov: key = $file, value = %( key = $NM, value = %( key = $ex, value = @(cov foreach ordered bp of exon) ) )
+		my%covStart01;
+		my%covEnd01;
+		foreach my$file (@Files) {
+			print "\tfor bam $fName{$file}\n";
+			#scan bedtools file, and intersect with %allInterval (coding regions of selected genes) 
+			#create 2 hash : 
+			# - %allDepth: depth foreach position in intervals from %allInterval : $allDepth{$loc} = depth
+			# - %notCov: start and end of each not covered domain within %allInterval : $notCov{$start} = $end
+			@hashSub = intersect($file,$fName{$file},$outdir,$maxD,$chr,\@Thresholds,\%{ $Regions{$chr}{$gene} });
+			my%allDepth = %{ $hashSub[0] };
+			my%notCov = %{ $hashSub[1] };
+			my%notCovStarts = %{ $hashSub[2] };
+
+			#unless ( ((exists$opts{X}) && ($opts{X}eq"N")) && ((exists$opts{a}) && ($opts{a}eq"N")) )
+			if ($allS || $byS) {
+				#for depth-line :
+				#create a hash : foreach file, foreach NM, foreach exon, return an array of values for ordered positions
+				# %NMdepth: key = $file, value = %(key = $NM, value = %( key = $ex, value = @(cov foreach ordered bp of exon) ) )
+				#@{ $NMdepth{$file}{$NM}{$startReg} } = [ cov foreach ordered bp of exon ]
+				if ($All)
+					{ %{ $NMdepth{$gene}{$file} } = depthLine(\%{ $Regions{$chr}{$gene} },\%allDepth); }
+				else {
+					foreach my$NM (@NMs)
+						{ %{ $NMdepth{$NM}{$file} } = depthLine(\%{ $Regions{$chr}{$NM} },\%allDepth); }
+					}
+
+				#for cov-domains:
+				#intersections not covered regions and exons 
+				#starts and ends of not covered regions within exons
+				#$NMcovEnd{$NM}{$threshold}{$ex}{$notCovStart} = $notCovEnd;
+				#@{ $NMcovStart{$NM}{$threshold}{$ex} } = [ordered $notCovStarts]
+				my(%NMcovStart,%NMcovEnd);
+				if ($All) {
+					@hashSub = notCovDomains2(\@Thresholds,\%{ $Regions{$chr}{$gene} },\%notCov,\%notCovStarts);
+					%{ $NMcovStart{$gene} } = %{ $hashSub[0] } ;
+					%{ $NMcovEnd{$gene} } = %{ $hashSub[1] };
+					foreach my$NM (@NMs) {
+						@hashSub = notCovDomains1($All,$fName{$file},$outdir,$outfile,$gene,$chr,$NM,$NMsens{$NM},\@Thresholds,$pThreshold,\%{ $Regions{$chr}{$gene} },\%{ $NM_Ex{$NM} },\%notCov,\%notCovStarts,\%NMnotCov);
+						%NMnotCov = %{ $hashSub[0] } ;
+						%{ $NM_UC{$NM}{$fName{$file}} } = %{ $hashSub[3] } ;
+						}
+					}
+				else {
+					foreach my$NM (@NMs) {
+						@hashSub = notCovDomains1($All,$fName{$file},$outdir,$outfile,$gene,$chr,$NM,$NMsens{$NM},\@Thresholds,$pThreshold,\%{ $Regions{$chr}{$NM} },\%{ $NM_Ex{$NM} },\%notCov,\%notCovStarts,\%NMnotCov);
+						%NMnotCov = %{ $hashSub[0] } ;
+						%{ $NMcovStart{$NM} } = %{ $hashSub[1] } ;
+						%{ $NMcovEnd{$NM} } = %{ $hashSub[2] };
+						%{ $NM_UC{$NM}{$fName{$file}} } = %{ $hashSub[3] } ;
+						}
+					}
+
+				#transposition and splicing: 1st position of 1st exon = 1, 
+				#and	if end of exon = x, start of next exon = x+1
+				#$covEnd01{$file}{$NM}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+				#@{ $covStart01{$file}{$NM}{$threshold}{$ex} } = [ordered $notCovStarts00]
+				if ($All) {
+					@hashSub = transposeCov(\@Thresholds,\%{ $Regions{$chr}{$gene} },\%{ $Reg_00{$gene} },\%{ $NMcovStart{$gene} },\%{ $NMcovEnd{$gene} });
+					%{ $covStart01{$gene}{$file} } = %{ $hashSub[0] };
+					%{ $covEnd01{$gene}{$file} } = %{ $hashSub[1] };
+					}
+				else {
+					foreach my$NM (@NMs) {
+						@hashSub = transposeCov(\@Thresholds,\%{ $Regions{$chr}{$NM} },\%{ $Reg_00{$NM} },\%{ $NMcovStart{$NM} },\%{ $NMcovEnd{$NM} });
+						%{ $covStart01{$NM}{$file} } = %{ $hashSub[0] };
+						%{ $covEnd01{$NM}{$file} } = %{ $hashSub[1] };
+						}
+					}
+				}
+
+			#@{ $NMCov{$NM}{$threshold}{$nReg} } = [nber of covered samples foreach pos of Regions{$NM}{$startReg}]
+			#unless ((exists$opts{T}) && ($opts{T}eq"N"))
+			if ($Sum) {
+				if ($All) {
+					foreach my$threshold (@Thresholds)
+						{ %{ $NMCov{$gene}{$threshold} } = covByThreshold($threshold,\%{ $Regions{$chr}{$gene} },\%allDepth,\%{ $NMCov{$gene}{$threshold} }); }
+					}
+				else {
+					foreach my$NM (@NMs) {
+						foreach my$threshold (@Thresholds)
+							{ %{ $NMCov{$NM}{$threshold} } = covByThreshold($threshold,\%{ $Regions{$chr}{$NM} },\%allDepth,\%{ $NMCov{$NM}{$threshold} }); }
+						}
+					}
+				}
+			}
+
+		#foreach NM, find max cov, among all samples
+		my(%maxCovA,%maxCovS);	#$maxCov{$NM} = $maxDepth;
+		#unless ( ((exists$opts{X}) && ($opts{X}eq"N")) && ((exists$opts{a}) && ($opts{a}eq"N")) )
+		if ($allS || $byS) {
+			unless ($maxD) { 
+				if ($All) { 
+					@hashSub = maxCov(\@Files,\%{ $NMdepth{$gene} },\%{ $Reg_00{$gene} }); 
+					$maxCovA{$gene} = $hashSub[0];
+					%{ $maxCovS{$gene} } = %{$hashSub[1]};
+					}
+				else {
+					foreach my$NM (@NMs) { 
+						@hashSub = maxCov(\@Files,\%{ $NMdepth{$NM} },\%{ $Reg_00{$NM} });
+						$maxCovA{$NM} = $hashSub[0];
+						%{ $maxCovS{$NM} } = %{$hashSub[1]};
+						}
+					}
+				}
+			}
+
+		#reverse if sens "-"
+		if ($Rev) {
+			if ($sens eq "-") {
+				if ($All) {
+					@hashSub = ReverseGene1($Sum,$allS,$byS,$gene,$NMlength{$gene},\@Thresholds,\%{ $Reg_00{$gene} },\%{ $NMbed00{$gene} },\%{ $NMmut00{$gene} },\%{ $NMdepth{$gene} },\%{ $covEnd01{$gene} },\%{ $covStart01{$gene} },\%{ $NMCov{$gene} });
+					my%RegR = %{$hashSub[0]};
+					%{ $NMbed00{$gene} } = %{$hashSub[1]};
+					%{ $NMmut00{$gene} } = %{$hashSub[2]};
+					%{ $NMdepth{$gene} } = %{$hashSub[3]};
+					%{ $covEnd01{$gene} } = %{$hashSub[4]};
+					%{ $covStart01{$gene} } = %{$hashSub[5]};
+					%{ $NMCov{$gene} } = %{$hashSub[6]};
+					foreach my$NM (@NMs) {
+						@hashSub = ReverseGene2($NM,$NMlength{$gene},\@Thresholds,\%{ $Reg_00{$gene} },\%{ $NM_Ex00{$NM} },\%{ $intron{$NM} },\%{ $UTR{$NM} },\%{ $Cod{$NM} });
+						%{ $NM_Ex00{$NM} } = %{$hashSub[0]};
+						%{ $intron{$NM} } = %{$hashSub[1]};
+						%{ $UTR{$NM} } = %{$hashSub[2]};
+						%{ $Cod{$NM} } = %{$hashSub[3]};
+						}
+					%{ $Reg_00{$gene} } = %RegR;
+					}
+				else {
+					foreach my$NM (@NMs) {
+						@hashSub = ReverseNMs($Sum,$allS,$byS,$NM,$NMlength{$NM},\@Thresholds,\%{ $Reg_00{$NM} },\%{ $NM_Ex00{$NM} },\%{ $intron{$NM} },\%{ $UTR{$NM} },\%{ $Cod{$NM} },\%{ $NMbed00{$NM} },\%{ $NMmut00{$NM} },\%{ $NMdepth{$NM} },\%{ $covEnd01{$NM} },\%{ $covStart01{$NM} },\%{ $NMCov{$NM} });
+						%{ $Reg_00{$NM} } = %{$hashSub[0]};
+						%{ $NM_Ex00{$NM} } = %{$hashSub[1]};
+						%{ $intron{$NM} } = %{$hashSub[2]};
+						%{ $UTR{$NM} } = %{$hashSub[3]};
+						%{ $Cod{$NM} } = %{$hashSub[4]};
+						%{ $NMbed00{$NM} } = %{$hashSub[5]};
+						%{ $NMmut00{$NM} } = %{$hashSub[6]};
+						%{ $NMdepth{$NM} } = %{$hashSub[7]};
+						%{ $covEnd01{$NM} } = %{$hashSub[8]};
+						%{ $covStart01{$NM} } = %{$hashSub[9]};
+						%{ $NMCov{$NM} } = %{$hashSub[10]};
+						}
+					}
+				}
+			}
+
+		#@{ $NMCov{$NM}{$threshold}{$nReg} } = [nber of covered samples foreach pos of Regions{$NM}{$startReg}]
+		#$NMCovEnd{$NM}{$threshold}{$ex}{$start}=$end
+		#$NMCovVal{$NM}{$threshold}{$ex}{$start}=$value
+		my(%NMCovEnd,%NMCovVal);
+		if ($Sum) {
+			if ($All) {
+				@hashSub= covDomains(\@Thresholds,\%{ $Reg_00{$gene} },\%{ $NMCov{$gene} });
+				%{ $NMCovEnd{$gene} } = %{$hashSub[0]};		
+				%{ $NMCovVal{$gene} } = %{$hashSub[1]};
+				}
+			else {
+				foreach my$NM (@NMs) {
+					@hashSub= covDomains(\@Thresholds,\%{ $Reg_00{$NM} },\%{ $NMCov{$NM} });
+					%{ $NMCovEnd{$NM} } = %{$hashSub[0]};		
+					%{ $NMCovVal{$NM} } = %{$hashSub[1]};
+					}
+				}
+			}
+
+		#graphique R
+		my@colors=("gold","orange","orangered","red1","magenta4");
+
+		#graph covByGene
+		#unless ((exists$opts{T}) && ($opts{T}eq"N"))
+		if ($Sum) { 
+			if ($All)
+				{ graphByGeneG($gene,$suff,$outdir,$sens,$chr,$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$gene} },\%NM_Ex00,\%{ $NMbed00{$gene} },\%intron,\%UTR,\%Cod,\%{ $NMmut00{$gene} },\%{ $NMCovEnd{$gene} },\%{ $NMCovVal{$gene} }); }
+			else
+				{ graphByGeneN($gene,$suff,$outdir,$sens,$chr,\%NMlength,\@NMs,\@Files,\@colors,\@Thresholds,\%Regions,\%NM_Ex00,\%NMbed00,\%intron,\%UTR,\%Cod,\%NMmut00,\%NMCovEnd,\%NMCovVal); }
+			}
+
+		#graph covBySample
+		#unless ((exists$opts{X}) && ($opts{X}eq"N"))
+		if ($allS) {
+			if ($All) {
+				my$ok=0;
+				if ($pThreshold) {
+					foreach my$NM (@NMs) {
+						foreach my$file (@Files) {
+							if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
+								{ $ok=1; last; }
+							}
+						}
+					}
+				else { $ok=1; }
+				if ($ok)
+					{ graphAllSampleG($suff,$outdir,$gene,$sens,$Rev,$chr,$maxCovA{$gene},$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$gene} },\%{ $Reg_00{$gene} },\%NM_Ex00,\%{ $NMbed00{$gene} },\%intron,\%UTR,\%Cod,\%{ $NMdepth{$gene} },\%{ $covStart01{$gene} },\%{ $covEnd01{$gene} },\%{ $NMmut00{$gene} },\%fName); }
+				}
+			else {
+				foreach my$NM (@NMs) {
+					my$ok=0;
+					if ($pThreshold) {
+						foreach my$file (@Files) {
+							if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
+								{ $ok=1; last; }
+							}
+						}
+					else { $ok=1; }
+					if ($ok)
+						{ graphAllSampleN($NM,$suff,$outdir,$gene,$sens,$Rev,$chr,$maxCovA{$NM},$NMlength{$NM},$NMstartCod{$NM},$NMendCod{$NM},\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$NM} },\%{ $Reg_00{$NM} },\%{ $NM_Ex00{$NM} },\%{ $NMbed00{$NM} },\%{ $intron{$NM} },\%{ $UTR{$NM} },\%{ $Cod{$NM} },\%{ $NMdepth{$NM} },\%{ $covStart01{$NM} },\%{ $covEnd01{$NM} },\%{ $NMmut00{$NM} },\%fName); }
+					}
+				}
+			}
+		#unless ((exists$opts{a}) && ($opts{a}eq"N"))
+		if ($byS) {
+			if ($All) { 
+				my$ok=0;
+				if ($pThreshold) {
+					foreach my$NM (@NMs) {
+						foreach my$file (@Files) {
+							if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
+								{ $ok=1; last; }
+							}
+						}
+					}
+				else { $ok=1; }
+				if ($ok)
+					{ graphBySampleG($suff,$outdir,$gene,$sens,$Rev,$chr,$NMlength{$gene},\%{ $maxCovS{$gene} },\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$gene} },\%{ $Reg_00{$gene} },\%NM_Ex00,\%{ $NMbed00{$gene} },\%intron,\%UTR,\%Cod,\%{ $NMdepth{$gene} },\%{ $covStart01{$gene} },\%{ $covEnd01{$gene} },\%{ $NMmut00{$gene} },\%fName); }
+				}
+			else {
+				foreach my$NM (@NMs) {
+					my$ok=0;
+					if ($pThreshold) {
+						foreach my$file (@Files) {
+							if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
+								{ $ok=1; last; }
+							}
+						}
+					else { $ok=1; }
+					if ($ok)
+						{ graphBySampleN($NM,$suff,$outdir,$gene,$sens,$Rev,$chr,$NMstartCod{$NM},$NMendCod{$NM},$NMlength{$NM},\%{ $maxCovS{$NM} },\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$NM} },\%{ $Reg_00{$NM} },\%{ $NM_Ex00{$NM} },\%{ $NMbed00{$NM} },\%{ $intron{$NM} },\%{ $UTR{$NM} },\%{ $Cod{$NM} },\%{ $NMdepth{$NM} },\%{ $covStart01{$NM} },\%{ $covEnd01{$NM} },\%{ $NMmut00{$NM} },\%fName); }
+					}
+				}
+			}
+		}
+	#$NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
+	open (OUT, ">$outdir/notCovSummary.txt"); 
+	print OUT "depth threshold: $pThreshold\n";
+	foreach my$gene (sort@Genes) {
+		print OUT "\n$gene\n"; 
+		foreach my$NM (@{ $geneNM{$gene} }) {
+			my$txt="";
+			foreach my$file (@Files) { 
+				if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
+					{ $txt .= "\t$fName{$file} (".$NM_UC{$NM}{$fName{$file}}{$pThreshold}."\% notCov)"; }
+				}
+			if ($txt)
+				{ print OUT "\t$NM : not covered in bam files :$txt\n"; }
+			else
+				{ print OUT "\t$NM : OK\n"; }
+			}
+		}
+	close OUT;								
+	}
+
+#plots:
+if ($covPlot) { 
+	mkdir ("$outdir/covPlot");
+	if (!$bedFile || $coordPlot) 
+		{ %withChr = covPlot($bin,$max2,"regions","all_Genes_Regions",\%path,$extenS,\@Files,\%fName,$outdir,\%withChr); }
+	if ($bedFile) 
+		{ %withChr = covPlot($bin,$max2,"original",$bedName,\%path,$extenS,\@Files,\%fName,$outdir,\%withChr); }
+	}
+
+if ($interS) {
+	unless (-e "$outdir/covPlot")
+		{ mkdir ("$outdir/covPlot"); }
+	if (!$bedFile || $coordPlot)
+		{ InterS($bin,$max2,\%allInterval,"all_Genes_Regions",\@Files,\%fName,$outdir); }
+	if ($bedFile) {
+		#unless ($Sum || $allS || $byS || $coordPlot) 
+		#	{ %withChr = bedToolsCov("original",\%path,$extenS,\@Files,\%fName,$outdir); }
+		unless (($Sum || $allS || $byS || $coordPlot) && $Expand)
+			{ %withChr = bedToolsCov("original",\%path,$extenS,\@Files,\%fName,$outdir,\%withChr); }
+		InterS($bin,$max2,\%Bed,$bedName,\@Files,\%fName,$outdir);
+		}
+	}
+
+unlink "$outdir/regions_0Chr.bed";
+unlink "$outdir/regions_wChr.bed";
+unlink "$outdir/original_0Chr.bed";
+unlink "$outdir/original_wChr.bed";
+foreach (@Files)
+	{ unlink "$outdir/$fName{$_}\_cov_sort.bed"; }
+
+system "tar -zcvf $outdir.tar.gz $outdir";
+system "rm -rf $outdir";
+
+exit;
+
+
+######################
+sub readBed
+{
+my($bed) = @_;
+my%covBed;			#$covbed{$chr}{$start} = $end;	transform in 1-based coord
+open(BED, $bed) || die "can't open file $bed\n";
+print "open $bed\n";
+my$ok=0;
+while (my$line=<BED>) {
+	if ($line =~ /(^[\w]+)\t(\d+)\t(\d+)/) {
+		$ok=1;
+		chomp $line;
+		my@tab = split(/\t/,$line);
+		$tab[0] =~ s/chr//i;
+		#keep longest interval
+		if ( exists $covBed{$tab[0]}{($tab[1]+1)} ) {
+			if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)}) 
+				{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }	
+			else { next; }
+			}
+		else
+			{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }
+		}
+	}
+unless ($ok) { die "no bed formatted line in $bed file";}
+close BED;
+return(%covBed);
+}
+
+
+#################### 
+#extractBed from bedtools output
+#not used anymore
+sub extractBed
+{
+my($dir,$file) = @_;
+my%covBed;		#$covbed{$chr}{$start} = $end;
+
+if ($dir) { 
+	$dir =~ s/\/$//;
+	open(COV, $dir."/".$file) || die "can't open file $file\n"; 
+	}
+else
+	{ open(COV, $file) || die "can't open file $file\n"; }
+while (my$line=<COV>) {
+	chomp $line;
+	my@tab = split(/\t/,$line);
+	$tab[0] =~ s/chr//;
+	if ( exists $covBed{$tab[0]}{($tab[1]+1)} ) {
+		if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)}) 
+			{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }	
+		else { next; }
+		}
+	else
+		{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }
+	}
+close COV;
+return(%covBed);
+}
+
+
+##############################
+#print lines of RefSeq matching each $id of @IDs
+sub gene2Ref
+{
+my($idFile,$ref,$h1)=@_;
+my@IDs=@$h1;
+my@Ref;
+open(REF, $ref) || die "can't open file $ref\n";
+while (my$line=<REF>) {
+	unless($line =~ /^#/) {
+		chomp $line;
+		push(@Ref, $line);
+		}
+	}
+close(REF);
+my@Ref2;
+foreach my$id (@IDs) { 
+	my@tmp = grep(/\t$id\t/, @Ref); 
+	if (@tmp) { push(@Ref2, @tmp); }
+	else { die "can't find $id in $ref file\n"; }
+	}
+open(IDS, ">$idFile") || die "can't create file $idFile\n";
+foreach(@Ref2) { print IDS "$_\n"; }
+close(IDS);
+}
+
+
+##############################
+#old one
+sub geneFromBed
+{
+print"look for transcripts overlapping bed file\n";
+my($ref,$h1) = @_;	#refseq in 0-based
+my%interval = %$h1;	#$Bed{$chr}{$start} = $end , in 1-based
+my@Chrom=(0);
+my$ok1=0;		#next line if no NM in this chromosome
+my$chr;
+my@bedStarts=();
+my(%allNM);
+open(REF, $ref) || die "can't open file $ref\n";
+while (my$line=<REF>) {
+	unless($line =~ /^#/) {
+		chomp $line;
+		my@tab=split(/\t/,$line);
+		$tab[2] =~ s/chr//i;
+		unless ($tab[2] eq $Chrom[-1]) { 
+			push (@Chrom, $tab[2]); print $tab[2]."\n";
+			$ok1=0;
+			foreach my$i (sort(keys%interval)) {
+				if ($i eq $tab[2]) {
+					$chr = $tab[2]; 
+					@bedStarts = sort{$a<=>$b}keys%{ $interval{$chr} };
+					$ok1=1;
+					last; 
+					}
+				}
+			}
+		if ($ok1) {
+			for (my$c=0;$c<scalar(@bedStarts);$c++) {
+				if ( (($tab[4]+1) <= $interval{$chr}{$bedStarts[$c]}) && ($tab[5] >= $bedStarts[$c]) )
+					{ $allNM{$tab[1]} = $tab[12]; }
+				}
+			}
+
+		}
+	}
+close(REF);
+my@Transcripts = sort{ $allNM{$a} cmp $allNM{$b} }keys%allNM ;
+return(sort@Transcripts);
+}
+
+
+######################
+#new one, refseq in ram
+sub geneFromBed2
+{
+print"look for transcripts overlapping bed file\n";
+my($idFile,$ref,$h1) = @_;	#refseq in 0-based
+my%interval = %$h1;	#$Bed{$chr}{$start} = $end , in 1-based
+
+my(%NM,@Transcripts,%RefNames,%RefLines,%newLines);
+#$RefCoord{$chr}{$start} = $end, in 1-based
+#@{ $RefCoord{$chr}{$start}{$end} } = [$NM1,$NM2,...]		
+open(REF, $ref) || die "can't open file $ref\n";
+while (my$line=<REF>) {
+	unless($line =~ /^#/) {
+		chomp $line;
+		my@tab=split(/\t/,$line);
+		$tab[2] =~ s/chr//i;			
+		push(@{ $RefNames{$tab[2]}{($tab[4]+1)}{$tab[5]} }, $tab[1]);
+		push(@{ $RefLines{$tab[2]}{($tab[4]+1)}{$tab[5]} }, $line);
+		}
+	}
+close(REF);
+
+foreach my$chr (sort(keys%interval)) {
+	my@bedStarts = sort{$a<=>$b}keys%{ $interval{$chr} };
+	my@refStarts = sort{$a<=>$b}keys%{ $RefNames{$chr} };
+	my$c=0;	#idx of @refStarts
+	my@RefEnds = sort{$a<=>$b}keys%{ $RefNames{$chr}{$refStarts[$c]} };
+	my$refEnd=$RefEnds[-1];
+	foreach my$bedstart(@bedStarts) {
+		while ( ($c<(scalar@refStarts-1)) && ($bedstart > $refEnd) ) { 
+			$c++; 
+			@RefEnds = sort{$a<=>$b}keys%{ $RefNames{$chr}{$refStarts[$c]} };
+			$refEnd=$RefEnds[-1];
+			}
+		my$c2=$c;
+		while (($c2<(scalar@refStarts-1))&&($bedstart<=$refEnd)&&($interval{$chr}{$bedstart}>=$refStarts[$c2])) {
+			foreach my$end (@RefEnds) {
+				if ($bedstart<=$end) { 
+					foreach(@{ $RefNames{$chr}{$refStarts[$c2]}{$end} }) 
+						{ $NM{$_}=1; }
+					foreach(@{ $RefLines{$chr}{$refStarts[$c2]}{$end} }) 
+						{ $newLines{$_}=1;}
+					}
+				}
+			$c2++;
+			@RefEnds = sort{$a<=>$b}keys%{ $RefNames{$chr}{$refStarts[$c2]} };
+			$refEnd=$RefEnds[-1];
+			}
+		foreach my$end (@RefEnds) {
+			if ($bedstart<=$end) { 
+				foreach(@{ $RefNames{$chr}{$refStarts[$c2]}{$end} }) 
+					{ $NM{$_}=1; }
+				foreach(@{ $RefLines{$chr}{$refStarts[$c2]}{$end} }) 
+					{ $newLines{$_}=1;}
+				}
+			}
+		}
+	}
+open(IDS, ">$idFile") || die "can't create file $idFile\n";
+foreach(keys%newLines)
+	{ print IDS "$_\n";}
+close(IDS);
+@Transcripts = sort(keys(%NM));
+return(@Transcripts);
+}
+
+
+##########################
+#RefSeq:
+##bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
+#0	NM_032291	chr1	+	66999824	67210768	67000041	67208778	25	66999824,67091529,67098752,67101626,67105459,67108492,67109226,67126195,67133212,67136677,67137626,67138963,67142686,67145360,67147551,67154830,67155872,67161116,67184976,67194946,67199430,67205017,67206340,67206954,67208755,	67000051,67091593,67098777,67101698,67105516,67108547,67109402,67126207,67133224,67136702,67137678,67139049,67142779,67145435,67148052,67154958,67155999,67161176,67185088,67195102,67199563,67205220,67206405,67207119,67210768,	0	SGIP1	cmpl	cmpl	0,1,2,0,0,0,1,0,0,0,1,2,1,1,1,1,0,1,1,2,2,0,2,1,1,
+sub Id2Coord
+{
+my($idFile,$len,$nonCod) = @_;
+my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%Bed);
+
+open(IDS, "$idFile") || die "can't open file $idFile\n";
+while (my$line=<IDS>) {
+	chomp $line;
+	my@tab=split(/\t/,$line);
+	$tab[2] =~ s/^chr//i;
+	if ( (exists $geneNM{$tab[12]}) && ($tab[2] ne $NMchr{$geneNM{$tab[12]}[0]}) )
+		{ $tab[12].= "-$tab[2]"; }
+	my$ok=1;
+	if (exists $NMchr{$tab[1]}) {
+		if ($tab[2] =~ /^$NMchr{$tab[1]}.+/)
+			{ $ok=0; }
+		unless ($NMchr{$tab[1]} =~ /$tab[2].+/)
+			{ $ok=0; }
+			#{ $tab[1].= "-$tab[2]"; }
+		}
+	unless ($nonCod) {
+		#only coding transcipt: cdsStar != cdsEnd
+		if ($tab[6] == $tab[7]) 
+			{ $ok=0; }
+		}
+	if ($ok) {
+		my$NM = $tab[1];
+		my$gene = $tab[12];
+		$NMgene{$NM} = $gene;
+		push(@{ $geneNM{$gene} }, $NM);
+		my$chr = $tab[2];
+		$NMchr{$NM} = $chr;	
+		$NMsens{$NM} = $tab[3];
+		print $gene."\tchr: ".$NMchr{$NM}."\t".$NM."\tsens:".$NMsens{$NM}."\n";
+		$NMstartCod{$NM} = ($tab[6]+1);	#for 1-based coord
+		$NMendCod{$NM} = $tab[7];
+		my@Starts = split(/,/,$tab[9]);
+		my@Ends = split(/,/,$tab[10]);
+		#expand exons +/-length:
+		my%interval;
+		for (my$i=0;$i<scalar(@Starts);$i++) { 
+			$interval{($Starts[$i]+1-$len)} = $Ends[$i]+$len;	#in 1-based coord
+			if ( exists $Bed{$chr}{($Starts[$i]+1-$len)} ) {
+				if ( ($Ends[$i]+$len) > $Bed{$chr}{($Starts[$i]+1-$len)}) 
+					{ $Bed{$chr}{($Starts[$i]+1-$len)} = $Ends[$i]+$len; }	
+				else { next; }
+				}
+			else
+				{ $Bed{$chr}{($Starts[$i]+1-$len)} = $Ends[$i]+$len; }
+			}
+		#eventually merges overlapping intervals of regions
+		#associates real exons to intervals
+		my@Starts2 = sort{$a<=>$b}(keys%interval);
+		my%interval2;
+		my$start = $Starts2[0];
+		my$end = $interval{$start};
+		$NM_Ex{$NM}{$start}{$Starts[0]+1} = $Ends[0];
+		for (my$i=1;$i<scalar(@Starts2);$i++) {
+			if ($Starts2[$i] <= $end) { 
+				$end = $interval{$Starts2[$i]}; 
+				$NM_Ex{$NM}{$start}{$Starts[$i]+1} = $Ends[$i];
+				}
+			else { 
+				$interval2{$start} = $end;
+				$start = $Starts2[$i];
+				$end = $interval{$start};
+				$NM_Ex{$NM}{$start}{$Starts[$i]+1} = $Ends[$i];
+				}
+			}
+		$interval2{$start} = $end;
+		$NM_Ex{$NM}{$start}{$Starts[-1]+1} = $Ends[-1];
+		%{ $Regions{$chr}{$NM} } = %interval2;				
+		}
+	}
+close(IDS);
+unlink "$idFile" or warn "Could not unlink: $!";
+@Genes = sort(keys%geneNM);
+foreach(@Genes)
+	{ @{ $geneNM{$_} } = sort@{ $geneNM{$_} }; }
+return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\@Genes,\%Bed);
+}
+
+
+#########################
+#make 1 common region from all transcripts of 1 gene
+sub changeRegion1
+{
+#@hashSub = changeRegion1($NMs[$i],\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ $Regions{$chr}{$NMs[$i]} },\%{ $NM_Ex{$NMs[$i]} });
+my($NM,$h1,$h2,$h3,$h4) = @_;
+my%RegionG = %$h1;	#for gene: $Regions{start of region} = end of region
+my%geneNM_Ex = %$h2;	#foreach $nm of gene already processed: $geneNM_Ex{$nm}{start of region}{start of exon} = end of exon
+my%RegionN = %$h3;	#for current NM: $Regions{start of region} = end of region
+my%NM_Ex = %$h4;	#for current NM: $NM_Ex{start of region}{start of exon} = end of exon
+
+my@StartG = sort{$a<=>$b}(keys%RegionG);
+my@StartN = sort{$a<=>$b}(keys%RegionN);
+my(%RegionG2,%geneNM_Ex2);
+my$c=0;	#$c: count of @StartG
+my$i=0;	#$i: count of @StartN
+my$endN = $RegionN{$StartN[$i]};
+
+while ( ($i < scalar@StartN) && ($endN < $StartG[0]) ) {
+	$RegionG2{$StartN[$i]} = $endN;
+	foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
+		{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+	$i++;
+	$endN = $RegionN{$StartN[$i]};
+	}
+while ( $i < scalar@StartN ) {
+	$endN = $RegionN{$StartN[$i]};				
+	if ( $endN < $StartG[$c] )
+		{
+		$RegionG2{$StartN[$i]} = $endN;
+		foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
+			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+		}
+	while ( ($c < (scalar@StartG -1)) && ($StartN[$i] > $RegionG{$StartG[$c]}) )
+		{
+		$RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]};
+		foreach my$nm (keys%geneNM_Ex)
+			{
+			foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
+				{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+			}
+		$c++; 
+		}
+	while ( ($c < (scalar@StartG -1)) && ($StartN[$i] <= $RegionG{$StartG[$c]}) && ($endN >= $StartG[$c]) )
+		{
+		if ($StartN[$i] < $StartG[$c])
+			{
+			if ($endN > $RegionG{$StartG[$c]})
+				{ $RegionG2{$StartN[$i]} = $endN; }
+			else
+				{ $RegionG2{$StartN[$i]} = $RegionG{$StartG[$c]}; }
+			foreach my$nm (keys%geneNM_Ex)
+				{ 
+				foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
+					{ $geneNM_Ex2{$nm}{$StartN[$i]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+				}
+			foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
+				{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+			}
+		else
+			{
+			if ($endN > $RegionG{$StartG[$c]})
+				{ $RegionG2{$StartG[$c]} = $endN; }
+			else
+				{ $RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]}; }
+			foreach my$nm (keys%geneNM_Ex)
+				{ 
+				foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
+					{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+				}
+			foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
+				{ $geneNM_Ex2{$NM}{$StartG[$c]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+			}
+		$c++;
+		}
+	#current $c
+	if ( ($endN < $StartG[$c]) && ($StartN[$i]>$RegionG{$StartG[$c-1]}) )
+		{
+		$RegionG2{$StartN[$i]} = $endN;			
+		foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
+			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+		}
+	if ( $StartN[$i] > $RegionG{$StartG[$c]} )
+		{
+		$RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]};
+		foreach my$nm (keys%geneNM_Ex)
+			{
+			foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
+				{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+			} 
+		}
+	if ( ($StartN[$i] <= $RegionG{$StartG[$c]}) && ($endN >= $StartG[$c]) )
+		{
+		if ($StartN[$i] < $StartG[$c])
+			{
+			if ($endN > $RegionG{$StartG[$c]})
+				{ $RegionG2{$StartN[$i]} = $endN; }
+			else
+				{ $RegionG2{$StartN[$i]} = $RegionG{$StartG[$c]}; }
+			foreach my$nm (keys%geneNM_Ex)
+				{ 
+				foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
+					{ $geneNM_Ex2{$nm}{$StartN[$i]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+				}
+			foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
+				{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+			}
+		else
+			{
+			if ($endN > $RegionG{$StartG[$c]})
+				{ $RegionG2{$StartG[$c]} = $endN; }
+			else
+				{ $RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]}; }
+			foreach my$nm (keys%geneNM_Ex)
+				{ 
+				foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
+					{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+				}
+			foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
+				{ $geneNM_Ex2{$NM}{$StartG[$c]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+			}
+		}
+	if ( $StartN[$i] > $RegionG{$StartG[-1]} )	#if regionN keep going on after end of regionG
+		{
+		$RegionG2{$StartN[$i]} = $endN;		
+		foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
+			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+		}
+	$i++;
+	}
+#if regionG keep going on after end of regionN
+while ( ($c < scalar@StartG) && ($StartG[$c] > $endN) )
+	{
+	$RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]};
+	foreach my$nm (keys%geneNM_Ex)
+		{ 
+		foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
+			{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+		}
+	$c++; 
+	}
+
+#merge intervals
+@StartG = sort{$a<=>$b}(keys%RegionG2);
+my(%RegionG3,%geneNM_Ex3);
+my$startReg = $StartG[0];
+my$endReg = $RegionG2{$startReg};
+foreach my$nm (keys%geneNM_Ex2)
+	{ 
+	foreach my$startEx (keys%{ $geneNM_Ex2{$nm}{$startReg} })
+		{ $geneNM_Ex3{$nm}{$startReg}{$startEx} = $geneNM_Ex2{$nm}{$startReg}{$startEx}; }
+	}
+for (my$i=1;$i<scalar(@StartG);$i++)
+	{
+	if ($StartG[$i] <= $endReg)
+		{ 
+		if ($RegionG2{$StartG[$i]} > $endReg)
+			{ $endReg = $RegionG2{$StartG[$i]}; }
+		foreach my$nm (keys%geneNM_Ex2)
+			{
+			foreach my$startEx (keys%{ $geneNM_Ex2{$nm}{$StartG[$i]} })
+				{ $geneNM_Ex3{$nm}{$startReg}{$startEx} = $geneNM_Ex2{$nm}{$StartG[$i]}{$startEx}; }
+			}
+		}
+	else
+		{ 
+		$RegionG3{$startReg} = $endReg;
+		$startReg = $StartG[$i];
+		$endReg = $RegionG2{$startReg};
+		foreach my$nm (keys%geneNM_Ex2)
+			{
+			foreach my$startEx (keys%{ $geneNM_Ex2{$nm}{$startReg} })
+				{ $geneNM_Ex3{$nm}{$startReg}{$startEx} = $geneNM_Ex2{$nm}{$startReg}{$startEx}; }
+			}
+		}
+	}
+$RegionG3{$startReg} = $endReg;
+
+return(\%RegionG3,\%geneNM_Ex3);
+}
+
+
+#########################
+#extract bed from file, and intersect with %Regions (regions of selected genes) 
+#create 1 hash : 
+sub changeRegion2G
+{
+	#@hashSub = changeRegion2G(\@NMs,\%{ $Regions{$chr}{$gene} },\%NM_Ex,\%{ $Bed{$chr} });
+	#%{ $Regions{$chr}{$gene} } = %{$hashSub[0]};
+	#%NM_Ex = %{$hashSub[1]};
+	#%{ $RegBed{$gene} } = %{$hashSub[2]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
+my($h1,$h2,$h3,$h4) = @_;
+my@NMs = @$h1;		# @{ $geneNM{$gene} } = [$NM1,...]
+my%interval = %$h2;		# $Regions{start of region} = end of region
+my%NM_Ex = %$h3;		# %NM_Ex{NM}{start of region}{start of exon} = end of exon
+my%Bed = %$h4;			#$Bed{$startBed} = $endBed;
+
+my%RegBed;			#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
+
+my@Starts = sort{$a<=>$b}(keys%interval);
+my(%interval2,%NM_Ex2,%RegBed1);
+my$c=0;	#$c: count of @StartInterval			
+my@startBed = sort{$a<=>$b}keys%Bed;
+my$endBed = $Bed{$startBed[0]};
+for (my$i=0;$i<scalar@startBed;$i++) {
+	if ($startBed[$i] > $interval{$Starts[-1]})	#if bed keep going on after end of region
+		{ last; }
+	$endBed = $Bed{$startBed[$i]};	
+	if ( $endBed < $Starts[0] )
+		{ next; }
+	if ( $endBed < $Starts[$c] ) {
+		if ($startBed[$i] > $interval{$Starts[$c-1]})
+			{ 
+			$interval2{$startBed[$i]} = $endBed; 
+			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
+			next;
+			}
+		else { $c--; }
+		}
+	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] > $interval{$Starts[$c]}) ) { 
+		$interval2{$Starts[$c]} = $interval{$Starts[$c]};
+		foreach my$NM (@NMs) {
+			foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
+				{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+			}
+		$c++; 
+		}
+	if ( $startBed[$i] > $interval{$Starts[$c]} ) { #for current $c
+		$interval2{$Starts[$c]} = $interval{$Starts[$c]};
+		foreach my$NM (@NMs) {
+			foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
+				{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+			} 
+		}
+	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] <= $interval{$Starts[$c]}) && ($endBed >= $Starts[$c]) ) {
+		if ($startBed[$i] < $Starts[$c]) {
+			if ($endBed > $interval{$Starts[$c]})
+				{ $interval2{$startBed[$i]} = $endBed; }
+			else
+				{ $interval2{$startBed[$i]} = $interval{$Starts[$c]}; }
+			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
+			foreach my$NM (@NMs) {
+				foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
+					{ $NM_Ex2{$NM}{$startBed[$i]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+				}
+			}
+		else {
+			if ($endBed > $interval{$Starts[$c]})
+				{ $interval2{$Starts[$c]} = $endBed; }
+			else
+				{ $interval2{$Starts[$c]} = $interval{$Starts[$c]}; }
+			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
+			foreach my$NM (@NMs) {
+				foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
+					{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+				}
+			}
+		$c++;
+		}
+	if ( ($startBed[$i] <= $interval{$Starts[$c]}) && ($endBed >= $Starts[$c]) ) {	#for current $c
+		if ($startBed[$i] < $Starts[$c]) {
+			if ($endBed > $interval{$Starts[$c]})
+				{ $interval2{$startBed[$i]} = $endBed; }
+			else
+				{ $interval2{$startBed[$i]} = $interval{$Starts[$c]}; }
+			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
+			foreach my$NM (@NMs) {
+				foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
+					{ $NM_Ex2{$NM}{$startBed[$i]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+				}
+			}
+		else {
+			if ($endBed > $interval{$Starts[$c]})
+				{ $interval2{$Starts[$c]} = $endBed; }
+			else
+				{ $interval2{$Starts[$c]} = $interval{$Starts[$c]}; }
+			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
+			foreach my$NM (@NMs) {
+				foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
+					{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+				}
+			}
+		}
+	}
+#if region keep going on after end of bed
+while ( ($c < scalar@Starts) && ($Starts[$c] > $endBed) ) {
+	$interval2{$Starts[$c]} = $interval{$Starts[$c]};
+	foreach my$NM (@NMs) {
+		foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
+			{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+		}
+	$c++; 
+	}
+
+#merge intervals
+my@Starts2 = sort{$a<=>$b}(keys%interval2);
+my(%interval3,%NM_Ex3,%RegBed2);
+my$startReg = $Starts2[0];
+my$endReg = $interval2{$startReg};
+foreach my$NM (keys%NM_Ex2) {
+	foreach my$startEx (keys%{ $NM_Ex2{$NM}{$startReg} })
+		{ $NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$startReg}{$startEx}; }
+	}
+foreach my$startBed (keys%{ $RegBed1{$startReg} })
+	{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
+for (my$i=1;$i<scalar(@Starts2);$i++) {
+	if ($Starts2[$i] <= $endReg) { 
+		if ($interval2{$Starts2[$i]} > $endReg)
+			{ $endReg = $interval2{$Starts2[$i]}; }
+		foreach my$NM (keys%NM_Ex2) {
+			foreach my$startEx (keys%{ $NM_Ex2{$NM}{$Starts2[$i]} })
+				{ $NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$Starts2[$i]}{$startEx}; }
+			}
+		foreach my$startBed (keys%{ $RegBed1{$Starts2[$i]} })
+			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$Starts2[$i]}{$startBed}; }
+		}
+	else { 
+		$interval3{$startReg} = $endReg;
+		$startReg = $Starts2[$i];
+		$endReg = $interval2{$startReg};
+		foreach my$NM (keys%NM_Ex2)
+			{
+			foreach my$startEx (keys%{ $NM_Ex2{$NM}{$startReg} })
+				{ $NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$startReg}{$startEx}; }
+			}
+		foreach my$startBed (keys%{ $RegBed1{$startReg} })
+			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
+		}
+	}
+$interval3{$startReg} = $endReg;
+
+foreach my$NM (keys%NM_Ex3)
+	{ %{ $NM_Ex{$NM} } = %{ $NM_Ex3{$NM} };	 }
+
+return(\%interval3,\%NM_Ex,\%RegBed2);
+}
+
+
+#########################
+#extract bed from file, and intersect with %Regions (regions of selected genes) 
+#create 1 hash : 
+sub changeRegion2N
+{
+	#@hashSub = changeRegion2N(\%{ $Regions{$NMchr{$NM}}{$NM} },\%{ $NM_Ex{$NM} },\%{ $Bed{$NMchr{$NM}} });
+	#%{ $Regions{$NMchr{$NM}}{$NM} } = %{$hashSub[0]};
+	#%{ $NM_Ex{$NM} } = %{$hashSub[1]};
+	#%{ $RegBed{$NM} } = %{$hashSub[2]};
+my($h1,$h2,$h3) = @_;
+my%interval = %$h1;		# $Regions{start of region} = end of region
+my%NM_Ex = %$h2;		# %NM_Ex{start of region}{start of exon} = end of exon
+my%Bed = %$h3;			#$Bed{$startBed} = $endBed;
+
+my%RegBed;			#$RegBed{$startReg}{$startBed} = $endBed;
+
+my@Starts = sort{$a<=>$b}(keys%interval);
+my(%interval2,%NM_Ex2,%RegBed1);
+my$c=0;	#$c: count of @StartInterval			
+my@startBed = sort{$a<=>$b}keys%Bed;
+my$endBed = $Bed{$startBed[0]};
+for (my$i=0;$i<scalar@startBed;$i++)
+	{
+	if ($startBed[$i] > $interval{$Starts[-1]})	#if bed keep going on after end of region
+		{ last; }
+	$endBed = $Bed{$startBed[$i]};	
+	if ( $endBed < $Starts[0] )
+		{ next; }
+	if ( $endBed < $Starts[$c] )
+		{
+		if ($startBed[$i] > $interval{$Starts[$c-1]})
+			{ 
+			$interval2{$startBed[$i]} = $endBed; 
+			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
+			next;
+			}
+		else { $c--; }
+		}
+	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] > $interval{$Starts[$c]}) )
+		{ 
+		$interval2{$Starts[$c]} = $interval{$Starts[$c]};
+		foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
+			{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+		$c++; 
+		}
+	if ( $startBed[$i] > $interval{$Starts[$c]} )	#for current $c
+		{ 
+		$interval2{$Starts[$c]} = $interval{$Starts[$c]};
+		foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
+			{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+		}
+	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] <= $interval{$Starts[$c]}) && ($endBed >= $Starts[$c]) )
+		{
+		if ($startBed[$i] < $Starts[$c])
+			{
+			if ($endBed > $interval{$Starts[$c]})
+				{ $interval2{$startBed[$i]} = $endBed; }
+			else
+				{ $interval2{$startBed[$i]} = $interval{$Starts[$c]}; }
+			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
+			foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
+				{ $NM_Ex2{$startBed[$i]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+			}
+		else
+			{
+			if ($endBed > $interval{$Starts[$c]})
+				{ $interval2{$Starts[$c]} = $endBed; }
+			else
+				{ $interval2{$Starts[$c]} = $interval{$Starts[$c]}; }
+			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
+			foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
+				{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+			}
+		$c++;
+		}
+	if ( ($startBed[$i] <= $interval{$Starts[$c]}) && ($endBed >= $Starts[$c]) )	#for current $c
+		{
+		if ($startBed[$i] < $Starts[$c])
+			{
+			if ($endBed > $interval{$Starts[$c]})
+				{ $interval2{$startBed[$i]} = $endBed; }
+			else
+				{ $interval2{$startBed[$i]} = $interval{$Starts[$c]}; }
+			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
+			foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
+				{ $NM_Ex2{$startBed[$i]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+			}
+		else
+			{
+			if ($endBed > $interval{$Starts[$c]})
+				{ $interval2{$Starts[$c]} = $endBed; }
+			else
+				{ $interval2{$Starts[$c]} = $interval{$Starts[$c]}; }
+			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
+			foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
+				{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+			}
+		}
+	}
+#if region keep going on after end of bed
+while ( ($c < scalar@Starts) && ($Starts[$c] > $endBed) )
+	{
+	$interval2{$Starts[$c]} = $interval{$Starts[$c]};
+	foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
+		{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+	$c++; 
+	}
+
+#merge intervals
+my@Starts2 = sort{$a<=>$b}(keys%interval2);
+my(%interval3,%NM_Ex3,%RegBed2);
+my$startReg = $Starts2[0];
+my$endReg = $interval2{$startReg};
+foreach my$startEx (keys%{ $NM_Ex2{$startReg} })
+	{ $NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$startReg}{$startEx}; }
+foreach my$startBed (keys%{ $RegBed1{$startReg} })
+	{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
+for (my$i=1;$i<scalar(@Starts2);$i++)
+	{
+	if ($Starts2[$i] <= $endReg)
+		{ 
+		if ($interval2{$Starts2[$i]} > $endReg)
+			{ $endReg = $interval2{$Starts2[$i]}; }
+		foreach my$startEx (keys%{ $NM_Ex2{$Starts2[$i]} })
+			{ $NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$Starts2[$i]}{$startEx}; }
+		foreach my$startBed (keys%{ $RegBed1{$Starts2[$i]} })
+			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$Starts2[$i]}{$startBed}; }
+		}
+	else
+		{ 
+		$interval3{$startReg} = $endReg;
+		$startReg = $Starts2[$i];
+		$endReg = $interval2{$startReg};
+		foreach my$startEx (keys%{ $NM_Ex2{$startReg} })
+			{ $NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$startReg}{$startEx}; }
+		foreach my$startBed (keys%{ $RegBed1{$startReg} })
+			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
+		}
+	}
+$interval3{$startReg} = $endReg;	
+
+return(\%interval3,\%NM_Ex3,\%RegBed2);
+}
+
+
+#########################
+#extract bed from file, and intersect with %Regions (regions of selected genes) 
+#no -L option: shorten bed eventually
+#create 1 hash : 
+sub linkBed
+{
+my($h1,$h2) = @_;
+my%NM_interval = %$h1;		# $Regions{chr}{gene}{start of region} = end of region
+my%Bed = %$h2;			#$Bed{$chr}{$startBed} = $endBed;
+
+#my%covBed2;			
+my%RegBed;			#$RegBed{$NM}{$startRegion}{$startBed} = $endBed;
+my$c=0;				#idx of $startByChr = sort{$a<=>$b}(keys%{ $allInterval{$chr} });
+foreach my$chr (keys%NM_interval)
+	{
+	foreach my$NM (keys%{ $NM_interval{$chr} })
+		{
+		my%interval = %{ $NM_interval{$chr}{$NM} };
+		my@Starts = sort{$a<=>$b}(keys%interval);
+		my$c=0;
+		foreach my$start (sort{$a<=>$b}keys%{ $Bed{$chr} })
+			{
+			my$end = $Bed{$chr}{$start};
+			if ( $end < $Starts[$c] )
+				{ next; }
+			while ( ($c < (scalar(@Starts)-1)) && ($start > $interval{$Starts[$c]}) )
+				{ $c++; }
+			my$c2=$c;
+			while ( ($c2 < scalar@Starts) && ($start <= $interval{$Starts[$c2]}) && ($end >= $Starts[$c2]) )
+				{ 
+				#eventually restrict %Bed
+				if ($start < $Starts[$c2])
+					{
+					if ($end > $interval{$Starts[$c2]})
+						{ 
+						#$covBed2{$chr}{$Starts[$c2]} = $interval{$Starts[$c2]};
+						$RegBed{$NM}{$Starts[$c2]}{$Starts[$c2]} = $interval{$Starts[$c2]};
+						}
+					else
+						{ 
+						#$covBed2{$chr}{$Starts[$c2]} = $end;
+						$RegBed{$NM}{$Starts[$c2]}{$Starts[$c2]} = $end;
+						}
+					}
+				else
+					{
+					if ($end > $interval{$Starts[$c2]})
+						{ 
+						#$covBed2{$chr}{$start} = $interval{$Starts[$c2]}; 
+						$RegBed{$NM}{$Starts[$c2]}{$start} = $interval{$Starts[$c2]};
+						}
+					else
+						{
+						#$covBed2{$chr}{$start} = $end; 
+						$RegBed{$NM}{$Starts[$c2]}{$start} = $end;
+						}
+					}
+				$c2++;
+				}
+			}
+		}
+	}
+#return(\%covBed2,\%RegBed);
+return(%RegBed);
+}
+
+
+#########################
+#eliminates $NM with no corresponding cov bed
+sub notAnalysedG
+{
+my($h0,$h1,$h2,$h3)=@_;
+my@Genes = @$h0;
+my%Regions = %$h1;
+my%NM_Ex = %$h2;
+my%RegBed = %$h3;
+my(@Not,@Genes2,%Regions2,%NM_Ex2,%RegBed2);
+foreach my$gene (@Genes)
+	{
+	my@startBed = keys%{ $RegBed{$gene} };
+	unless (@startBed)
+		{
+		print "$gene not in analysed bed\n";
+		push(@Not ,$gene);
+		}
+	}
+foreach my$chr (sort(keys%Regions))
+	{
+	foreach my$gene (sort(keys%{ $Regions{$chr} }))
+		{
+		my$ok=1;
+		foreach my$not(@Not)
+			{
+			if ($gene eq $not)
+				{ $ok=0; last; }
+			}
+		if ($ok)
+			{
+			push(@Genes2, $gene);
+			%{ $Regions2{$chr}{$gene} } = %{ $Regions{$chr}{$gene} };
+			foreach (@{ $geneNM{$gene}})
+				{ %{ $NM_Ex2{$_} } = %{ $NM_Ex{$_} }; }
+			%{ $RegBed2{$gene} } = %{ $RegBed{$gene} };
+			}	
+		}
+	}
+return(\@Genes2,\%Regions2,\%NM_Ex2,\%RegBed2);
+}
+#############
+#eliminates $NM with no corresponding cov bed
+sub notAnalysedN
+{
+my($h0,$h1,$h2,$h3,$h4)=@_;
+my@Genes = @$h0;
+my%NMgene = %$h1;
+my%Regions = %$h2;
+my%NM_Ex = %$h3;
+my%RegBed = %$h4;
+my(@Not,@Genes2,%Regions2,%NM_Ex2,%RegBed2);
+foreach my$NM (keys%NM_Ex)
+	{
+	my@startBed = keys%{ $RegBed{$NM} };
+	unless (@startBed)
+		{
+		print "$NM not in analysed bed\n";
+		push(@Not ,$NM);
+		}
+	}
+foreach my$chr (sort(keys%Regions))
+	{
+	foreach my$NM (sort(keys%{ $Regions{$chr} }))
+		{
+		my$ok=1;
+		foreach my$not(@Not)
+			{
+			if ($NM eq $not)
+				{ $ok=0; last; }
+			}
+		if ($ok)
+			{
+			push(@Genes2, $NMgene{$NM});
+			%{ $Regions2{$chr}{$NM} } = %{ $Regions{$chr}{$NM} };
+			%{ $NM_Ex2{$NM} } = %{ $NM_Ex{$NM} };
+			%{ $RegBed2{$NM} } = %{ $RegBed{$NM} };
+			}	
+		}
+	}
+return(\@Genes2,\%Regions2,\%NM_Ex2,\%RegBed2);
+}
+
+
+#########################
+
+sub readMut
+{
+my($file) = @_;
+my(%Mut);			#$covbed{$chr}{$start} = $end;
+open(BED, $file) || die "can't open file $file\n";
+while (my$line=<BED>) {
+	unless($line =~ /^\s*$/) {
+		chomp $line;
+		my@tab = split(/\t/,$line);
+		$tab[0] =~ s/chr//i;
+		$Mut{$tab[0]}{$tab[1]} = $tab[2];	#already in 1-based coord
+		}
+	}
+close BED;
+return(%Mut);
+}
+
+
+#########################
+
+sub linkMut
+{
+my($h1,$h2) = @_;
+my%NM_interval = %$h1;		# $Regions{chr}{NM}{start of region} = end of region
+my%Mut = %$h2;			#$Mut{$chr}{$startMut} = $infoMut;
+
+my%RegMut;			#$RegMut{$NM}{$startRegion}{$startMut} = $MutInfo;
+my$c=0;				#idx of $Starts = sort{$a<=>$b}(keys%{ $NM_interval{$chr} });
+foreach my$chr (keys%NM_interval) {
+	foreach my$NM (keys%{ $NM_interval{$chr} }) {
+		my%interval = %{ $NM_interval{$chr}{$NM} };
+		my@Starts = sort{$a<=>$b}(keys%interval);
+		my$c=0;
+		foreach my$mut (sort{$a<=>$b}keys%{ $Mut{$chr} }) {
+			if ( $mut < $Starts[$c] )
+				{ next; }
+			while ( ($c < (scalar(@Starts)-1)) && ($mut > $interval{$Starts[$c]}) )
+				{ $c++; }
+			if ( ($mut <= $interval{$Starts[$c]}) && ($mut >= $Starts[$c]) )
+				{ $RegMut{$NM}{$Starts[$c]}{$mut} = $Mut{$chr}{$mut}; }
+			}
+		}
+	}
+
+return(%RegMut);
+}
+
+
+#########################
+sub depthMut
+{
+my($mutFile,$h1,$extenS,$h2,$h3,$h4,$outdir) = @_;
+my%path = %$h1;
+my@Files = @$h2;
+my%fileName = %$h3;
+my%Mut = %$h4;
+#my%withChr = %$h5;
+
+open(MUT0,">$outdir/mut_0Chr.bed") or die "cannot create $outdir/mut_0Chr.bed";
+open(MUTw,">$outdir/mut_wChr.bed") or die "cannot create $outdir/mut_wChr.bed";
+foreach my$chr (sort(keys%Mut)) {
+	foreach my$pos (sort{$a<=>$b}keys%{ $Mut{$chr} }) {
+		print MUT0 $chr."\t".($pos-1)."\t".$pos."\n";
+		print MUTw "chr".$chr."\t".($pos-1)."\t".$pos."\n";
+		}
+	}
+close(MUT0);close(MUTw);
+
+my%isChr;
+foreach(@Files)
+	{ $isChr{$_} = "_0Chr.bed"; }
+my%depthMut;
+foreach my$file (@Files) {
+	print "cmd: coverageBed -abam $path{$file}$fileName{$file}$extenS -b $outdir/mut$isChr{$file} -d > $outdir/$fileName{$file}\_covMut.bed\n";
+	system "coverageBed -abam $path{$file}$fileName{$file}$extenS -b $outdir/mut$isChr{$file} -d > $outdir/$fileName{$file}\_covMut.bed";
+	open(COV, "$outdir/$fileName{$file}\_covMut.bed") || die "can't open file $outdir/$fileName{$file}\_covMut.bed\n";
+	my$ok=0;
+	while (my$line=<COV>) {
+		chomp $line;
+		my@tab = split(/\t/,$line);
+		if ($tab[-1] != 0)
+			{ $ok=1; last; }
+		}
+	close COV;
+	unless ($ok) {
+		print "try other reference genome:\n";
+		foreach (@Files) 
+			{ $isChr{$_} = "_wChr.bed"; }
+		print "cmd: coverageBed -abam $path{$file}$fileName{$file}$extenS -b $outdir/mut$isChr{$file} -d > $outdir/$fileName{$file}\_covMut.bed\n";
+		system "coverageBed -abam $path{$file}$fileName{$file}$extenS -b $outdir/mut$isChr{$file} -d > $outdir/$fileName{$file}\_covMut.bed";
+		}
+
+	print "cmd: sort -k 1,1 -k 2n,2n -k 4n,4n $outdir/$fileName{$file}\_covMut.bed > $outdir/$fileName{$file}\_covMut_sorted.bed\n";
+	system "sort -k 1,1 -k 2n,2n -k 4n,4n $outdir/$fileName{$file}\_covMut.bed > $outdir/$fileName{$file}\_covMut_sorted.bed";
+	unlink "$outdir/$fileName{$file}\_covMut.bed";
+	open(IN, "$outdir/$fileName{$file}\_covMut_sorted.bed");
+	while (<IN>) { 
+		my$line = $_;
+		chomp $line;
+		push (@{ $depthMut{$file} }, $line) ;
+		}
+	close(IN);
+	unlink "$outdir/$fileName{$file}\_covMut_sorted.bed";
+	}
+unlink "$outdir/mut_0Chr.bed";
+unlink "$outdir/mut_wChr.bed";
+
+my@mutName = split(/\//, $mutFile);
+$mutName[-1] =~ s/.list$//;
+open(COV, ">$outdir/$mutName[-1]\_depth.txt") or die "cannot create $outdir/$mutName[-1]\_depth.txt";
+print COV "chr\t1-based position\tmutation";
+foreach (@Files) { print COV "\t$fileName{$_}"; }
+print COV "\n";
+my@Pos;
+foreach (@{ $depthMut{$Files[0]} }) {
+	my@tab = split(/\t/,$_); 
+	my$chr = $tab[0]; 
+	$chr =~ s/^chr//i;
+	push(@Pos, $chr."\t".($tab[1]+1));
+	}
+for my$i (0 .. $#Pos) {
+	print COV $Pos[$i];
+	my@loc = split(/\t/,$Pos[$i]);
+	print COV "\t".$Mut{$loc[0]}{$loc[1]};
+	foreach my$file(@Files) { 
+		my@tab = split(/\t/,$depthMut{$file}[$i]); 
+		print COV "\t".$tab[-1];
+		}
+	print COV "\n";
+	}
+close(COV);
+}
+
+
+#########################
+#transposition and splicing, for exons of transcripts: 
+#1st position of 1st exon = 0, 
+#if end of exon = x, start of next exon = x
+sub transposeReg
+{
+my($spacer,$h1) = @_;
+my%Regions=%$h1;		# $Regions{chr}{NM}{start of region} = end of region	
+
+my(%Reg_00,%NMlength);	
+#$Reg_00{$NM}{$startReg} = endReg (for start of region = 0)
+foreach my$chr (keys%Regions)
+	{
+	foreach my$gene ( keys%{ $Regions{$chr} } )	#$gene or $NM
+		{
+		print "transpose and splice $gene\n";
+		my@Starts = sort{$a<=>$b}(keys%{ $Regions{$chr}{$gene} });
+		#find $spacer as $NMlength/100
+		unless((exists $opts{S}) && ($opts{S} eq "N"))
+			{
+			$NMlength{$gene}=0;
+			for (my$reg=0;$reg<scalar@Starts;$reg++)
+				{ $NMlength{$gene} += ($Regions{$chr}{$gene}{$Starts[$reg]} - $Starts[$reg] +1); }
+			$spacer = int($NMlength{$gene}/100);
+			}
+		#transpose $Regions{$chr}{$gene}
+		my$start00 = 0;
+		my$end00 =  $Regions{$chr}{$gene}{$Starts[0]} - $Starts[0] + $start00 +1;
+		$Reg_00{$gene}{$start00} = $end00;
+		for (my$reg=1;$reg<scalar@Starts;$reg++)
+			{
+			$start00 = $end00 + $spacer;
+			$end00 = $Regions{$chr}{$gene}{$Starts[$reg]} - $Starts[$reg] + $start00 +1;
+			$Reg_00{$gene}{$start00} = $end00;
+			}
+		#re-calculates $NMlength
+		my@Starts00 = sort{$a<=>$b}(keys%{ $Reg_00{$gene} });
+		$NMlength{$gene} = $Reg_00{$gene}{$Starts00[-1]};
+		}
+	}
+return($spacer,\%NMlength,\%Reg_00);
+}
+
+#########################
+#transposition and splicing, for exons of transcripts: 
+#1st position of 1st exon = 0, 
+#if end of exon = x, start of next exon = x
+sub transposeNM
+{
+my($NMstartCod,$NMendCod,$h1,$h2,$h3) = @_;
+my%Reg=%$h1;			# $Regions{start of region} = end of region
+my%Reg_00=%$h2;			#$Reg_00{$startReg} = endReg (for start of region = 0)	
+my%NM_Ex=%$h3;			# %NM_Ex{start of region}{start of exon} = end of exon
+
+my(%NM_Ex00,$NMstartCod00,$NMendCod00);	
+#NM_Ex00{$startReg}{$startExon} = endExon (for start of region = 0)
+my@Starts = sort{$a<=>$b}(keys%Reg);
+my@Starts00 = sort{$a<=>$b}(keys%Reg_00);
+#transpose $NMstartCod and $NMendCod
+my$r=0;
+while ($NMstartCod>$Reg{$Starts[$r]}) { $r++; }
+$NMstartCod00 = $NMstartCod - $Starts[$r] + $Starts00[$r];
+while ( ($NMendCod>$Reg{$Starts[$r]}) ) { $r++; }
+$NMendCod00 = $NMendCod - $Starts[$r] + $Starts00[$r] +1;
+#transpose %NM_Ex
+for (my$r=0;$r<scalar@Starts;$r++)
+	{
+	foreach my$startEx (keys%{ $NM_Ex{$Starts[$r]} })
+		{ $NM_Ex00{$Starts00[$r]}{($startEx-$Starts[$r]+$Starts00[$r])} = $NM_Ex{$Starts[$r]}{$startEx}-$Starts[$r]+$Starts00[$r]+1;}
+	}
+return($NMstartCod00,$NMendCod00,\%NM_Ex00);
+}
+
+
+#########################
+#if ($All):
+#make arrays for starts of non coding exons, before and after coding exons
+#and arrays for starts of extragenic regions, before and after exons 
+sub designExons1
+{
+#@hashSub = designExons(\%Reg_00,\%NM_00,\%NMstartCod00,\%NMendCod00);
+my($h1,$h2,$h3,$h4,$h5,$h6) = @_;
+my@Genes=@$h1;
+my%geneNM=%$h2;
+my%Reg_00=%$h3;			#$Reg_00{NM}{start of region} = end of region (for start of region = 0)
+my%NM_Ex00=%$h4;		#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+my%NMstartCod00=%$h5;		#$NMstartCod00{$NM} = $start of coding sequence (for start of region = 0)
+my%NMendCod00=%$h6;		#$NMendCod00{$NM} = $end of coding sequence (for start of region = 0)
+
+my(%intron,%UTR,%Cod);
+#$intron{$NM}{$startInt} = $endInt;
+#$UTR{$NM}{$startUTR} = $endUTR;
+#$Cod{$NM}{$startCod} = $endCod;
+foreach my$gene (@Genes) {
+	print "design exons of $gene\n";
+	my@startReg = sort{$a<=>$b}keys%{ $Reg_00{$gene} } ; 
+	foreach my$NM (@{ $geneNM{$gene} }) {
+		print "\tfor $NM\n";
+		my(%Exons,@startEx);
+		#introns:
+		foreach my$startR (@startReg) {
+			my@Starts = sort{$a<=>$b}(keys%{ $NM_Ex00{$NM}{$startR} });
+			if (@Starts) {
+				$intron{$NM}{$startR} = $Starts[0];
+				for (my$ex=0;$ex<(scalar@Starts-1);$ex++)
+					{ $intron{$NM}{ $NM_Ex00{$NM}{$startR}{$Starts[$ex]} } = $Starts[$ex+1]; }
+				$intron{$NM}{ $NM_Ex00{$NM}{$startR}{$Starts[-1]} } = $Reg_00{$gene}{$startR};
+				push (@startEx , @Starts); 
+				for (my$ex=0;$ex<scalar@Starts;$ex++)
+					{ $Exons{$Starts[$ex]} = $NM_Ex00{$NM}{$startR}{$Starts[$ex]}; }
+				}
+			else
+				{ $intron{$NM}{$startR} = $Reg_00{$gene}{$startR}; }
+			}
+		#exons:
+		my$i=0;
+			#UTRpreCod
+		while ( $Exons{$startEx[$i]}<$NMstartCod00{$NM} && $i<(scalar@startEx-1) ) {
+			$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
+			$i++;						
+			}
+		if ( $startEx[$i] < $NMstartCod00{$NM} ) 
+			{ $UTR{$NM}{$startEx[$i]} = $NMstartCod00{$NM}; }
+			#Cod
+		if( $Exons{$startEx[$i]} >= $NMendCod00{$NM} )
+			{ $Cod{$NM}{$NMstartCod00{$NM}} = $NMendCod00{$NM}; }
+		else {
+			$Cod{$NM}{$NMstartCod00{$NM}} = $Exons{$startEx[$i]}; 
+			$i++;
+			while ( $Exons{$startEx[$i]}<$NMendCod00{$NM} && $i<(scalar@startEx-1) ) {
+				$Cod{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
+				$i++;	
+				}
+			if ( $Exons{$startEx[$i]} >= $NMendCod00{$NM} ) 
+				{ $Cod{$NM}{$startEx[$i]} = $NMendCod00{$NM}; }
+			}
+			#UTRpostCod
+		if ( $Exons{$startEx[$i]} > $NMendCod00{$NM} ) 
+			{ $UTR{$NM}{$NMendCod00{$NM}} = $Exons{$startEx[$i]}; }
+		while ($i<(scalar@startEx-1)) {
+			$i++;
+			$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
+			}
+		}
+	}
+return(\%intron,\%UTR,\%Cod);
+}
+
+#########################
+#foreach $NM
+#make arrays for starts of non coding exons, before and after coding exons
+#and arrays for starts of extragenic regions, before and after exons 
+sub designExons2
+{
+#@hashSub = designExons(\%Reg_00,\%NM_00,\%NMstartCod00,\%NMendCod00);
+my($h1,$h2,$h3,$h4) = @_;
+my%Reg_00=%$h1;			#$Reg_00{NM}{start of region} = end of region (for start of region = 0)
+my%NM_Ex00=%$h2;		#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+my%NMstartCod00=%$h3;		#$NMstartCod00{$NM} = $start of coding sequence (for start of region = 0)
+my%NMendCod00=%$h4;		#$NMendCod00{$NM} = $end of coding sequence (for start of region = 0)
+
+my(%intron,%UTR,%Cod);
+#$intron{$NM}{$startInt} = $endInt;
+#$UTR{$NM}{$startUTR} = $endUTR;
+#$Cod{$NM}{$startCod} = $endCod;
+foreach my$NM (keys%Reg_00)
+	{
+	print "design exons of $NM\n";
+	my@startReg = sort{$a<=>$b}keys%{ $Reg_00{$NM} } ;
+	my(%Exons,@startEx);
+	#introns:
+	foreach my$startR (@startReg)
+		{
+		my@Starts = sort{$a<=>$b}(keys%{ $NM_Ex00{$NM}{$startR} });
+		if (@Starts)
+			{
+			$intron{$NM}{$startR} = $Starts[0];
+			for (my$ex=0;$ex<(scalar@Starts-1);$ex++)
+				{ $intron{$NM}{ $NM_Ex00{$NM}{$startR}{$Starts[$ex]} } = $Starts[$ex+1]; }
+			$intron{$NM}{ $NM_Ex00{$NM}{$startR}{$Starts[-1]} } = $Reg_00{$NM}{$startR};
+			push (@startEx , @Starts);
+			for (my$ex=0;$ex<scalar@Starts;$ex++)
+				{ $Exons{$Starts[$ex]} = $NM_Ex00{$NM}{$startR}{$Starts[$ex]}; }
+			}
+		else
+			{ $intron{$NM}{$startR} = $Reg_00{$NM}{$startR}; }
+		}
+	#exons:
+	my$i=0;
+		#UTRpreCod
+	while ( $Exons{$startEx[$i]}<$NMstartCod00{$NM} && $i<(scalar@startEx-1) )		
+		{
+		$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
+		$i++;						
+		}
+	if ( $startEx[$i] < $NMstartCod00{$NM} ) 
+		{ $UTR{$NM}{$startEx[$i]} = $NMstartCod00{$NM}; }
+		#Cod
+	if( $Exons{$startEx[$i]} >= $NMendCod00{$NM} )
+		{ $Cod{$NM}{$NMstartCod00{$NM}} = $NMendCod00{$NM}; }
+	else
+		{
+		$Cod{$NM}{$NMstartCod00{$NM}} = $Exons{$startEx[$i]}; 
+		$i++;
+		while ( $Exons{$startEx[$i]}<$NMendCod00{$NM} && $i<(scalar@startEx-1) ) 
+			{
+			$Cod{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
+			$i++;	
+			}
+		if ( $Exons{$startEx[$i]} >= $NMendCod00{$NM} ) 
+			{ $Cod{$NM}{$startEx[$i]} = $NMendCod00{$NM}; }
+		}
+		#UTRpostCod
+	if ( $Exons{$startEx[$i]} > $NMendCod00{$NM} ) 
+		{ $UTR{$NM}{$NMendCod00{$NM}} = $Exons{$startEx[$i]}; }
+	while ($i<(scalar@startEx-1))
+		{
+		$i++;
+		$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
+		}
+	}
+return(\%intron,\%UTR,\%Cod);
+}
+
+
+#########################
+
+#transposition and splicing of RegBed and RegMut
+sub transposeBed
+{
+my($h1,$h2,$h3,$h4) = @_;
+my%Regions = %$h1;		# $Regions{chr}{NM}{start of region} = end of region
+my%Reg_00 = %$h2;		# #$Reg_00{$NM}{$startReg} = endReg (start of Region =0)
+my%RegBed = %$h3;		#$RegBed{$NM}{$startRegion}{$startBed} = $endBed;
+my%RegMut = %$h4;		#$RegMut{$NM}{$startRegion}{$startMut} = $MutInfo;
+
+my(%NMbed00,%NMmut00);		#$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
+				#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+foreach my$chr (keys%Regions)
+	{
+	foreach my$NM ( keys%{ $Regions{$chr} } )	#$gene or $NM
+		{
+		my@startReg = sort{$a<=>$b}(keys%{ $Regions{$chr}{$NM} });
+		my@start00 = sort{$a<=>$b}(keys%{ $Reg_00{$NM} });
+		for (my$i=0;$i<scalar@startReg;$i++)
+			{
+			my$sub = $startReg[$i] - $start00[$i];
+			foreach my$startBed ( keys%{ $RegBed{$NM}{$startReg[$i]} } )
+				{ $NMbed00{$NM}{($startBed-$sub)} = $RegBed{$NM}{$startReg[$i]}{$startBed}-$sub+1; }
+			foreach my$mut ( keys%{ $RegMut{$NM}{$startReg[$i]} } )
+				{ $NMmut00{$NM}{($mut-$sub)} = $RegMut{$NM}{$startReg[$i]}{$mut}; }
+			}
+		}
+	}
+return(\%NMbed00,\%NMmut00);
+}
+
+
+###########################
+#merge intervals from %Regions: 
+#$Regions{chr}{NM}{start of region} = end of region
+#my%allInterval = mergeIntervals(%Regions);
+sub mergeIntervals
+{
+print "merge overlapping intervals from RefSeq selected transcripts\n";
+# %allExon : key1 = chr, value1 = %( key2 = NM, value2 = %(key3 = exonstart, value3 = exonend) ) 
+#$interval2{$chr}{$start} = $end;
+my(%allExon) = @_;
+
+#for each same starts, keep longer intervals
+my(%interval,%chrom);
+foreach my$chr (keys%allExon)
+	{
+	foreach my$NM (keys%{ $allExon{$chr} })
+		{
+		$chrom{$chr} = 1;
+		foreach my$start ( sort{$a<=>$b}(keys%{ $allExon{$chr}{$NM} }) )
+			{
+			if ( exists $interval{$chr}{$start} )
+				{
+				if ( $allExon{$chr}{$NM}{$start} > $interval{$chr}{$start} )
+					{  $interval{$chr}{$start} = $allExon{$chr}{$NM}{$start}; }	
+				else { next; }
+				}
+			else
+				{ $interval{$chr}{$start} = $allExon{$chr}{$NM}{$start}; }
+			}
+		}
+	}
+my@chrom = sort(keys%chrom);
+
+#merge overlapping intervals
+my(%interval2);
+foreach my$chr (@chrom)
+	{ 
+	my@Starts = sort{$a<=>$b}(keys%{ $interval{$chr} }); 	#hash{chr}=@sortedStart
+	my$start = $Starts[0];
+	my$end = $interval{$chr}{$start};
+	$interval2{$chr}{$start} = $end;
+	for (my$i=1;$i<scalar(@Starts);$i++)
+		{
+		if ($Starts[$i] <= $end)
+			{
+			if ($interval{$chr}{$Starts[$i]} > $end)
+				{ $end = $interval{$chr}{$Starts[$i]}; }
+			else { next; }
+			}
+		else
+			{
+			$interval2{$chr}{$start} = $end;
+			$start = $Starts[$i];
+			$end = $interval{$chr}{$start};
+			}
+		}
+	$interval2{$chr}{$start} = $end;
+	}
+return (%interval2)	#$interval2{$chr}{$start} = $end;
+}
+
+
+#####################
+sub printBed
+{
+my($bedFile,$h1) = @_;
+my%interval = %$h1;
+open (OUT0, ">$outdir/$bedFile\_0Chr.bed")  || die "cannot create $outdir/$bedFile\_0Chr.bed\n";
+open (OUTw, ">$outdir/$bedFile\_wChr.bed")  || die "cannot create $outdir/$bedFile\_wChr.bed\n";
+foreach my$chr (sort(keys%interval)) {
+	foreach my$start (sort{$a<=>$b}keys%{ $interval{$chr} }) {
+		print OUT0 $chr."\t".($start-1)."\t".$interval{$chr}{$start}."\n";
+		print OUTw "chr".$chr."\t".($start-1)."\t".$interval{$chr}{$start}."\n";
+		}
+	}
+close OUT0;
+close OUTw;
+}
+
+
+####################
+#no longer used
+sub withChr
+{
+my($bedName,$h1,$extenS,$h2,$h3,$outdir) = @_;
+my%path = %$h1;
+my@Files = @$h2;
+my%fName = %$h3;
+my%withChr;
+foreach (@Files) {
+	#intersect: to know which bed to use (with or without chr prefix)
+	$withChr{$_}="_0Chr.bed";
+	print "bedtools intersect -a $path{$_}$fName{$_}$extenS -b $outdir/$bedName\_0Chr.bed -bed > $outdir/$fName{$_}\_inter.bed\n";
+	system "bedtools intersect -a $path{$_}$fName{$_}$extenS -b $outdir/$bedName\_0Chr.bed -bed > $outdir/$fName{$_}\_inter.bed";
+	if ( -z "$outdir/$fName{$_}\_inter.bed" ) { 
+		print "no overlap between refseq and $fName{$_}\n";
+		$withChr{$_}="_wChr.bed"; 
+		}
+	unlink "$outdir/$fName{$_}\_inter.bed";
+	}
+return(%withChr);
+}
+
+####################
+#bedtools
+sub bedToolsCov
+{
+my($bedName,$h1,$extenS,$h2,$h3,$outdir,$h4) = @_;
+my%path = %$h1;
+my@Files = @$h2;
+my%fName = %$h3;
+my%withChr = %$h4;
+my%withChr2;
+
+foreach (@Files) {
+	print "perform bedtools coverageBed on $fName{$_}\n";
+	print "cmd: coverageBed -abam $path{$_}$fName{$_}$extenS -b $outdir/$bedName$withChr{$_} -d > $outdir/$fName{$_}\_cov.bed\n";
+	system "coverageBed -abam $path{$_}$fName{$_}$extenS -b $outdir/$bedName$withChr{$_} -d > $outdir/$fName{$_}\_cov.bed";
+
+	open(COV, "$outdir/$fName{$_}\_cov.bed") || die "can't open file $outdir/$fName{$_}\_cov.bed\n";
+	my$ok=0;
+	while (my$line=<COV>) {
+		chomp $line;
+		my@tab = split(/\t/,$line);
+		if ($tab[-1] != 0)
+			{ $ok=1; last; }
+		}
+	close COV;
+	unless ($ok) {
+		print "try other reference genome:\n";
+		#$withChr{$_} = "_wChr.bed";
+		foreach (@Files) 
+			{ $withChr{$_} = "_wChr.bed"; }
+		print "cmd: coverageBed -abam $path{$_}$fName{$_}$extenS -b $outdir/$bedName$withChr{$_} -d > $outdir/$fName{$_}\_cov.bed\n";
+		system "coverageBed -abam $path{$_}$fName{$_}$extenS -b $outdir/$bedName$withChr{$_} -d > $outdir/$fName{$_}\_cov.bed";
+		}
+	$withChr2{$_} = $withChr{$_};
+
+	print "cmd: sort -k 1,1 -k 2n,2n -k 4n,4n $outdir/$fName{$_}\_cov.bed > $outdir/$fName{$_}\_cov_sort.bed\n";
+	system "sort -k 1,1 -k 2n,2n -k 4n,4n $outdir/$fName{$_}\_cov.bed > $outdir/$fName{$_}\_cov_sort.bed";
+	unlink "$outdir/$fName{$_}\_cov.bed";
+	}
+
+return(%withChr2);
+}
+
+
+####################
+#if bedtools covfile and interval not identical (in previous versiosns)
+#scan bedtools file, and intersect with %allInterval (coding regions of selected genes) 
+#create 2 hash : 
+# - %allDepth: depth foreach position in intervals from %allInterval : $allCov{$chr}{$loc} = $cov
+# - %notCov: start and end of each not covered domain within %allInterval
+sub intersect
+{
+#@hashSub = intersect($file,$maxD,$chr,\@Thresholds,\%{ $Regions{$chr}{$gene} });
+my($file,$fileName,$outdir,$maxD,$chr,$h1,$h2) = @_;
+my@Thresholds = @$h1;
+my%Intervals = %$h2;
+
+my@Starts = sort{$a<=>$b}(keys%Intervals);
+my%allDepth;		#for depth line : $allDepth{$loc} = $cov
+my$c=0;			#idx of $startByChr
+my$ok=0;
+
+unless ( -s "$outdir/$fileName\_cov_sort.bed" ) { die "$outdir/$fileName\_cov_sort.bed is empty\n"; }
+open(COV, "$outdir/$fileName\_cov_sort.bed") || die "can't open file $outdir/$fileName\_cov_sort.bed\n";
+while (my$line=<COV>) {
+	chomp $line;
+	my@tab = split(/\t/,$line);
+	$tab[0] =~ s/chr//;
+	if ($tab[0] eq $chr) {
+		while ( (($tab[1]+1) > $Intervals{$Starts[$c]}) && ($c < (scalar@Starts-1)) )
+			{ $c++; }
+		if ( ($tab[2] >= $Starts[$c]) && (($tab[1]+1) <= $Intervals{$Starts[$c]}) ) {
+			my$loc = $tab[1]+$tab[-2]; #so now 1-based coordinate
+			my$cov = $tab[-1];
+			if ($maxD) { if ($cov > $maxD) { $cov = $maxD; } }
+			$allDepth{$loc} = $cov; 
+			}
+		if ( ($tab[1]+1) > $Intervals{$Starts[-1]} )
+			{ $ok = 1; }
+		}
+	if ($ok) { last; }	
+	}
+close COV;
+#cov-domains:
+my%notCov;		#for cov-domains: foreach chr, for regions > threshold: $notCov{$chr}{$start} = $end
+my%notCovStarts;	#for cov-domains: foreach chr, ordered starts of regions < threshold
+my$noCovStart=0; my$noCovEnd=0;
+foreach my$threshold (@Thresholds) {
+	foreach my$start (@Starts) {
+		my$pos=$start;
+		while ($pos<=$Intervals{$start}) {
+			if ( $allDepth{$pos} < $threshold ) {
+				if ( $pos == ($noCovEnd + 1) ) { 
+					$notCov{$threshold}{$noCovStart} = $pos ; 
+					$noCovEnd = $pos; 
+					}
+				else { 
+					$notCov{$threshold}{$pos} = $pos ; 
+					$noCovStart = $pos; 
+					$noCovEnd = $pos; 
+					}
+				}
+			$pos++;
+			}
+		}
+	@{ $notCovStarts{$threshold} } = sort{$a<=>$b}keys%{ $notCov{$threshold} };
+	}
+	
+return(\%allDepth,\%notCov,\%notCovStarts);
+}
+
+
+####################
+#scan bedtools file, and intersect with %allInterval (coding regions of selected genes) 
+#create 2 hash : 
+# - %allDepth: depth foreach position in intervals from %allInterval : $allDepth{$loc} = $cov
+# - %notCov: start and end of each not covered domain within %allInterval
+sub intersect2
+{
+my($file,$fileName,$outdir,$maxD,$h1) = @_;
+my@Thresholds = @$h1;
+
+#all cov values:
+my%allDepth;		#for cov-line : $allDepth{$loc} = $cov 
+
+unless ( -s "$outdir/$fileName\_cov_sort.bed" ) { die "$outdir/$fileName\_cov_sort.bed\n is empty"; }
+open(COV, "$outdir/$fileName\_cov_sort.bed") || die "can't open file $outdir/$fileName\_cov_sort.bed\n";
+while (my$line=<COV>)
+	{
+	if ($line =~ /^\s*$/) { die "bedtools file $file\_cov_sort.bed empty\n"; }
+	chomp $line;
+	my@tab = split(/\t/,$line);
+	$tab[0] =~ s/chr//;
+	$allDepth{($tab[1]+$tab[-2])} = $tab[-1]; #now 1-based coordinate
+	if ($maxD) 
+		{ 
+		if ($tab[-1] > $maxD) 
+			{ $allDepth{($tab[1]+$tab[-2])} = $maxD; } 
+		}
+	}
+close COV;
+
+#cov-domains:
+my%notCov;		#for cov-domains: foreach chr, for regions > threshold: $notCov{$chr}{$start} = $end
+my%notCovStarts;	#for cov-domains: foreach chr, ordered starts of regions < threshold
+my$noCovStart=-1; my$noCovEnd=-1;
+foreach my$threshold (@Thresholds)
+	{
+	foreach my$pos (sort{$a<=>$b}keys%allDepth)
+		{
+		if ( $allDepth{$pos} < $threshold )
+			{
+			if ( $pos == ($noCovEnd + 1) )
+				{ 
+				$notCov{$threshold}{$noCovStart} = $pos ; 
+				$noCovEnd = $pos; 
+				}
+			else 
+				{ 
+				$notCov{$threshold}{$pos} = $pos ; 
+				$noCovStart = $pos; 
+				$noCovEnd = $pos; 
+				}
+			}
+		}
+	@{ $notCovStarts{$threshold} } = sort{$a<=>$b}keys%{ $notCov{$threshold} };
+	}
+return(\%allDepth,\%notCov,\%notCovStarts);
+}
+
+
+#########################
+#for cov-line :
+#create a hash : foreach file, foreach NM, foreach exon, return an array of values for ordered positions
+# %NMcov: key = $file, value = %(key = $NM, value = %( key = $ex, value = @(cov foreach ordered bp of exon) ) )
+sub depthLine
+{
+my($h1,$h2)=@_; 
+my%Regions = %$h1;	# $Regions{start of region} = end of region
+my%allDepth = %$h2;	#$allDepth{$loc} = $cov
+
+my%depthLine;		#@{ $depthLine{$startReg} } = [$allDepth{$posByChr[$c]}, ]
+my@Pos = sort{$a<=>$b}keys%allDepth;
+my@startReg = sort{$a<=>$b}keys%Regions;
+my$c=0;
+for (my$r=0;$r<scalar@startReg;$r++)
+	{ 
+	while ( ( $startReg[$r] > $Pos[$c] ) && ( $c < (scalar@Pos -1) ) )
+		{ $c++; }
+	while ( ( $Regions{$startReg[$r]} >= $Pos[$c] ) && ( $c < (scalar@Pos -1) ) )
+		{
+		push( @{ $depthLine{$r} } , $allDepth{$Pos[$c]} );
+		$c++;
+		}
+	}
+return(%depthLine);
+}	
+
+
+########################
+#for cov-domains:
+#intersections not covered regions and exons 
+	#starts and ends of not covered regions within exons
+sub notCovDomains1
+{
+#@hashSub = notCovDomains1($All,$fName{$file},$outdir,$outfile,$gene,$chr,$NM,$NMsens{$NM},\@Thresholds,$pThreshold,\%{ $Regions{$chr}{$gene} },\%{ $NM_Ex{$NM} },\%notCov,\%notCovStarts,\%NMnotCov);
+my($All,$file2,$outdir,$outfile,$gene,$chr,$NM,$sens,$h1,$pThreshold,$h2,$h3,$h4,$h5,$h6) = @_;
+my@Thresholds = @$h1;
+my%Regions = %$h2;	# $Regions{start of region} = end of region
+my%NM_Ex = %$h3;	# $NM_Ex{start of region}{start of exon} = end of exon
+my%notCov = %$h4; 	# $notCov{$threshold}{$start} = $end
+my%notCovStarts = %$h5;
+my%NMnotCov = %$h6;
+
+my(%NMcovStart, %NMcovEnd);
+#$NMcovEnd{$NM}{$threshold}{$ex}{$notCovStart} = $notCovEnd;
+#@{ $NMcovStart{$NM}{$threshold}{$ex} } = [ordered $notCovStarts]
+
+my$nExon=0;	#total nber of $Exons
+foreach my$startR (keys%NM_Ex)
+	{ $nExon+=scalar(keys%{ $NM_Ex{$startR} }); }
+my@startReg = sort{$a<=>$b}keys%Regions;
+
+my$txt1 = "\nsample: ".$file2."\ngene: ".$gene."\ntranscript: ".$NM."\ncoding sequence: chr ".$chr." : ".$NMstartCod{$NM}." - ".$NMendCod{$NM}."\n";
+my%txt;
+my($geneL,%geneUC,%NM_UC);
+foreach my$threshold (@Thresholds) {
+
+	#$txt{$threshold} .= "\ndepth threshold = $threshold\n\n";
+	my$nEx=0;	#idx of $Exons (for printing)
+	my$posix=0;	#idx of $notCovStarts
+	$geneUC{$threshold}=0; $geneL=0;
+	for (my$r=0;$r<scalar@startReg;$r++)
+		{
+		my$startEx = $startReg[$r]; 
+		my$endEx = $Regions{$startReg[$r]};
+		$geneL += $Regions{$startReg[$r]}-$startReg[$r];
+
+		unless ( scalar@{ $notCovStarts{$threshold} } == 0 )
+			{
+			while ( ( $startEx > $notCov{$threshold}{$notCovStarts{$threshold}[$posix]} ) && ( $posix < (scalar@{ $notCovStarts{$threshold} }-1) ) )
+				{ $posix++; }
+	
+			while ( ( $endEx >= $notCovStarts{$threshold}[$posix] ) && ( $posix < (scalar@{ $notCovStarts{$threshold} }-1) ) )
+				{
+				if ($startEx >= $notCovStarts{$threshold}[$posix]) 
+					{
+					if ($endEx > $notCov{$threshold}{$notCovStarts{$threshold}[$posix]})
+						{ $NMcovEnd{$threshold}{$r}{$startEx} = $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}; }
+					else	#$endEx <= $notCov{$chr}{$notCovStarts{$chr}[$posix]}
+						{ $NMcovEnd{$threshold}{$r}{$startEx} = $endEx; }
+					}
+				else	#$startEx < $notCovStarts{$chr}[$posix]
+					{
+					if ($endEx <= $notCov{$threshold}{$notCovStarts{$threshold}[$posix]})
+						{ $NMcovEnd{$threshold}{$r}{$notCovStarts{$threshold}[$posix]} = $endEx; }
+					else	#$end > $notCov{$chr}{$notCovStarts{$chr}[$posix]}
+						{ $NMcovEnd{$threshold}{$r}{$notCovStarts{$threshold}[$posix]} = $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}; }
+					}
+				$posix++;
+				}
+			#for last [posix]:
+			if ( ($startEx <= $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}) && ($endEx >= $notCovStarts{$threshold}[$posix]) )
+				{
+				if ($startEx >= $notCovStarts{$threshold}[$posix]) 
+					{
+					if ($endEx > $notCov{$threshold}{$notCovStarts{$threshold}[$posix]})
+						{ $NMcovEnd{$threshold}{$r}{$startEx} = $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}; }
+					else	#$endEx <= $notCov{$chr}{$notCovStarts{$chr}[$posix]}
+						{ $NMcovEnd{$threshold}{$r}{$startEx} = $endEx; }
+					}
+				else	#$startEx < $notCovStarts{$chr}[$posix]
+					{
+					if ($endEx <= $notCov{$threshold}{$notCovStarts{$threshold}[$posix]})
+						{ $NMcovEnd{$threshold}{$r}{$notCovStarts{$threshold}[$posix]} = $endEx; }
+					else	#$end > $notCov{$chr}{$notCovStarts{$chr}[$posix]}
+						{ $NMcovEnd{$threshold}{$r}{$notCovStarts{$threshold}[$posix]} = $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}; }
+					}
+				}
+			}
+		if ($pThreshold) {
+			if ($sens eq "+") {
+				foreach my$ex (sort{$a<=>$b}keys%{ $NM_Ex{$startReg[$r]} }) {
+					$nEx++;
+					if (exists $NMcovEnd{$threshold}{$r})
+						{ $txt{$threshold} .= "exon $nEx : ".$ex." - ".$NM_Ex{$startReg[$r]}{$ex}."\n"; } 
+					}
+				}
+			else {
+				foreach my$ex (sort{$a<=>$b}keys%{ $NM_Ex{$startReg[$r]} }) {
+					if (exists $NMcovEnd{$threshold}{$r}) 
+						{ $txt{$threshold} .= "exon ".($nExon-$nEx)." : ".$ex." - ".$NM_Ex{$startReg[$r]}{$ex}."\n"; }
+					$nEx++; 
+					}
+				}
+			if ((exists $NMcovEnd{$threshold}{$r}) && (scalar(keys%{ $NM_Ex{$startReg[$r]} })!=0)) {
+				$NMnotCov{$NM}{$file2}{$threshold} = 1;
+				$txt{$threshold} .= "\tnot covered from :\n";
+				foreach my$pos (sort{$a<=>$b}(keys%{ $NMcovEnd{$threshold}{$r} })) { 
+					push(@{ $NMcovStart{$threshold}{$r} }, $pos);
+					$txt{$threshold} .= "\t$pos\tto\t".$NMcovEnd{$threshold}{$r}{$pos}."\n";
+					$geneUC{$threshold} += $NMcovEnd{$threshold}{$r}{$pos} - $pos;
+					}
+				}
+			}
+		else {
+			if ($sens eq "+") {
+				foreach my$ex ( sort{$a<=>$b}keys%{ $NM_Ex{$startReg[$r]} } ) {
+					$nEx++;
+					$txt{$threshold} .= "exon $nEx : ".$ex." - ".$NM_Ex{$startReg[$r]}{$ex}."\n"; 
+					}
+				}
+			else {
+				foreach my$ex ( sort{$a<=>$b}keys%{ $NM_Ex{$startReg[$r]} } ) { 
+					$txt{$threshold} .= "exon ".($nExon-$nEx)." : ".$ex." - ".$NM_Ex{$startReg[$r]}{$ex}."\n"; 
+					$nEx++; 
+					}
+				}
+			if ((exists $NMcovEnd{$threshold}{$r}) && (scalar(keys%{ $NM_Ex{$startReg[$r]} })!=0)) {
+				$txt{$threshold} .= "\tnot covered from :\n";
+				foreach my$pos (sort{$a<=>$b}(keys%{ $NMcovEnd{$threshold}{$r} })) { 
+					push(@{ $NMcovStart{$threshold}{$r} }, $pos);
+					$txt{$threshold} .= "\t$pos\tto\t".$NMcovEnd{$threshold}{$r}{$pos}."\n";
+					$geneUC{$threshold} += $NMcovEnd{$threshold}{$r}{$pos} - $pos;
+					}
+				}
+			}
+		}
+	$NM_UC{$threshold} = sprintf("%.1f", ($geneUC{$threshold}/$geneL*100));print"$gene\_$NM\t$NM_UC{$threshold}\n";
+	}
+
+if ($pThreshold) {
+	if (exists $NMnotCov{$NM}{$file2}{$pThreshold}) {
+		open(OUT, ">$outdir/cov\_$file2/$outfile$file2\_$gene\_$NM.txt") || die "can't create file $outdir/$outfile$file2\_$NM.txt\n";
+		print OUT $txt1; 
+		foreach my$threshold (@Thresholds) {
+			print OUT "\ndepth threshold = $threshold\n\n";
+			print OUT "not covered over $NM_UC{$threshold}% of exons\n\n";
+			print OUT $txt{$threshold};
+			}
+		close OUT;
+		}
+	}
+else {
+	open(OUT, ">$outdir/cov\_$file2/$outfile$file2\_$gene\_$NM.txt") || die "can't create file $outdir/$outfile$file2\_$NM.txt\n";
+	foreach my$threshold (@Thresholds) {
+		print OUT "\ndepth threshold = $threshold\n\n";
+		print OUT "not covered over $NM_UC{$threshold}% of exons:\n\n";
+		print OUT $txt{$threshold};
+		}
+	 close OUT;
+	}
+
+return(\%NMnotCov,\%NMcovStart,\%NMcovEnd,\%NM_UC);
+}
+
+
+########################
+#for cov-domains:
+#intersections not covered regions and exons 
+	#starts and ends of not covered regions within exons
+sub notCovDomains2
+{
+#@hashSub = notCovDomains1($file2,$outdir,$outfile,$gene,$chr,$NM,$NMsens{$NM},\@Thresholds,\%{ $Regions{}$chr}{$gene} },\%{ $NM_Ex{$NM} },\%notCov,\%notCovStarts);
+my($h1,$h2,$h3,$h4) = @_;
+my@Thresholds = @$h1;
+my%Regions = %$h2;	# $Regions{start of region} = end of region
+my%notCov = %$h3; 	# $notCov{$threshold}{$start} = $end
+my%notCovStarts = %$h4;
+
+my(%NMcovStart, %NMcovEnd);
+#$NMcovEnd{$NM}{$threshold}{$ex}{$notCovStart} = $notCovEnd;
+#@{ $NMcovStart{$NM}{$threshold}{$ex} } = [ordered $notCovStarts]
+
+my@startReg = sort{$a<=>$b}keys%Regions;
+foreach my$threshold (@Thresholds)
+	{
+	my$posix=0;	#idx of $notCovStarts
+	for (my$r=0;$r<scalar@startReg;$r++)
+		{
+		my$startEx = $startReg[$r]; 
+		my$endEx = $Regions{$startReg[$r]}; 
+
+		unless ( scalar@{ $notCovStarts{$threshold} } == 0 )
+			{
+			while ( ( $startEx > $notCov{$threshold}{$notCovStarts{$threshold}[$posix]} ) && ( $posix < (scalar@{ $notCovStarts{$threshold} }-1) ) )
+				{ $posix++; }
+	
+			while ( ( $endEx >= $notCovStarts{$threshold}[$posix] ) && ( $posix < (scalar@{ $notCovStarts{$threshold} }-1) ) )
+				{
+				if ($startEx >= $notCovStarts{$threshold}[$posix]) 
+					{
+					if ($endEx > $notCov{$threshold}{$notCovStarts{$threshold}[$posix]})
+						{ $NMcovEnd{$threshold}{$r}{$startEx} = $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}; }
+					else	#$endEx <= $notCov{$chr}{$notCovStarts{$chr}[$posix]}
+						{ $NMcovEnd{$threshold}{$r}{$startEx} = $endEx; }
+					}
+				else	#$startEx < $notCovStarts{$chr}[$posix]
+					{
+					if ($endEx <= $notCov{$threshold}{$notCovStarts{$threshold}[$posix]})
+						{ $NMcovEnd{$threshold}{$r}{$notCovStarts{$threshold}[$posix]} = $endEx; }
+					else	#$end > $notCov{$chr}{$notCovStarts{$chr}[$posix]}
+						{ $NMcovEnd{$threshold}{$r}{$notCovStarts{$threshold}[$posix]} = $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}; }
+					}
+				$posix++;
+				}
+			#for last [posix]:
+			if ( ($startEx <= $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}) && ($endEx >= $notCovStarts{$threshold}[$posix]) )
+				{
+				if ($startEx >= $notCovStarts{$threshold}[$posix]) 
+					{
+					if ($endEx > $notCov{$threshold}{$notCovStarts{$threshold}[$posix]})
+						{ $NMcovEnd{$threshold}{$r}{$startEx} = $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}; }
+					else	#$endEx <= $notCov{$chr}{$notCovStarts{$chr}[$posix]}
+						{ $NMcovEnd{$threshold}{$r}{$startEx} = $endEx; }
+					}
+				else	#$startEx < $notCovStarts{$chr}[$posix]
+					{
+					if ($endEx <= $notCov{$threshold}{$notCovStarts{$threshold}[$posix]})
+						{ $NMcovEnd{$threshold}{$r}{$notCovStarts{$threshold}[$posix]} = $endEx; }
+					else	#$end > $notCov{$chr}{$notCovStarts{$chr}[$posix]}
+						{ $NMcovEnd{$threshold}{$r}{$notCovStarts{$threshold}[$posix]} = $notCov{$threshold}{$notCovStarts{$threshold}[$posix]}; }
+					}
+				}
+			}
+		if (exists $NMcovEnd{$threshold}{$r})
+			{
+			foreach my$pos (sort{$a<=>$b}(keys%{ $NMcovEnd{$threshold}{$r} }))
+				{ push(@{ $NMcovStart{$threshold}{$r} }, $pos); }
+			}
+		}
+	}
+close OUT;
+return(\%NMcovStart, \%NMcovEnd);
+}
+
+
+#########################
+#transposition and splicing, for %NMcovStart and %NMcovEnd
+#for $gene and $NM
+sub transposeCov
+{
+my($h1,$h2,$h3,$h4,$h5) = @_;
+my@Thresholds = @$h1;
+my%Regions = %$h2;	# $Regions{start of region} = end of region
+my%Reg_00 = %$h3;	# $Reg_00{start of region} = end of region (start of region =0)
+my%NMcovStart = %$h4;
+my%NMcovEnd = %$h5;
+
+my(%covStart01,%covEnd01);
+
+
+my@startReg = sort{$a<=>$b}keys%Regions;
+my@start00 = sort{$a<=>$b}keys%Reg_00;
+foreach my$threshold (@Thresholds)
+	{
+	my$sub = $startReg[0];
+	for (my$i=0;$i<scalar(keys%{ $NMcovEnd{$threshold}{0} });$i++)
+		{ $covEnd01{$threshold}{0}{($NMcovStart{$threshold}{0}[$i]-$sub)} = $NMcovEnd{$threshold}{0}{$NMcovStart{$threshold}{0}[$i]}-$sub+1; }
+
+	for (my$ex=1;$ex<scalar@startReg;$ex++)
+		{
+		$sub = $startReg[$ex] - $start00[$ex];
+		for (my$i=0;$i<scalar(keys%{ $NMcovEnd{$threshold}{$ex} });$i++)
+			{ $covEnd01{$threshold}{$ex}{($NMcovStart{$threshold}{$ex}[$i]-$sub)} = $NMcovEnd{$threshold}{$ex}{$NMcovStart{$threshold}{$ex}[$i]}-$sub+1; }
+		}
+
+	for (my$ex=0;$ex<scalar@startReg;$ex++)
+		{
+		foreach my$pos ( sort{$a<=>$b}(keys%{ $covEnd01{$threshold}{$ex} }) )
+			{  push(@{ $covStart01{$threshold}{$ex} }, $pos); }
+		}
+	}
+
+return(\%covStart01,\%covEnd01);
+}
+
+
+#########################
+#
+sub covByThreshold
+{
+my($threshold,$h1,$h2,$h3)=@_;
+my%Regions = %$h1;	# $Regions{start of region} = end of region
+my%Depth = %$h2;	#$allDepth{$loc} = $cov
+my%Cov = %$h3;		#@{ $Cov{$reg} } = [nbe of covered samples foreach pos of reg], for defined threshold
+#print"for threshold $threshold, add covered positions\n";
+my@Pos = sort{$a<=>$b}keys%Depth;
+my@startReg = sort{$a<=>$b}keys%Regions;
+my$d=0;	#index of @posByChr=keys%{ $Depth{$chr} }
+for (my$r=0;$r<scalar@startReg;$r++)
+	{
+	my$c=0;	#index of @{ $NMCov{$threshold}{$NM}{$r} }
+	while ( ( $startReg[$r] > $Pos[$d] ) && ( $d < (scalar@Pos -1) ) )
+		{ $d++; }
+	while ( ( $Regions{$startReg[$r]} >= $Pos[$d] ) && ( $d < (scalar@Pos -1) ) )
+		{
+		if(($Depth{$Pos[$d]}ne"") && ($Depth{$Pos[$d]}>=$threshold))
+			{ $Cov{$r}[$c]++; }
+		$d++; $c++;
+		}
+	}
+return(%Cov);
+}
+
+
+############################
+#foreach NM, find max cov, among all samples
+sub maxCov
+{
+my($h1,$h2,$h3) = @_;
+my@Files=@$h1;
+my%NMdepth=%$h2;	#@{ $NMdepth{$file}{$startReg} } = [ cov foreach ordered bp of exon ]
+my%Reg_00 = %$h3;	#$Reg_00{start of region} = $end of region (for start of region = 0)
+#open (OUT1, ">test1");
+my@maxA1;#for All samples
+my(%maxS1,%maxS2,%maxCovS);#for each sample
+foreach my$file (@Files)
+	{
+	for (my$ex=0;$ex<scalar(keys%Reg_00);$ex++)
+		{
+		foreach my$cov (@{ $NMdepth{$file}{$ex} })
+			{ push( @maxA1, $cov ); push( @{ $maxS1{$file} }, $cov );}
+		}
+	@{ $maxS2{$file} } = sort{$b<=>$a}@{ $maxS1{$file} };
+	$maxCovS{$file} = $maxS2{$file}[0];
+	}
+my@maxA2 = sort{$b<=>$a}@maxA1;
+my$maxCovA = $maxA2[0];
+return($maxCovA,\%maxCovS);
+}
+
+
+##########################
+sub ReverseGene1
+{
+#ReverseGene1($Sum,$allS,$byS,$gene,$NMlength{$gene},\@Thresholds,\%{ $Reg_00{$gene} },\%{ $NMbed00{$gene} },\%{ $NMmut00{$gene} },\%{ $NMdepth{$gene} },\%{ $covEnd01{$gene} },\%{ $covStart01{$gene} },\%{ $NMCov{$gene} });
+my($Sum,$allS,$byS,$gene,$length,$h1,$h2,$h3,$h4,$h5,$h6,$h7,$h8)=@_;
+my@Thresholds = @$h1;
+my%Reg_00 = %$h2;
+my%NMbed00 = %$h3;
+my%NMmut00 = %$h4;
+my%NMdepth = %$h5;
+my%covEnd01 = %$h6;
+my%covStart01 = %$h7;
+my%NMCov = %$h8;
+print "reverse $gene\n";
+#$Reg_00{$NM}{start of region} = $end of region (for start of region = 0)
+#%{ $Reg_00{$NM} } = reverseNM($NMlength{$NM},\%{ $Reg_00{$NM} });
+#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+#foreach my$startReg (keys%{ $NM_Ex00{$NM} })
+#{ %{ $NM_Ex00{$NM}{$startReg} } = reverseNM( $NMlength{$NM},\%{ $NM_Ex00{$NM}{$startReg} } ); }
+my(%RegR);
+foreach my$startReg (keys%Reg_00)
+	{ $RegR{($length-$Reg_00{$startReg})} = $length-$startReg; }
+%Reg_00 = %RegR;
+%NMbed00 = reverseEx($length,\%NMbed00);
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+my(%mutR); 
+foreach (keys%NMmut00)
+	{ $mutR{($length-$_)} = $NMmut00{$_}; }
+%NMmut00 = %mutR;
+#unless ((exists$opts{X}) && ($opts{X}eq"N"))
+if ($allS || $byS)
+	{		
+	#@{ $NMcov{$file}{$NM}{$ex} } = [ cov foreach ordered bp of exon ]
+	foreach my$file (keys%NMdepth)
+		{
+		my$nEx=scalar(keys%{ $NMdepth{$file} })-1;
+		my%tmp;
+		foreach my$ex (sort{$a<=>$b}(keys%{ $NMdepth{$file} }))
+			{ @{ $tmp{($nEx-$ex)} } = reverse@{ $NMdepth{$file}{$ex} }; }
+		%{ $NMdepth{$file} } = %tmp;
+		}
+	#$covEnd01{$file}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+	#@{ $covStart01{$file}{$threshold}{$ex} } = [ordered $notCovStarts00]
+	foreach my$file (keys%covEnd01)
+		{
+		foreach my$threshold (keys%{ $covEnd01{$file} })
+			{
+			my%tmp;
+			my$nEx=scalar(keys%{ $covEnd01{$file}{$threshold} })-1;
+			foreach my$ex (keys%{ $covEnd01{$file}{$threshold} })
+				{ %{ $tmp{($nEx-$ex)} } = reverseEx($length,\%{ $covEnd01{$file}{$threshold}{$ex} }); }
+			%{ $covEnd01{$file}{$threshold} } = %tmp;
+			foreach my$ex (keys%{ $covEnd01{$file}{$threshold} })
+				{ @{ $covStart01{$file}{$threshold}{$ex} } = sort{$a<=>$b}keys%{ $covEnd01{$file}{$threshold}{$ex} }; }
+			}
+		}
+	}
+#@{ $NMCov{$threshold}{$NM}{$nReg} } = [nber of covered samples foreach pos of Regions{$NM}{$startReg}]
+#unless ((exists$opts{T}) && ($opts{T}eq"N"))
+if ($Sum)
+	{
+	foreach my$threshold (@Thresholds)
+		{
+		my$nEx=scalar(keys%{ $NMCov{$threshold} })-1;
+		my%tmp;
+		foreach my$ex (sort{$a<=>$b}(keys%{ $NMCov{$threshold} }))
+			{ @{ $tmp{($nEx-$ex)} } = reverse@{ $NMCov{$threshold}{$ex} }; }
+		%{ $NMCov{$threshold} } = %tmp;
+		}
+	}
+return(\%Reg_00,\%NMbed00,\%NMmut00,\%NMdepth,\%covEnd01,\%covStart01,\%NMCov);
+}
+##########################
+sub ReverseGene2
+{
+#@hashSub = ReverseGene2($NM,$NMlength{$gene},\@Thresholds,\%{ $Reg_00{$gene} },\%{ $NM_Ex00{$NM} },\%{ $intron{$NM} },\%{ $UTR{$NM} },\%{ $Cod{$NM} });
+my($NM,$length,$h1,$h2,$h3,$h4,$h5,$h6)=@_;
+my@Thresholds = @$h1;
+my%Reg_00 = %$h2;
+my%NM_Ex00 = %$h3;
+my%intron = %$h4;
+my%UTR = %$h5;
+my%Cod = %$h6;
+print "reverse $NM\n";
+#$Reg_00{$NM}{start of region} = $end of region (for start of region = 0)
+#%{ $Reg_00{$NM} } = reverseNM($NMlength{$NM},\%{ $Reg_00{$NM} });
+#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+#foreach my$startReg (keys%{ $NM_Ex00{$NM} })
+#{ %{ $NM_Ex00{$NM}{$startReg} } = reverseNM( $NMlength{$NM},\%{ $NM_Ex00{$NM}{$startReg} } ); }
+my(%NM_ExR);
+foreach my$startReg (keys%Reg_00)
+	{ %{ $NM_ExR{($length-$Reg_00{$startReg})} } = reverseEx( $length,\%{ $NM_Ex00{$startReg} } ); }
+%NM_Ex00 = %NM_ExR;	
+# $intron{$NM}{$startIntron} = $endIntron (for start of region = 0)
+%intron = reverseEx($length,\%intron);
+# $UTR{$NM}{$startUTR} = $endUTR (for start of region = 0)
+%UTR = reverseEx($length,\%UTR);
+# $Cod{$NM}{$startCod} = $endCod (for start of region = 0)}
+%Cod = reverseEx($length,\%Cod);
+return(\%NM_Ex00,\%intron,\%UTR,\%Cod);
+}
+
+##########################
+sub ReverseNMs
+{
+#ReverseNMs($Sum,$allS,$byS,$NM,$NMlength{$NM},\@Thresholds,\%{ $Reg_00{$NM} },\%{ $NM_Ex00{$NM} },\%{ $intron{$NM} },\%{ $UTR{$NM} },\%{ $Cod{$NM} },\%{ $NMbed00{$NM} },\%{ $NMmut00{$NM} },\%{ $NMdepth{$NM} },\%{ $covEnd01{$NM} },\%{ $covStart01{$NM} },\%{ $NMCov{$NM} });
+my($Sum,$allS,$byS,$NM,$length,$h1,$h2,$h3,$h4,$h5,$h6,$h7,$h8,$h9,$h10,$h11,$h12)=@_;
+my@Thresholds = @$h1;
+my%Reg_00 = %$h2;
+my%NM_Ex00 = %$h3;
+my%intron = %$h4;
+my%UTR = %$h5;
+my%Cod = %$h6;
+my%NMbed00 = %$h7;
+my%NMmut00 = %$h8;
+my%NMdepth = %$h9;
+my%covEnd01 = %$h10;
+my%covStart01 = %$h11;
+my%NMCov = %$h12;
+print "reverse $NM\n";
+#$Reg_00{$NM}{start of region} = $end of region (for start of region = 0)
+#%{ $Reg_00{$NM} } = reverseNM($NMlength{$NM},\%{ $Reg_00{$NM} });
+#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+#foreach my$startReg (keys%{ $NM_Ex00{$NM} })
+#{ %{ $NM_Ex00{$NM}{$startReg} } = reverseNM( $NMlength{$NM},\%{ $NM_Ex00{$NM}{$startReg} } ); }
+my(%RegR,%NM_ExR);
+foreach my$startReg (keys%Reg_00)
+	{
+	$RegR{($length-$Reg_00{$startReg})} = $length-$startReg;
+	%{ $NM_ExR{($length-$Reg_00{$startReg})} } = reverseEx( $length,\%{ $NM_Ex00{$startReg} } );
+	}
+%Reg_00 = %RegR;
+%NM_Ex00 = %NM_ExR;
+# $intron{$NM}{$startIntron} = $endIntron (for start of region = 0)
+%intron = reverseEx($length,\%intron);
+# $UTR{$NM}{$startUTR} = $endUTR (for start of region = 0)
+%UTR = reverseEx($length,\%UTR);
+# $Cod{$NM}{$startCod} = $endCod (for start of region = 0)}
+%Cod = reverseEx($length,\%Cod);
+#$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
+%NMbed00 = reverseEx($length,\%NMbed00);
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+my(%mutR); 
+foreach (keys%NMmut00)
+	{ $mutR{($length-$_)} = $NMmut00{$_}; }
+%NMmut00 = %mutR;
+#unless ((exists$opts{X}) && ($opts{X}eq"N"))
+if ($allS || $byS)
+	{		
+	#@{ $NMcov{$file}{$NM}{$ex} } = [ cov foreach ordered bp of exon ]
+	foreach my$file (keys%NMdepth)
+		{
+		my$nEx=scalar(keys%{ $NMdepth{$file} })-1;
+		my%tmp;
+		foreach my$ex (sort{$a<=>$b}(keys%{ $NMdepth{$file} }))
+			{ @{ $tmp{($nEx-$ex)} } = reverse@{ $NMdepth{$file}{$ex} }; }
+		%{ $NMdepth{$file} } = %tmp;
+		}
+	#$covEnd01{$file}{$NM}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+	#@{ $covStart01{$file}{$NM}{$threshold}{$ex} } = [ordered $notCovStarts00]
+	foreach my$file (keys%covEnd01)
+		{
+		foreach my$threshold (keys%{ $covEnd01{$file} })
+			{
+			my%tmp;
+			my$nEx=scalar(keys%{ $covEnd01{$file}{$threshold} })-1;
+			foreach my$ex (keys%{ $covEnd01{$file}{$threshold} })
+				{ %{ $tmp{($nEx-$ex)} } = reverseEx($length,\%{ $covEnd01{$file}{$threshold}{$ex} }); }
+			%{ $covEnd01{$file}{$threshold} } = %tmp;
+			foreach my$ex (keys%{ $covEnd01{$file}{$threshold} })
+				{ @{ $covStart01{$file}{$threshold}{$ex} } = sort{$a<=>$b}keys%{ $covEnd01{$file}{$threshold}{$ex} }; }
+			}
+		}
+	}
+#@{ $NMCov{$threshold}{$NM}{$nReg} } = [nber of covered samples foreach pos of Regions{$NM}{$startReg}]
+#unless ((exists$opts{T}) && ($opts{T}eq"N"))
+if ($Sum)
+	{
+	foreach my$threshold (@Thresholds)
+		{
+		my$nEx=scalar(keys%{ $NMCov{$threshold} })-1;
+		my%tmp;
+		foreach my$ex (sort{$a<=>$b}(keys%{ $NMCov{$threshold} }))
+			{ @{ $tmp{($nEx-$ex)} } = reverse@{ $NMCov{$threshold}{$ex} }; }
+		%{ $NMCov{$threshold} } = %tmp;
+		}
+	}
+
+return(\%Reg_00,\%NM_Ex00,\%intron,\%UTR,\%Cod,\%NMbed00,\%NMmut00,\%NMdepth,\%covEnd01,\%covStart01,\%NMCov);
+}
+
+##########################
+sub reverseEx
+{
+my($NMlength,$h1) = @_;
+my%data=%$h1;
+my(%dataR);
+foreach (keys%data)
+	{ $dataR{($NMlength-$data{$_})} = $NMlength-$_; }
+return(%dataR);
+}
+
+
+#################################
+#merge overlapping intervals 
+#%interval2 = merge(\%interval);
+sub merge
+{
+my($h1) = @_;
+my%interval = %$h1;
+my@Starts = sort{$a<=>$b}(keys%interval);
+my$start = $Starts[0];
+my$end = $interval{$start};
+my%interval2;
+for (my$i=1;$i<scalar(@Starts);$i++)
+	{
+	if ($Starts[$i] <= $end)
+		{
+		if ($interval{$Starts[$i]} > $end)
+			{ $end = $interval{$Starts[$i]}; }
+		else { next; }
+		}
+	else
+		{
+		$interval2{$start} = $end;
+		$start = $Starts[$i];
+		$end = $interval{$start};
+		}
+	}
+$interval2{$start} = $end;
+return(%interval2);
+}
+
+
+#####################
+sub covDomains
+{
+#@hashSub= covDomains(\@Thresholds,\%{ $Reg_00{$NM} },\%{ $NMCov{$NM} });
+#$NMCovEnd{$NM}{$threshold}{$ex}{$start}=$end
+#$NMCovVal{$NM}{$threshold}{$ex}{$start}=$value
+my($h1,$h2,$h3) = @_;
+my@Thresholds=@$h1;
+my%Reg_00=%$h2;		#$Reg_00{start of region} = $end of region (for start of region = 0)
+my%NMCov=%$h3;		#@{ $NMCov{$threshold}{$nReg} } = [nber of covered samples foreach pos of Regions{$NM}{$startReg}]
+#$NMCovEnd{$threshold}{$ex}{$start}=$end
+#$NMCovVal{$threshold}{$ex}{$start}=$value
+my(%NMCovEnd,%NMCovVal);
+my@startR = sort{$a<=>$b}keys%Reg_00;
+foreach my$threshold (@Thresholds)
+	{
+	foreach my$r (sort{$a<=>$b}(keys%{ $NMCov{$threshold} }))
+		{
+		my$start=$startR[$r];
+		my$end=$start+1; 
+		my$cov=$NMCov{$threshold}{$r}[0];
+		for (my$i=1;$i<scalar@{ $NMCov{$threshold}{$r} };$i++)
+			{
+			if ($NMCov{$threshold}{$r}[$i] == $cov)
+				{ $end++; }
+			else
+				{
+				$NMCovEnd{$threshold}{$r}{$start}=$end;
+				$NMCovVal{$threshold}{$r}{$start}=$cov;
+				$start=$startR[$r]+$i;
+				$end=$start+1;
+				$cov=$NMCov{$threshold}{$r}[$i];
+				}
+			$NMCovEnd{$threshold}{$r}{$start}=$end;
+			$NMCovVal{$threshold}{$r}{$start}=$cov;
+			}
+		}
+	}
+return(\%NMCovEnd,\%NMCovVal);
+}
+
+
+########################
+#for $All $NM on same graph
+sub graphAllSampleG
+{
+#graphAllSampleG($suff,$outdir,$gene,$sens,$Rev,$chr,$maxCovA{$gene},$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$gene} },\%{ $Reg_00{$gene} },\%NM_Ex00,\%{ $NMbed00{$gene} },\%intron,\%UTR,\%Cod,\%{ $NMdepth{$gene} },\%{ $covStart01{$gene} },\%{ $covEnd01{$gene} },\%{ $NMmut00{$gene} });
+my($suff,$outdir,$gene,$sens,$Rev,$chr,$maxY,$NMlength,$h0,$h1,$h2,$h3,$h4,$h5,$h6,$h7,$h8,$h9,$h10,$h11,$h12,$h13,$h14,$h15)= @_;
+my@NMs=@$h0;
+my@Files=@$h1;
+my@colors=@$h2;
+my@Thresholds=@$h3;
+my%Regions=%$h4;		
+my%Reg_00=%$h5;
+my%NM_Ex00=%$h6;
+my%NMbed00=%$h7;
+my%intron=%$h8;
+my%UTR=%$h9;
+my%Cod=%$h10;
+my%NMdepth=%$h11;
+my%covStart01=%$h12;
+my%covEnd01=%$h13;
+my%NMmut00=%$h14;
+my%fileName=%$h15;
+
+print "print CMDR graphAllSampleG: $gene\n";
+open (CMDR, ">$outdir/$gene\_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+#print CMDR "png(\"$NM.png\", ".$NMlength{$NM}.", ".(scalar@Files*250).");
+print CMDR 
+"png(\"".$outdir."/cov_All/".$gene."_bySample.png\", 1500, ".(scalar@Files*(400*(0.875+(0.125*scalar@NMs)))).")\n
+par(mfrow=c(".scalar@Files.",1))\n"; 
+
+if ($maxY<10) { $maxY = 10; }
+if ($maxD) { $maxY = $maxD; }
+
+my@Starts = sort{$a<=>$b}(keys%Regions);
+my$startReg = $Starts[0];
+my$endReg = $Regions{$Starts[-1]};
+
+foreach my$file (@Files) {
+
+	my($Y,$Y1,$Y2);
+
+	#$line1: cmdR for plot cov line
+	#@{ $NMdepth{$file}{$ex} } = [ cov foreach ordered bp of exon ]
+	$Y1=(0.5+0.25*scalar@NMs);$Y2=1.25;
+	my($line1a,$line1b) = line1($maxY,$NMlength,$Y1,$Y2,\%Reg_00,\%{ $NMdepth{$file} });
+	
+	#$line2: cmdR for cmdR for lines(intron)	#$intron{$startInt} = $endInt;
+	my$line2="";
+	for(my$i=0;$i<scalar@NMs;$i++) { 
+		$Y=(0.425+0.25*$i);
+		$line2 .= line2($maxY,$Y,\%{ $intron{$NMs[$i]} });
+		}
+
+	#$line3a: cmdR for rect(bed, empty)	#$NMbed00{$startBed00} = $endBed00 (start of Region=0 )
+	$Y1=0.1;$Y2=0.25;
+	my$line3a = line3a($maxY,$Y1,$Y2,\%NMbed00);
+	my$line3b = line3a($maxY,$Y1,$Y2,\%Reg_00);
+
+	#$line3: cmdR for rect(not covered domains)
+	#$covEnd01{$file}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+	#@{ $covStart01{$file}{$threshold}{$ex} } = [ordered $notCovStarts00]
+	$Y1=0.1;$Y2=0.25;
+	my%line3 = line3($maxY,$Y1,$Y2,\@Thresholds,\@colors,\%Reg_00,\%{ $covStart01{$file} },\%{ $covEnd01{$file} });
+
+	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
+	my$line4a="";
+	for(my$i=0;$i<scalar@NMs;$i++) {
+		if (scalar(keys%{ $UTR{$NMs[$i]} })!=0) {
+			$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
+			$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR{$NMs[$i]} });
+			}
+		}
+
+	#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
+	my$line4b="";
+	for(my$i=0;$i<scalar@NMs;$i++) {
+		if (scalar(keys%{ $Cod{$NMs[$i]} })) {
+			$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
+			$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod{$NMs[$i]} });
+			}
+		}
+	
+	#$line4c: Nb exon
+	#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+	my$line4c="";
+	for(my$i=0;$i<scalar@NMs;$i++) {
+		$Y=(0.3+0.25*$i);
+		$line4c .= line4c($sens,$Rev,$maxY,$Y,\%{ $NM_Ex00{$NMs[$i]} });
+		}
+	
+	#$line5: cmdR for legends
+	my$comp = "<";
+	my$line5 = line5a($comp,\@colors,\@Thresholds);
+	
+	#$line6: cmdR for mutations (symbol)
+	#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+	my$line6a = ""; my$line6b = "";
+	if (scalar(keys%NMmut00) != 0) {
+		$Y1=0.05;$Y2=(0.3+0.25*scalar@NMs);
+		$line6a = line6a($maxY,$Y1,$Y2,\%NMmut00);
+		#$line6b: cmdR for mutations (text)
+		#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+		$Y=(0.3+0.25*scalar@NMs);
+		$line6b = line6b($maxY,$Y,\%NMmut00);
+		}
+
+	#$line7: NM names
+	my$line7 = line7($NMlength,$maxY,\@NMs);
+
+	#print CMDR:
+	print CMDR 
+"plot (c(0,0), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".((0.5+0.25*scalar@NMs)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"sample : $fileName{$file}\", ylab = \"depth\", cex.lab=1.5, cex.axis=1.2)\n";
+
+	print CMDR $line1a.$line1b;
+
+	my$col=0;
+	foreach my$threshold (@Thresholds)
+		{
+		print CMDR 
+"abline(h=$threshold, col=\"".$colors[$col]."\", lty = \"dotted\", lwd=1)\n"; 
+		$col++;
+		}
+
+	print CMDR $line2.$line4a.$line4b.$line4c.$line5.$line6a.$line6b.$line7;
+
+	print CMDR $line3b." lwd=1, col=\"green\", border =\"green\")\n";
+	foreach my$threshold (@Thresholds)	
+		{
+		if ($line3{$threshold}) 
+			{ print CMDR $line3{$threshold}; }
+		}
+	print CMDR $line3a." lwd=1, col=NA, border =\"black\")\n";
+	
+	}
+if ($sens eq "+")
+	{
+	print CMDR 
+"mtext(\"$gene\tchr $chr\t".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+	}
+else
+	{
+	print CMDR 
+"mtext(\"$gene\tchr $chr\t".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+	}
+print CMDR "dev.off();\n";
+close CMDR;
+system "Rscript $outdir/$gene\_temp.R";
+unlink "$outdir/$gene\_temp.R";
+}
+
+########################
+#graph foreach $NM 
+sub graphAllSampleN
+{
+#graphAllSampleN($NM,$suff,$outdir,$gene,$sens,$Rev,$chr,$maxCovA{$NM},$NMlength{$NM},$NMstartCod{$NM},$NMendCod{$NM},\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$NM} },\%{ $Reg_00{$NM} },\%{ $NM_Ex00{$NM} },\%{ $NMbed00{$NM} },\%{ $intron{$NM} },\%{ $UTR{$NM} },\%{ $Cod{$NM} },\%{ $NMdepth{$NM} },\%{ $covStart01{$NM} },\%{ $covEnd01{$NM} },\%{ $NMmut00{$NM} });
+my($NM,$suff,$outdir,$gene,$sens,$Rev,$chr,$maxY,$NMlength,$NMstartCod,$NMendCod,$h1,$h2,$h3,$h4,$h5,$h6,$h7,$h8,$h9,$h10,$h11,$h12,$h13,$h14,$h15)= @_;
+my@Files=@$h1;
+my@colors=@$h2;
+my@Thresholds=@$h3;
+my%Regions=%$h4;
+my%Reg_00=%$h5;
+my%NM_Ex00=%$h6;
+my%NMbed00=%$h7;
+my%intron=%$h8;
+my%UTR=%$h9;
+my%Cod=%$h10;
+my%NMdepth=%$h11;
+my%covStart01=%$h12;
+my%covEnd01=%$h13;
+my%NMmut00=%$h14;
+my%fileName=%$h15;
+
+print "print CMDR graphAllSampleN: $gene\t$NM\n";
+open (CMDR, ">$outdir/$NM\_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+#print CMDR "png(\"$NM.png\", ".$NMlength{$NM}.", ".(scalar@Files*250).");
+print CMDR 
+"png(\"".$outdir."/cov_All/".$gene."_".$NM."_bySample.png\", 1500, ".(scalar@Files*400).")\n
+par(mfrow=c(".scalar@Files.",1))\n"; 
+
+if ($maxY<10) { $maxY = 10; }
+if ($maxD) { $maxY = $maxD; }
+
+my@Starts = sort{$a<=>$b}(keys%Regions);
+my$startReg = $Starts[0];
+my$endReg = $Regions{$Starts[-1]};
+
+foreach my$file (@Files)
+	{
+	#$line1: cmdR for plot cov line
+	#@{ $NMdepth{$file}{$NM}{$ex} } = [ cov foreach ordered bp of exon ]
+	my$Y1=0.75;my$Y2=1.25;
+	my($line1a,$line1b) = line1($maxY,$NMlength,$Y1,$Y2,\%Reg_00,\%{ $NMdepth{$file} });
+	
+	#$line2: cmdR for cmdR for lines(intron)	#$intron{$startInt} = $endInt;
+	my$Y=0.425;
+	my$line2 = line2($maxY,$Y,\%intron);
+
+	#$line3a: cmdR for rect(bed, empty)	#$NMbed00{$startBed00} = $endBed00 (start of Region=0 )
+	$Y1=0.1;$Y2=0.25;
+	my$line3a = line3a($maxY,$Y1,$Y2,\%NMbed00);	#empty black squares
+	my$line3b = line3a($maxY,$Y1,$Y2,\%Reg_00);	#full green squares
+
+	#$line3: cmdR for rect(not covered domains)
+	#$covEnd01{$file}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+	#@{ $covStart01{$file}{$threshold}{$ex} } = [ordered $notCovStarts00]
+	$Y1=0.1;$Y2=0.25;
+	my%line3 = line3($maxY,$Y1,$Y2,\@Thresholds,\@colors,\%Reg_00,\%{ $covStart01{$file} },\%{ $covEnd01{$file} });
+
+	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$startUTR} = $endUTR;
+	$Y1=0.375;$Y2=0.475;
+	my$line4a = "";
+	if (scalar(keys%UTR)!=0) { $line4a .= line4a($maxY,$Y1,$Y2,\%UTR); }
+
+	#$line4b: cmdR for rect(coding exons)	#$Cod{$startCod} = $endCod;
+	$Y1=0.35;$Y2=0.5;
+	my$line4b = "";
+	if (scalar(keys%Cod)!=0) { $line4b .= line4b($maxY,$Y1,$Y2,\%Cod); }
+
+	#$line4c: Nb exon
+	#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+	$Y=0.3;
+	my$line4c = line4c($sens,$Rev,$maxY,$Y,\%NM_Ex00);
+	
+	#$line5: cmdR for legends
+	my$comp = "<";
+	my$line5 = line5a($comp,\@colors,\@Thresholds);
+	
+	#$line6: cmdR for mutations (symbol)
+	#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+	my$line6a = ""; my$line6b = "";
+	if (scalar(keys%NMmut00) != 0)
+		{
+		$Y1=0.05;$Y2=0.55;
+		$line6a = line6a($maxY,$Y1,$Y2,\%NMmut00);
+		#$line6b: cmdR for mutations (text)
+		#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+		$Y=0.55;
+		$line6b = line6b($maxY,$Y,\%NMmut00);
+		}
+
+	#print CMDR:
+	print CMDR 
+"plot (c(0,0), xlim=c(0,".$NMlength."), ylim=c(-".(0.75*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"sample : $fileName{$file}\", ylab = \"depth\", cex.lab=1.5, cex.axis=1.2)\n";
+
+	print CMDR $line1a.$line1b;
+
+	my$col=0;
+	foreach my$threshold (@Thresholds)
+		{
+		print CMDR 
+"abline(h=$threshold, col=\"".$colors[$col]."\", lty = \"dotted\", lwd=1)\n"; 
+		$col++;
+		}
+
+	print CMDR $line2.$line4a.$line4b.$line4c.$line5.$line6a.$line6b;
+
+	print CMDR $line3b." lwd=1, col=\"green\", border =\"green\")\n";
+	foreach my$threshold (@Thresholds)	
+		{
+		if ($line3{$threshold}) 
+			{ print CMDR $line3{$threshold}; }
+		}
+	print CMDR $line3a." lwd=1, col=NA, border =\"black\")\n";
+	
+	}
+if ($sens eq "+")
+	{
+	print CMDR 
+"mtext(\"$gene\t$NM\tchr $chr\t".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+	}
+else
+	{
+	print CMDR 
+"mtext(\"$gene\t$NM\tchr $chr\t".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+	}
+print CMDR "dev.off();\n";
+close CMDR;
+system "Rscript $outdir/$NM\_temp.R";
+unlink "$outdir/$NM\_temp.R";
+}
+
+
+########################
+#for $All $NM on same graph
+sub graphBySampleG
+{
+#graphBySampleG($suff,$outdir,$gene,$sens,$Rev,$chr,$NMlength{$gene},\%{ $maxCovS{$gene} },\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$gene} },\%{ $Reg_00{$gene} },\%NM_Ex00,\%{ $NMbed00{$gene} },\%intron,\%UTR,\%Cod,\%{ $NMdepth{$gene} },\%{ $covStart01{$gene} },\%{ $covEnd01{$gene} },\%{ $NMmut00{$gene} });
+my($suff,$outdir,$gene,$sens,$Rev,$chr,$NMlength,$h0,$h1,$h2,$h3,$h4,$h5,$h6,$h7,$h8,$h9,$h10,$h11,$h12,$h13,$h14,$h15,,$h16)= @_;
+my%maxCov=%$h0;
+my@NMs=@$h1;
+my@Files=@$h2;
+my@colors=@$h3;
+my@Thresholds=@$h4;
+my%Regions=%$h5;
+my%Reg_00=%$h6;
+my%NM_Ex00=%$h7;
+my%NMbed00=%$h8;
+my%intron=%$h9;
+my%UTR=%$h10;
+my%Cod=%$h11;
+my%NMdepth=%$h12;
+my%covStart01=%$h13;
+my%covEnd01=%$h14;
+my%NMmut00=%$h15;
+my%fileName=%$h16;
+
+my@Starts = sort{$a<=>$b}(keys%Regions);
+my$startReg = $Starts[0];
+my$endReg = $Regions{$Starts[-1]};
+
+foreach my$file (@Files)
+	{
+
+	print "print CMDR graphBySampleG: $gene\n";
+	open (CMDR, ">$outdir/$gene\_temp.R") || die;
+	print CMDR "#!/usr/bin/env Rscript\n\n" ;
+	#print CMDR "png(\"$NM.png\", ".$NMlength{$NM}.", ".(scalar@Files*250).");
+	print CMDR 
+	"png(\"$outdir/cov\_$fileName{$file}/$gene\_$fileName{$file}.png\", 1500, ".(400*(0.875+(0.125*scalar@NMs))).")\n"; 
+
+	my$maxY = $maxCov{$file};
+	if ($maxY<10) { $maxY = 10; }
+	if ($maxD) { $maxY = $maxD; }
+
+	my($Y,$Y1,$Y2);
+	#$line1: cmdR for plot cov line
+	#@{ $NMdepth{$file}{$ex} } = [ cov foreach ordered bp of exon ]
+	$Y1=(0.5+0.25*scalar@NMs);$Y2=1.25;
+	my($line1a,$line1b) = line1($maxY,$NMlength,$Y1,$Y2,\%Reg_00,\%{ $NMdepth{$file} });
+	
+	#$line2: cmdR for cmdR for lines(intron)	#$intron{$startInt} = $endInt;
+	my$line2="";
+	for(my$i=0;$i<scalar@NMs;$i++) { 
+		$Y=(0.425+0.25*$i);
+		$line2 .= line2($maxY,$Y,\%{ $intron{$NMs[$i]} });
+		}
+
+	#$line3a: cmdR for rect(bed, empty)	#$NMbed00{$startBed00} = $endBed00 (start of Region=0 )
+	$Y1=0.1;$Y2=0.25;
+	my$line3a = line3a($maxY,$Y1,$Y2,\%NMbed00);
+	my$line3b = line3a($maxY,$Y1,$Y2,\%Reg_00);
+
+	#$line3: cmdR for rect(not covered domains)
+	#$covEnd01{$file}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+	#@{ $covStart01{$file}{$threshold}{$ex} } = [ordered $notCovStarts00]
+	$Y1=0.1;$Y2=0.25;
+	my%line3 = line3($maxY,$Y1,$Y2,\@Thresholds,\@colors,\%Reg_00,\%{ $covStart01{$file} },\%{ $covEnd01{$file} });
+
+	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
+	my$line4a="";
+	for(my$i=0;$i<scalar@NMs;$i++) {
+		if (scalar(keys%{ $UTR{$NMs[$i]} })!=0) {
+			$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
+			$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR{$NMs[$i]} });
+			}
+		}
+
+	#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
+	my$line4b="";
+	for(my$i=0;$i<scalar@NMs;$i++) {
+		if (scalar(keys%{ $Cod{$NMs[$i]} })!=0) {
+			$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
+			$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod{$NMs[$i]} });
+			}
+		}
+	
+	#$line4c: Nb exon
+	#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+	my$line4c="";
+	for(my$i=0;$i<scalar@NMs;$i++) {
+		$Y=(0.3+0.25*$i);
+		$line4c .= line4c($sens,$Rev,$maxY,$Y,\%{ $NM_Ex00{$NMs[$i]} });
+		}
+	
+	#$line5: cmdR for legends
+	my$comp = "<";
+	my$line5 = line5a($comp,\@colors,\@Thresholds);
+	
+	#$line6: cmdR for mutations (symbol)
+	#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+	my$line6a = ""; my$line6b = "";
+	if (scalar(keys%NMmut00) != 0)
+		{
+		$Y1=0.05;$Y2=(0.3+0.25*scalar@NMs);
+		$line6a = line6a($maxY,$Y1,$Y2,\%NMmut00);
+		#$line6b: cmdR for mutations (text)
+		#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+		$Y=(0.3+0.25*scalar@NMs);
+		$line6b = line6b($maxY,$Y,\%NMmut00);
+		}
+
+	#$line7: NM names
+	my$line7 = line7($NMlength,$maxY,\@NMs);
+
+	#print CMDR:
+	print CMDR 
+"plot (c(0,0), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".((0.5+0.25*scalar@NMs)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"sample : $fileName{$file}\", ylab = \"depth\", cex.lab=1.5, cex.axis=1.2)\n";
+
+	print CMDR $line1a.$line1b;
+
+	my$col=0;
+	foreach my$threshold (@Thresholds)
+		{
+		print CMDR 
+"abline(h=$threshold, col=\"".$colors[$col]."\", lty = \"dotted\", lwd=1)\n"; 
+		$col++;
+		}
+
+	print CMDR $line2.$line4a.$line4b.$line4c.$line5.$line6a.$line6b.$line7;
+
+	print CMDR $line3b." lwd=1, col=\"green\", border =\"green\")\n";
+	foreach my$threshold (@Thresholds)	
+		{
+		if ($line3{$threshold}) 
+			{ print CMDR $line3{$threshold}; }
+		}
+	print CMDR $line3a." lwd=1, col=NA, border =\"black\")\n";
+	
+	if ($sens eq "+")
+		{
+		print CMDR 
+		"mtext(\"$gene\tchr $chr\t".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+		}
+	else
+		{
+		print CMDR 
+		"mtext(\"$gene\tchr $chr\t".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+		}
+	print CMDR "dev.off();\n";
+	close CMDR;
+	system "Rscript $outdir/$gene\_temp.R";
+	unlink "$outdir/$gene\_temp.R";
+	}
+}
+
+
+########################
+#graph foreach $NM 
+sub graphBySampleN
+{
+#graphBySampleN($NM,$suff,$outdir,$gene,$sens,$Rev,$chr,$NMstartCod{$NM},$NMendCod{$NM},$NMlength{$NM},\%{ $maxCovS{$NM} },\@Files,\@colors,\@Thresholds,\%{ $Regions{$chr}{$NM} },\%{ $Reg_00{$NM} },\%{ $NM_Ex00{$NM} },\%{ $NMbed00{$NM} },\%{ $intron{$NM} },\%{ $UTR{$NM} },\%{ $Cod{$NM} },\%{ $NMdepth{$NM} },\%{ $covStart01{$NM} },\%{ $covEnd01{$NM} },\%{ $NMmut00{$NM} });
+my($NM,$suff,$outdir,$gene,$sens,$Rev,$chr,$NMstartCod,$NMendCod,$NMlength,$h1,$h2,$h3,$h4,$h5,$h6,$h7,$h8,$h9,$h10,$h11,$h12,$h13,$h14,$h15,$h16)= @_;
+my%maxCov=%$h1;
+my@Files=@$h2;
+my@colors=@$h3;
+my@Thresholds=@$h4;
+my%Regions=%$h5;
+my%Reg_00=%$h6;
+my%NM_Ex00=%$h7;
+my%NMbed00=%$h8;
+my%intron=%$h9;
+my%UTR=%$h10;
+my%Cod=%$h11;
+my%NMdepth=%$h12;
+my%covStart01=%$h13;
+my%covEnd01=%$h14;
+my%NMmut00=%$h15;
+my%fileName=%$h16;
+
+my@Starts = sort{$a<=>$b}(keys%Regions);
+my$startReg = $Starts[0];
+my$endReg = $Regions{$Starts[-1]};
+
+foreach my$file (@Files)
+	{
+
+	print "print CMDR graphBySampleN: $gene\t$NM\n";
+	open (CMDR, ">$outdir/$NM\_temp.R") || die;
+	print CMDR "#!/usr/bin/env Rscript\n\n" ;
+	#print CMDR "png(\"$NM.png\", ".$NMlength{$NM}.", ".(scalar@Files*250).");
+	print CMDR 
+	"png(\"$outdir/cov\_$fileName{$file}/$gene\_$NM\_$fileName{$file}.png\", 1500, 400)\n"; 
+
+	my$maxY = $maxCov{$file};
+	if ($maxY<10) { $maxY = 10; }
+	if ($maxD) { $maxY = $maxD; }
+
+	#$line1: cmdR for plot cov line
+	#@{ $NMdepth{$file}{$NM}{$ex} } = [ cov foreach ordered bp of exon ]
+	my$Y1=0.75;my$Y2=1.25;
+	my($line1a,$line1b) = line1($maxY,$NMlength,$Y1,$Y2,\%Reg_00,\%{ $NMdepth{$file} });
+	
+	#$line2: cmdR for cmdR for lines(intron)	#$intron{$NM}{$startInt} = $endInt;
+	my$Y=0.425;
+	my$line2 = line2($maxY,$Y,\%intron);
+
+	#$line3a: cmdR for rect(bed, empty)	#$NMbed00{$startBed00} = $endBed00 (start of Region=0 )
+	$Y1=0.1;$Y2=0.25;
+	my$line3a = line3a($maxY,$Y1,$Y2,\%NMbed00);	#empty black squares
+	my$line3b = line3a($maxY,$Y1,$Y2,\%Reg_00);	#full green squares
+
+	#$line3: cmdR for rect(not covered domains)
+	#$covEnd01{$file}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+	#@{ $covStart01{$file}{$threshold}{$ex} } = [ordered $notCovStarts00]
+	$Y1=0.1;$Y2=0.25;
+	my%line3 = line3($maxY,$Y1,$Y2,\@Thresholds,\@colors,\%Reg_00,\%{ $covStart01{$file} },\%{ $covEnd01{$file} });
+
+	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
+	$Y1=0.375;$Y2=0.475;
+	my$line4a = "";
+	if (scalar(keys%UTR)!=0) { $line4a .= line4a($maxY,$Y1,$Y2,\%UTR); }
+
+	#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
+	$Y1=0.35;$Y2=0.5;
+	my$line4b = "";
+	if (scalar(keys%Cod)!=0) { $line4b .= line4b($maxY,$Y1,$Y2,\%Cod); }
+
+	#$line4c: Nb exon
+	#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+	$Y=0.3;
+	my$line4c = line4c($sens,$Rev,$maxY,$Y,\%NM_Ex00);
+	
+	#$line5: cmdR for legends
+	my$comp = "<";
+	my$line5 = line5a($comp,\@colors,\@Thresholds);
+	
+	#$line6: cmdR for mutations (symbol)
+	#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+	my$line6a = ""; my$line6b = "";
+	if (scalar(keys%NMmut00) != 0)
+		{
+		$Y1=0.05;$Y2=0.55;
+		$line6a = line6a($maxY,$Y1,$Y2,\%NMmut00);
+		#$line6b: cmdR for mutations (text)
+		#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+		$Y=0.55;
+		$line6b = line6b($maxY,$Y,\%NMmut00);
+		}
+
+	#print CMDR:
+	print CMDR 
+"plot (c(0,0), xlim=c(0,".$NMlength."), ylim=c(-".(0.75*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"sample : $fileName{$file}\", ylab = \"depth\", cex.lab=1.5, cex.axis=1.2)\n";
+
+	print CMDR $line1a.$line1b;
+
+	my$col=0;
+	foreach my$threshold (@Thresholds)
+		{
+		print CMDR 
+"abline(h=$threshold, col=\"".$colors[$col]."\", lty = \"dotted\", lwd=1)\n"; 
+		$col++;
+		}
+
+	print CMDR $line2.$line4a.$line4b.$line4c.$line5.$line6a.$line6b;
+
+	print CMDR $line3b." lwd=1, col=\"green\", border =\"green\")\n";
+	foreach my$threshold (@Thresholds)	
+		{
+		if ($line3{$threshold}) 
+			{ print CMDR $line3{$threshold}; }
+		}
+	print CMDR $line3a." lwd=1, col=NA, border =\"black\")\n";
+	
+	if ($sens eq "+")
+		{
+		print CMDR 
+	"mtext(\"$gene\t$NM\tchr $chr\t".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+		}
+	else
+		{
+		print CMDR 
+	"mtext(\"$gene\t$NM\tchr $chr\t".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+		}
+	print CMDR "dev.off();\n";
+	close CMDR;
+	system "Rscript $outdir/$NM\_temp.R";
+	unlink "$outdir/$NM\_temp.R";
+	}
+}
+
+
+############################
+#$line1: cmdR for plot cov line
+#@{ $NMdepth{$NM}{$file}{$ex} } = [ cov foreach ordered bp of exon ]
+sub line1
+{
+my($maxY,$NMlength,$Y1,$Y2,$h1,$h2) = @_;
+my%Reg_00=%$h1;
+my%NMdepth=%$h2;
+my@startR = sort{$a<=>$b}keys%Reg_00;
+my$line1a="";my$line1b="";
+my$p=0;my$i=0;
+for (my$n=0;$n<scalar@startR;$n++)
+	{
+	$line1a .= "par(new=TRUE)\nplot( c(";
+	$p=$startR[$n]; $i=0;
+	while ($i<scalar@{ $NMdepth{$n} })
+		{ $line1a .= $p.","; $p++; $i++; }
+	chop $line1a;
+	$line1a .= "), c(";
+	$p=$startR[$n]; $i=0;
+	while ($i<scalar@{ $NMdepth{$n} })
+		{
+		if ($NMdepth{$n}[$i] eq "") 
+			{ 
+			$line1a .= "0,";
+			$line1b .= "lines (c($p,".($p+1)."), c(0,0), lwd=2, col=\"grey\")\n"; 
+			}
+		else { $line1a .= $NMdepth{$n}[$i].","; }
+		$p++; $i++;
+		}
+	chop $line1a;
+	$line1a .= "), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".($Y1*$maxY).",".($Y2*$maxY)."), type =\"l\", lwd=2, col=\"black\", axes=FALSE, ann=FALSE)\n";
+	}
+return($line1a,$line1b);
+}
+###########################
+#$line2: cmdR for cmdR for lines(intron)	
+#$intron{$NM}{$startInt} = $endInt;
+sub line2
+{
+my($maxY,$Y,$h1) = @_;
+my%intron=%$h1;
+my$line="";
+my@startIntron = sort{$a<=>$b}keys%intron; 
+for (my$ex=0;$ex<scalar@startIntron;$ex++)
+	{ $line .= "lines (c(".$startIntron[$ex].",".$intron{$startIntron[$ex]}."),c(-".($Y*$maxY).",-".($Y*$maxY)."), lwd=3)\n"; }
+return($line);
+}
+###########################
+#cmdR for rect(bed) empty
+#$line3a = line3a($maxY,$Y1,$Y2,\%NMbed00);	#empty black squares
+#$line3b = line3a($maxY,$Y1,$Y2,\%Reg_00);	#full green squares
+sub line3a
+{
+my($maxY,$Y1,$Y2,$h1) = @_;
+my%NMbed00=%$h1;
+my@startBed = sort{$a<=>$b}keys%NMbed00;
+my$line = "rect (c(";
+foreach my$start (@startBed)
+	{ $line .= $start.","; }
+chop $line;
+$line .= "), c(";
+for (my$i=0;$i<scalar(@startBed);$i++)
+	{ $line .= "-".($Y1*$maxY).","; }			
+chop $line;
+$line .= "), c(";
+foreach my$start (@startBed)
+	{ $line .= $NMbed00{$start}.","; }
+chop $line;
+$line .= "), c(";
+for (my$i=0;$i<scalar(@startBed);$i++)
+	{ $line .= "-".($Y2*$maxY).","; }
+chop $line;
+$line .= "),";
+return($line);
+}
+##########################
+#$line3: cmdR for rect(not covered domains)
+#$covEnd01{$file}{$NM}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+#@{ $covStart01{$file}{$NM}{$threshold}{$ex} } = [ordered $notCovStarts00]
+sub line3
+{
+my($maxY,$Y1,$Y2,$h1,$h2,$h3,$h4,$h5) = @_;
+my@Thresholds=@$h1;
+my@colors=@$h2;
+my%Reg_00=%$h3;
+my%covStart01=%$h4;
+my%covEnd01=%$h5;
+my$col=0;
+my%line;
+foreach my$threshold (@Thresholds)
+	{
+	my$ok=0;
+	for (my$ex=0;$ex<(scalar(keys%Reg_00));$ex++)
+		{
+		if ( scalar(keys(%{ $covEnd01{$threshold}{$ex} })) != 0) 
+			{ $ok = 1; last; } 
+		}
+	
+	if ($ok)
+		{
+		$line{$threshold} = "rect (c(";
+		for (my$ex=0;$ex<scalar(keys%Reg_00);$ex++)
+			{			
+			foreach my$pos (@{ $covStart01{$threshold}{$ex} })
+				{ $line{$threshold} .= $pos.","; }
+			}
+		chop $line{$threshold};
+		$line{$threshold} .= "), c(";
+		for (my$ex=0;$ex<scalar(keys%Reg_00);$ex++)
+			{			
+			for (my$i=0;$i<scalar@{ $covStart01{$threshold}{$ex} };$i++)
+				{ $line{$threshold} .= "-".($Y1*$maxY).","; }
+			}			
+		chop $line{$threshold};
+		$line{$threshold} .= "), c(";
+		for (my$ex=0;$ex<scalar(keys%Reg_00);$ex++)
+			{
+			foreach my$pos (@{ $covStart01{$threshold}{$ex} })
+				{ $line{$threshold} .= $covEnd01{$threshold}{$ex}{$pos}.","; }
+			}
+		chop $line{$threshold};
+		$line{$threshold} .= "), c(";
+		for (my$ex=0;$ex<scalar(keys%Reg_00);$ex++)
+			{
+			for (my$i=0;$i<scalar@{ $covStart01{$threshold}{$ex} };$i++)
+				{ $line{$threshold} .= "-".($Y2*$maxY).","; }
+			}
+		chop $line{$threshold};
+		$line{$threshold} .= "), lwd=0.01, col=\"".$colors[$col]."\", border =\"".$colors[$col]."\")\n";
+		}
+	$col++;
+	}
+return(%line);
+}
+#############################
+#$line4a: cmdR for cmdR for rect(UTR exons)	
+#$UTR{$NM}{$startUTR} = $endUTR;
+sub line4a
+{
+my($maxY,$Y1,$Y2,$h1) = @_;
+my%UTR=%$h1;
+my@startUTR = sort{$a<=>$b}keys%UTR;
+my$line = "rect (c(";
+for (my$ex=0;$ex<scalar@startUTR;$ex++)
+	{ $line .= $startUTR[$ex].","; }
+chop $line;
+$line .= "), c(";
+for (my$ex=0;$ex<scalar@startUTR;$ex++)
+	{ $line .= "-".($Y1*$maxY).","; }
+chop $line;
+$line .= "), c(";
+for (my$ex=0;$ex<scalar@startUTR;$ex++)
+	{ $line .= $UTR{$startUTR[$ex]}.","; }
+chop $line;
+$line .= "), c(";
+for (my$ex=0;$ex<scalar@startUTR;$ex++)
+	{ $line .= "-".($Y2*$maxY).","; }
+chop $line;
+$line .= "), lwd=2, col=\"blue\")\n";
+return($line);
+}
+##########################
+#$line4b: cmdR for rect(coding exons)	
+#$Cod{$NM}{$startCod} = $endCod;
+sub line4b
+{
+my($maxY,$Y1,$Y2,$h1) = @_;
+my%Cod=%$h1;
+my@startCod = sort{$a<=>$b}keys%Cod;
+my$line = "rect (c(";
+foreach (my$ex=0;$ex<scalar@startCod;$ex++) 
+	{ $line .= $startCod[$ex].","; }
+chop $line;
+$line .= "), c(";
+foreach (my$ex=0;$ex<scalar@startCod;$ex++) 
+	{ $line .= "-".($Y1*$maxY).","; }
+chop $line;
+$line .= "), c(";
+foreach (my$ex=0;$ex<scalar@startCod;$ex++) 
+	{ $line .= $Cod{$startCod[$ex]}.","; }
+chop $line;
+$line .= "), c(";
+foreach (my$ex=0;$ex<scalar@startCod;$ex++) 
+	{ $line .= "-".($Y2*$maxY).","; }
+chop $line;
+$line .= "), lwd=2, col=\"blue\")\n";
+return($line);
+}
+###########################
+#$line4c: text Nb exon
+#($sens,$Rev,$maxY,$Y,\%{ $NM_Ex00{$NMs[$i]} });
+sub line4c
+{
+my($sens,$Rev,$maxY,$Y,$h1) = @_;
+my%NM_Ex00=%$h1;	#%NM_Ex00{start of region}{start of exon} = end of exon (for start of region = 0)
+my$line = "text( c(";
+foreach my$startR (sort{$a<=>$b}keys%NM_Ex00)
+	{
+	foreach my$startBed (sort{$a<=>$b}keys%{ $NM_Ex00{$startR} })
+		{ $line .= (($NM_Ex00{$startR}{$startBed}+$startBed)/2).","; }
+	}
+chop $line;
+$line .= "), c(";
+my$nEx=0;
+foreach my$startR (keys%NM_Ex00)
+	{
+	for (my$i=0;$i<scalar(keys%{ $NM_Ex00{$startR} });$i++)
+		{ $line .= "-".($Y*$maxY).","; $nEx++; }
+	}		
+chop $line;
+$line .= "), c(";
+my$i=1;
+if ($Rev)
+	{
+	foreach my$startR (keys%NM_Ex00)
+		{
+		while ($i<=$nEx)
+			{ $line .= "\"$i\" ,"; $i++; }
+		}			
+	}
+else
+	{
+	if ($sens eq "-")
+		{
+		$i=$nEx;
+		foreach my$startR (keys%NM_Ex00)
+			{
+			while ($i>0)
+				{ $line .= "\"$i\" ,"; $i--; }
+			}			
+		}
+	}
+chop $line;
+$line .= "), cex = 1)\n";
+return($line);
+}
+##########################
+#$line5: cmdR for legends
+sub line5a
+{
+my($comp,$h1,$h2) = @_;
+my@colors=@$h1;
+my@Thresholds=@$h2;
+my$line = "legend(\"topright\", legend = c(\">=$Thresholds[0]\",";
+foreach my$threshold (@Thresholds)
+	{ $line .="\"$comp$threshold\","; }
+chop $line;
+$line .= "), col = c(\"green\",";
+for (my$i=0;$i<scalar(@Thresholds);$i++)
+	{ $line .="\"".$colors[$i]."\","; }
+chop $line;
+$line .= "), pch = 15, bty = \"n\", pt.cex = 2.5, cex = 1, horiz = TRUE, inset = c(0, 0))\n";
+return($line);
+}
+##########################
+#$line5: cmdR for legends
+sub line5b
+{
+my($comp,$h1,$h2) = @_;
+my@colors=@$h1;
+my@Thresholds=@$h2;
+my$line = "legend(\"topright\", legend = c(";
+foreach my$threshold (@Thresholds)
+	{ $line .="\"$comp$threshold\","; }
+chop $line;
+$line .= "), col = c(";
+for (my$i=0;$i<scalar(@Thresholds);$i++)
+	{ $line .="\"".$colors[$i]."\","; }
+chop $line;
+$line .= "), pch = 15, bty = \"n\", pt.cex = 2.5, cex = 1, horiz = TRUE, inset = c(0, 0))\n";
+return($line);
+}
+#############################
+#$line6: cmdR for mutations (symbol)
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+sub line6a
+{
+my($maxY,$Y1,$Y2,$h1) = @_;
+my%NMmut00=%$h1;
+my$line="";
+#above
+$line .= "points(c(";
+foreach my$mut (keys%NMmut00)
+	{ $line .= $mut.","; }
+chop $line;
+$line .= "), c(";
+for (my$i=0;$i<scalar(keys%NMmut00);$i++)
+	{ $line .= "-".($Y1*$maxY).","; }			
+chop $line;
+$line .= "), pch = 6, col = \"black\", lwd = 1, cex = 1)\n";
+#below
+$line .= "points(c(";
+foreach my$mut (keys%NMmut00)
+	{ $line .= $mut.","; }
+chop $line;
+$line .= "), c(";
+for (my$i=0;$i<scalar(keys%NMmut00);$i++)
+	{ $line .= "-".($Y2*$maxY).","; }			
+chop $line;
+$line .= "), pch = 2, col = \"black\", lwd = 1, cex = 1)\n";
+return($line);
+}
+##############################
+#$line6b: cmdR for mutations (text)
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+sub line6b
+{
+my($maxY,$Y,$h1) = @_;
+my%NMmut00=%$h1;
+my$line="";
+$line = "text( c(";
+foreach my$mut (keys%NMmut00)
+	{ $line .= $mut.","; }
+chop $line;
+$line .= "), c(";
+for (my$i=0;$i<scalar(keys%NMmut00);$i++)
+	{ $line .= "-".($Y*$maxY).","; }			
+chop $line;
+$line .= "), c(";
+foreach my$mut (keys%NMmut00)
+	{ $line .= "\"".$NMmut00{$mut}."\" ,"; }			
+chop $line;
+#$line .= "), adj = c(0,2), cex = 1, srt = -45)\n";
+$line .= "), pos = 1, cex = 1)\n";
+#$line .= "), cex = 1)\n";
+return($line);
+}
+
+##############################
+#$line7: cmdR for text NM
+sub line7
+{
+my($NMlength,$maxY,$h1) = @_;
+my@NMs=@$h1;
+my$line="";
+$line = "text( c(";
+for (my$i=0;$i<scalar@NMs;$i++)
+	{ $line .= "-".(0.6*$NMlength/10).","; }
+chop $line;
+$line .= "), c(";
+for (my$i=0;$i<scalar@NMs;$i++)
+	{ $line .= "-".((0.425+0.25*$i)*$maxY).","; }		
+chop $line;
+$line .= "), c(";
+for (my$i=0;$i<scalar@NMs;$i++)
+	{ $line .= "\"".$NMs[$i]."\" ,"; }			
+chop $line;
+#$line .= "), adj = c(0,2), cex = 1)\n";
+$line .= "), cex = 1.2)\n";
+return($line);
+}
+
+
+##############################
+#graph with all transcripts of a gene
+sub graphByGeneG
+{
+#graphByGeneG($gene,$suff,$outdir,$sens,$chr,$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,\%{ Regions{$chr}{$gene} },\%NM_Ex00,\%{ $NMbed00{$gene} },\%intron,\%UTR,\%Cod,\%{ $NMmut00{$gene} },\%{ $NMCovEnd{$gene} },\%{ $NMCovVal{$gene} });
+my($gene,$suff,$outdir,$sens,$chr,$length,$h0,$h1,$h2,$h3,$h4,$h5,$h6,$h7,$h8,$h9,$h10,$h11,$h12)= @_;
+my@NMs=@$h0;
+my@Files=@$h1;
+my@colors=@$h2;
+my@Thresholds=@$h3;
+my%Regions=%$h4;
+my%NM_Ex00=%$h5;
+my%NMbed00=%$h6;
+my%intron=%$h7;
+my%UTR=%$h8;
+my%Cod=%$h9;
+my%NMmut00=%$h10;
+my%NMCovEnd=%$h11;
+my%NMCovVal=%$h12;
+
+print "print CMDR graphByGeneG: $gene\n";
+open (CMDR, ">$outdir/$gene\_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+my$nNM=scalar(@NMs);
+my$maxY=scalar(@Files);
+my@Starts = sort{$a<=>$b}(keys%Regions);
+my$startReg = $Starts[0];
+my$endReg = $Regions{$Starts[-1]};
+
+print CMDR 
+"png(\"".$outdir."/cov_All/".$gene."_covSum.png\", 1500, ".(400*(0.875+(0.125*$nNM))).")\n"; 
+
+if ($sens eq "+")
+	{ print CMDR 
+"plot (c(0,0), xlim=c(-".(0.8*$length/10).",".$length."), ylim=c(-".((0.5+0.25*scalar@NMs)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"chr $chr\t$startReg >>> $endReg\", ylab = \"nber of samples covered\", cex.lab=1.5, cex.axis=1.2)\n";
+	}
+else
+	{ print CMDR 
+"plot (c(0,0), xlim=c(-".(0.8*$length/10).",".$length."), ylim=c(-".((0.5+0.25*scalar@NMs)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"chr $chr\t$startReg <<< $endReg\", ylab = \"nber of samples covered\", cex.lab=1.5, cex.axis=1.2)\n";
+	}
+
+my($Y,$Y1,$Y2);
+#$line1
+#$NMCovEnd{$threshold}{$r}{$start}=$end
+#$NMCovVal{$threshold}{$r}{$start}=$value
+my$col=0;
+my%line1;
+#$line1: cmdR for plot cov line
+foreach my$threshold (@Thresholds)
+	{
+	$line1{$threshold} = line1g2($colors[$col],\%{ $NMCovEnd{$threshold} },\%{ $NMCovVal{$threshold} });
+	$col++;
+	}
+
+#$line2: cmdR for cmdR for lines(intron)	#$intron{$NM}{$startInt} = $endInt;
+my$line2="";
+for(my$i=0;$i<scalar@NMs;$i++) { 
+	$Y=(0.425+0.25*$i);
+	$line2 .= line2($maxY,$Y,\%{ $intron{$NMs[$i]} });
+	}
+
+#$line3a: cmdR for rect(bed, empty)	#$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
+$Y1=0.1;$Y2=0.25;
+my$line3a = line3a($maxY,$Y1,$Y2,\%NMbed00);
+
+#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
+my$line4a="";
+for(my$i=0;$i<scalar@NMs;$i++) {
+	if (scalar(keys%{ $UTR{$NMs[$i]} })!=0) {
+		$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
+		$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR{$NMs[$i]} });
+		}
+	}
+
+#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
+my$line4b="";
+for(my$i=0;$i<scalar@NMs;$i++) {
+	if (scalar(keys%{ $Cod{$NMs[$i]} })!=0) {
+		$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
+		$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod{$NMs[$i]} });
+		}
+	}
+
+#$line4c: Nb exon
+#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+my$line4c="";
+for(my$i=0;$i<scalar@NMs;$i++) {
+	$Y=(0.3+0.25*$i);
+	$line4c .= line4c($sens,$Rev,$maxY,$Y,\%{ $NM_Ex00{$NMs[$i]} });
+	}
+
+#$line5: cmdR for legends
+my$comp = ">=";
+my$line5 = line5b($comp,\@colors,\@Thresholds);
+
+#$line6: cmdR for mutations (symbol)
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+my$line6a = ""; my$line6b = "";
+if (scalar(keys%NMmut00) != 0)
+	{
+	$Y1=0.05;$Y2=(0.3+0.25*scalar@NMs);
+	$line6a = line6a($maxY,$Y1,$Y2,\%NMmut00);
+	#$line6b: cmdR for mutations (text)
+	#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+	$Y=(0.3+0.25*scalar@NMs);
+	$line6b = line6b($maxY,$Y,\%NMmut00);
+	}
+
+#$line7: NM names
+my$line7 = line7($length,$maxY,\@NMs);
+
+print CMDR "abline(h=0, col=\"grey\", lty = \"dotted\", lwd=1)\n"; 
+
+foreach my$threshold (reverse@Thresholds)
+	{ print CMDR $line1{$threshold}; }
+
+print CMDR $line2.$line4a.$line4b.$line4c.$line5.$line6a.$line6b.$line7;
+
+print CMDR $line3a." lwd=1, col=NA, border =\"black\")\n";
+
+
+print CMDR "mtext(\"$gene\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+print CMDR "dev.off();\n";
+close CMDR;
+system "Rscript $outdir/$gene\_temp.R";
+unlink "$outdir/$gene\_temp.R";
+}
+
+
+##############################
+#graph foreach transcript of a gene
+sub graphByGeneN
+{
+#graphByGeneN($gene,$suff,$outdir,$sens,$chr,\%NMlength,\@NMs,\@Files,\@colors,\@Thresholds,\%Regions,\%NM_Ex00,\%NMbed00,\%intron,\%UTR,\%Cod,\%NMmut00,\%NMCovEnd,\%NMCovVal);
+my($gene,$suff,$outdir,$sens,$chr,$h0,$h1,$h2,$h3,$h4,$h5,$h6,$h7,$h8,$h9,$h10,$h11,$h12,$h13)= @_;
+my%NMlength=%$h0;
+my@NMs=@$h1;
+my@Files=@$h2;
+my@colors=@$h3;
+my@Thresholds=@$h4;
+my%Regions=%$h5;
+my%NM_Ex00=%$h6;
+my%NMbed00=%$h7;
+my%intron=%$h8;
+my%UTR=%$h9;
+my%Cod=%$h10;
+my%NMmut00=%$h11;
+my%NMCovEnd=%$h12;
+my%NMCovVal=%$h13;
+
+print "print CMDR graphByGeneN: $gene\n";
+open (CMDR, ">$outdir/$gene\_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+my$nNM=scalar@NMs;
+my$maxY=scalar(@Files);
+
+print CMDR 
+"png(\"".$outdir."/cov_All/".$gene."_covSum.png\", 1500, ".($nNM*400).")\n
+par(mfrow=c($nNM,1))\n"; 
+
+foreach my$NM (sort(@NMs))
+	{
+	my@Starts = sort{$a<=>$b}(keys%{ $Regions{$chr}{$NM} });
+	my$startReg = $Starts[0];
+	my$endReg = $Regions{$chr}{$NM}{$Starts[-1]};
+
+	if ($sens eq "+")
+		{ print CMDR 
+"plot (c(0,0), xlim=c(0,".$NMlength{$NM}."), ylim=c(-".(0.6*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"transcript : $NM\t\tchr $chr\t$startReg >>> $endReg\", ylab = \"nber of samples covered\", cex.lab=1.5, cex.axis=1.2)\n";
+		}
+	else
+		{ print CMDR 
+"plot (c(0,0), xlim=c(0,".$NMlength{$NM}."), ylim=c(-".(0.6*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"transcript : $NM\t\tchr $chr\t$startReg <<< $endReg\", ylab = \"nber of samples covered\", cex.lab=1.5, cex.axis=1.2)\n";
+		}
+
+	#$line1: cmdR for plot cov line
+	#$NMCovEnd{$threshold}{$r}{$start}=$end
+	#$NMCovVal{$threshold}{$r}{$start}=$value
+	my$col=0;my($Y,$Y1,$Y2);
+	my%line1;
+	foreach my$threshold (@Thresholds)
+		{
+		$line1{$threshold} = line1g2($colors[$col],\%{ $NMCovEnd{$NM}{$threshold} },\%{ $NMCovVal{$NM}{$threshold} });
+		$col++;
+		}
+
+	#$line2: cmdR for cmdR for lines(intron)	#$intron{$NM}{$startInt} = $endInt;
+	$Y=0.425;
+	my$line2 = line2($maxY,$Y,\%{ $intron{$NM} });
+
+	#$line3a: cmdR for rect(bed, empty)	#$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
+	$Y1=0.1;$Y2=0.25;
+	my$line3a = line3a($maxY,$Y1,$Y2,\%{ $NMbed00{$NM} });
+
+	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
+	$Y1=0.375;$Y2=0.475;
+	my$line4a = "";
+	if (scalar(keys%{ $UTR{$NM} })!=0) { $line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR{$NM} }); }
+
+	#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
+	$Y1=0.35;$Y2=0.5;
+	my$line4b = "";
+	if (scalar(keys%{ $Cod{$NM} })!=0) { $line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod{$NM} }); }
+
+	#$line4c: Nb exon
+	#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+	$Y=0.3;
+	my$line4c = line4c($sens,$Rev,$maxY,$Y,\%{ $NM_Ex00{$NM} });
+
+	#$line5: cmdR for legends
+	my$comp = ">=";
+	my$line5 = line5b($comp,\@colors,\@Thresholds);
+	
+	#$line6: cmdR for mutations (symbol)
+	#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+	my$line6a = ""; my$line6b = "";
+	if (scalar(keys%{ $NMmut00{$NM} }) != 0)
+		{
+		$Y1=0.05;$Y2=0.55;
+		$line6a = line6a($maxY,$Y1,$Y2,\%{ $NMmut00{$NM} });
+		#$line6b: cmdR for mutations (text)
+		#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+		$Y=0.5;
+		$line6b = line6b($maxY,$Y,\%{ $NMmut00{$NM} });
+		}
+
+	print CMDR "abline(h=0, col=\"grey\", lty = \"dotted\", lwd=1)\n"; 
+
+	foreach my$threshold (reverse@Thresholds)
+		{ print CMDR $line1{$threshold}; }
+
+	print CMDR $line2.$line4a.$line4b.$line4c.$line5.$line6a.$line6b;
+
+	print CMDR $line3a." lwd=1, col=NA, border =\"black\")\n";
+	
+	}
+
+print CMDR "mtext(\"$gene\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+print CMDR "dev.off();\n";
+close CMDR;
+system "Rscript $outdir/$gene\_temp.R";
+unlink "$outdir/$gene\_temp.R";
+}
+
+
+###############################
+#graph line (disabled)
+sub line1g
+{
+my($NM,$maxY,$Y1,$Y2,$NMlength,$color,$h1,$h2) = @_;
+my%Reg_00=%$h1;
+my%NMCov=%$h2;
+my@startR = sort{$a<=>$b}keys%Reg_00;
+my$line="";
+for (my$n=0;$n<scalar@startR;$n++)
+	{
+	$line .= "par(new=TRUE)\nplot( c(";
+	my$p=$startR[$n]; my$i=0;
+	while ($i<scalar@{ $NMCov{$n} })
+		{ $line .= $p.","; $p++; $i++; }
+	chop $line;
+	$line .= "), c(";
+	$i=0;
+	while ($i<scalar@{ $NMCov{$n} })
+		{ $line .= $NMCov{$n}[$i].","; $i++; }
+	chop $line;
+	$line .= "), xlim=c(0,".$NMlength."), ylim=c(-".($Y1*$maxY).",".($Y2*$maxY)."), type =\"l\", lwd=2, col=\"$color\", axes=FALSE, ann=FALSE)\n";
+	}
+return($line);
+}
+####################################
+#same but graph rect
+sub line1g2
+{
+#$NMCovEnd{$threshold}{$NM}{$ex}{$start}=$end
+#$NMCovVal{$threshold}{$NM}{$ex}{$start}=$value
+my($color,$h1,$h2) = @_;
+my%NMCovEnd=%$h1;
+my%NMCovVal=%$h2;
+my@startR = sort{$a<=>$b}keys%NMCovEnd;
+my$line = "";
+for (my$r=0;$r<scalar@startR;$r++)
+	{
+	my@Starts= sort{$a<=>$b}keys%{ $NMCovEnd{$startR[$r]} };
+	$line .= "rect (c(";
+	for (my$i=0;$i<scalar@Starts;$i++)
+		{ $line .= $Starts[$i].","; }
+	chop $line;
+	$line .= "), c(";
+	for (my$i=0;$i<scalar@Starts;$i++)
+		{ $line .= "0,"; }
+	chop $line;
+	$line .= "), c(";
+	for (my$i=0;$i<scalar@Starts;$i++)
+		{ $line .= $NMCovEnd{$startR[$r]}{$Starts[$i]}.","; }
+	chop $line;
+	$line .= "), c(";
+	for (my$i=0;$i<scalar@Starts;$i++)
+		{ $line .= $NMCovVal{$startR[$r]}{$Starts[$i]}.","; }
+	chop $line;
+	$line .= "), border=NA, col=\"$color\")\n";
+	}
+return($line);
+}
+
+
+############################
+#covPlot($bin,$max2,"original",$bedName,\%path,$extenS,\@Files,\%fName,$outdir,\%withChr);
+sub covPlot
+{
+my($bin,$max2,$bed,$bedName,$h1,$extenS,$h2,$h3,$outdir,$h4)=@_;
+my%path = %$h1;
+my@Files = @$h2;
+my%fName = %$h3;
+my%withChr = %$h4;
+
+open(OUT1, ">$outdir/covPlot/$bedName\_binCovPlot.txt") || die "can't create $outdir/covPlot/$bedName\_binCovPlot.txt\n";
+open(OUT2, ">$outdir/covPlot/$bedName\_sumCovPlot.txt") || die "can't create $outdir/covPlot/$bedName\_sumCovPlot.txt\n";
+
+print OUT1 "depth\t";
+print OUT2 "depth\t";
+my$i=0;
+while ( ($i*$bin) <= $max2 ) {
+	print OUT1 ($bin*$i)."-".(($bin*($i+1))-1)."\t";
+	print OUT2 ">".($bin*$i)."\t";
+	$i++;
+	}
+print OUT1 ">=$max2\n";
+print OUT2 "\n";
+
+my(%hist,$lengthBed);
+foreach my$file (@Files) {
+	print "analysing ".$fName{$file}."\n";
+	if (exists $withChr{$file}) { 
+		my@hashSub = bedToolHist($bed,$bedName,\%path,$extenS,$file,\%fName,$outdir,\%withChr);
+		$lengthBed = $hashSub[0];
+		%hist = %{$hashSub[1]};
+		}
+	else {
+		$withChr{$file} = "_0Chr.bed";
+		my@hashSub = bedToolHist($bed,$bedName,\%path,$extenS,$file,\%fName,$outdir,\%withChr);
+		$lengthBed = $hashSub[0];
+		%hist = %{$hashSub[1]};
+		my$ok=0;
+		for (my$i=1;$i<scalar(keys%hist);$i++) {
+			if ($hist{$i} != 0)
+				{ $ok=1; last; }
+			}
+		unless ($ok) {
+			print "try other reference genome:\n";
+			$withChr{$file} = "_wChr.bed";
+			@hashSub = bedToolHist($bed,$bedName,\%path,$extenS,$file,\%fName,$outdir,\%withChr);
+			$lengthBed = $hashSub[0];
+			%hist = %{$hashSub[1]};
+			}
+		}
+	print OUT1 $fName{$file}.$extenS."\t";
+	my$histCount;
+	my$i=0;
+	while ( ($i*$bin) <= $max2 ) {
+		$histCount=0;
+		for (my$j=($bin*$i);$j<($bin*($i+1));$j++)
+			{ if (exists$hist{$j}) { $histCount+=$hist{$j}; } }
+		print OUT1 $histCount."\t";
+		$i++;
+		}
+	my@array=sort{$a<=>$b}keys%hist;
+	$histCount=0;
+	for ($i=$max2;$i<=$#array;$i++)
+		{ $histCount+=$hist{$array[$i]}; }
+	print OUT1 $histCount."\n";
+
+	print OUT2 $fName{$file}.$extenS."\t";
+	my$totCount=0;
+	if (exists$hist{0}) { $totCount+=$hist{0}; }
+	print OUT2 (1-$totCount)."\t";
+	$i=0;
+	while ( ($i*$bin) < $max2 ) {
+		$histCount=0;
+		for (my$j=(($bin*$i)+1);$j<=($bin*($i+1));$j++)
+			{ if (exists$hist{$j}) { $histCount+=$hist{$j}; } }
+		$totCount+=$histCount;
+		print OUT2 (1-$totCount)."\t";
+		$i++;
+		}
+	print OUT2 "\n";
+	}
+close(OUT1); 
+close(OUT2);
+#R barplot -sum, mean of all samples
+if (scalar@Files>1)
+	{ meanCovPlot($bin,$max2,$outdir,$bedName,$lengthBed); }
+#R barplot -sum, 1graph / sample
+allCovPlot($bin,$max2,$outdir,$bedName,$lengthBed,\@Files,\%fName,$extenS);
+
+return(%withChr)
+}
+
+##
+sub bedToolHist
+{
+my($bed,$bedName,$h1,$extenS,$file,$h2,$outdir,$h3)=@_;
+my%path = %$h1;
+my%fName = %$h2;
+my%withChr = %$h3;
+
+print "cmd: coverageBed -abam $path{$file}$fName{$file}$extenS -b $outdir/$bed$withChr{$file} -hist > $outdir/$fName{$file}\_hist.txt\n";
+system "coverageBed -abam $path{$file}$fName{$file}$extenS -b $outdir/$bed$withChr{$file} -hist > $outdir/$fName{$file}\_hist.txt";
+print "grep ^all $outdir/$fName{$file}\_hist.txt | cut -f2- > $outdir/$fName{$file}\_hist_all.txt\n";
+system "grep ^all $outdir/$fName{$file}\_hist.txt | cut -f2- > $outdir/$fName{$file}\_hist_all.txt";
+unlink "$outdir/$fName{$file}\_hist.txt";
+my(%hist,$lengthBed);
+open(FILE, "$outdir/$fName{$file}\_hist_all.txt") || die "can't open file $outdir/$fName{$file}\_hist_all.txt\n";
+while (my$line=<FILE>) {
+	chomp $line;
+	my@tab=split(/\t/,$line);
+	$lengthBed=$tab[2]; 
+	$hist{$tab[0]}=$tab[3];
+	last;
+	}
+while (my$line=<FILE>) {
+	chomp $line;
+	my@tab=split(/\t/,$line);
+	$hist{$tab[0]}=$tab[3];
+	}
+close(FILE);
+unlink "$outdir/$fName{$file}\_hist_all.txt";
+return($lengthBed,\%hist);
+}
+##
+sub meanCovPlot
+{
+my($bin,$max2,$outdir,$bedName,$lengthBed) = @_;
+print "doing meanCovPlot\n";
+my$line="";
+my$i=0;
+while ( ($i*$bin) <= $max2 ) {
+	$line .= "\">".($bin*$i)."\",";
+	$i++;
+	}
+chop $line;
+open (CMDR, ">$outdir/plot_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+print CMDR "png(\"$outdir/covPlot/$bedName\_meanCovPlot.png\", 800, 500)
+mat <- read.table(\"$outdir/covPlot/$bedName\_sumCovPlot.txt\",header=T, row.names=1)
+allMean = apply(mat,2,mean)
+std = apply(mat,2,sd)
+error.bar <- function(x, y, upper, lower=upper, length=0.1,...){
+if(length(x) != length(y) | length(y) !=length(lower) | length(lower) != length(upper))
+stop(\"vectors must be same length\")
+arrows(x,y+upper, x, y-lower, angle=90, code=3, length=length, ...)
+}
+barx <- barplot(allMean, names.arg=c(";
+print CMDR $line;
+print CMDR "), ylim=c(0,1), col=\"blue\", axis.lty=1, main=\"mean of all samples\", xlab=\"Depth\", ylab=\"fraction of $bedName ($lengthBed bp)\")
+error.bar(barx,allMean, 1.96*std/10)
+dev.off();warnings();\n";
+close CMDR;
+system "Rscript $outdir/plot_temp.R";
+unlink "$outdir/plot_temp.R";
+}
+##
+sub allCovPlot
+{
+my($bin,$max2,$outdir,$bedName,$lengthBed,$h1,$h2,$extenS) = @_;
+my@Files = @$h1;
+my%fileName = %$h2;
+print "doing allCovPlot\n";
+my$line="";
+my$i=0;
+while ( ($i*$bin) <= $max2 ) {
+	$line .= "\">".($bin*$i)."\",";
+	$i++;
+	}
+chop $line;
+open (CMDR, ">$outdir/hist_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+print CMDR "png(\"$outdir/covPlot/$bedName\_allCovPlot.png\", 800, ".(scalar@Files*250).")
+par(mfrow=c(".scalar@Files.",1))
+mat <- read.table(\"$outdir/covPlot/$bedName\_sumCovPlot.txt\",header=T, row.names=1)\n";
+foreach my$file (@Files) {
+	print CMDR "barplot(t(matrix(mat[\"$fileName{$file}$extenS\",])), names.arg=c(";
+	print CMDR $line;
+	print CMDR "), ylim=c(0,1), col=\"blue\", axis.lty=1, main=\"$fileName{$file}$extenS\",xlab=\"Depth\", ylab=\"fraction of $bedName\", cex.lab=1.2, cex.main=1.5, cex.axis=1.2, cex.names=1.2)\n";
+	}
+print CMDR "dev.off();warnings();\n";
+close CMDR;
+system "Rscript $outdir/hist_temp.R";
+unlink "$outdir/hist_temp.R";
+}
+##
+#R barplot -bin , mean of all samples
+#binCovPlot($bin,$max2,$outdir,$bedName,$lengthBed);
+sub binCovPlot
+{
+my($bin,$max2,$outdir,$bedName,$lengthBed) = @_;
+print "doing binCovPlot\n";
+my$line="";
+my$i=0;
+while ( ($i*$bin) <= $max2 )
+	{
+	$line .= "\"".($bin*$i)."-\",";
+	$i++;
+	}
+$line .= "\">100\"";
+open (CMDR, ">$outdir/plot_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+print CMDR "png(\"$outdir/covPlot/$bedName\_binCovPlot.png\", 800, 500)
+mat <- read.table(\"$outdir/covPlot/$bedName\_binCovPlot.txt\",header=T, row.names=1)
+mean1 = apply(mat,2,mean)
+mean2 = mean1[1:length(mean1)-1] 
+std1 = apply(mat,2,sd)
+std2 = std1[1:length(std1)-1]
+error.bar <- function(x, y, upper, lower=upper, length=0.1,...) {
+if(length(x) != length(y) | length(y) !=length(lower) | length(lower) != length(upper))
+stop(\"vectors must be same length\")
+arrows(x,y+upper, x, y-lower, angle=90, code=3, length=length, ...) }
+barx <- barplot(mean1, names.arg=c(";
+print CMDR $line;
+print CMDR "), col=\"blue\", axis.lty=1, main=\"mean of all samples\", xlab=\"Depth\", ylab=\"fraction of $bedName ($lengthBed bp)\")
+error.bar(barx,mean1, 1.96*std1/10)
+dev.off();warnings();\n";
+close CMDR;
+system "Rscript $outdir/plot_temp.R";
+unlink "$outdir/plot_temp.R";
+}
+##
+#R barplot -bin , 1graph / sample
+#allBinCovPlot($bin,$max2,$outdir,$bedName,$lengthBed,\@Files,\%fileName);
+sub allBinCovPlot
+{
+my($bin,$max2,$outdir,$bedName,$lengthBed,$h1,$h2) = @_;
+my@Files = @$h1;
+my%fileName = %$h2;
+print "doing allBinCovPlot\n";
+my$line="";
+my$i=0;
+while ( ($i*$bin) <= $max2 )
+	{
+	$line .= "\"".($bin*$i)."-\",";
+	$i++;
+	}
+$line .= "\">100\"";
+open (CMDR, ">$outdir/plot_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+print CMDR "png(\"$outdir/covPlot/$bedName\_allBinCovPlot.png\", 800, ".(scalar@Files*250).")
+par(mfrow=c(".scalar@Files.",1))
+mat <- read.table(\"$outdir/covPlot/$bedName\_binCovPlot.txt\",header=T, row.names=1)\n";
+foreach my$file (@Files)
+	{
+	print CMDR "barplot(t(matrix(mat[\"$fileName{$file}\.bam\",])), names.arg=c(";
+	print CMDR $line;
+	print CMDR "), ylim=c(0,1), col=\"blue\", axis.lty=1, main=\"$fileName{$file}\.bam\",xlab=\"Depth\", ylab=\"fraction of $bedName\", cex.lab=1.2, cex.main=1.5, cex.axis=1.2, cex.names=1.2)\n";
+	}
+
+print CMDR "dev.off();warnings();\n";
+close CMDR;
+system "Rscript $outdir/plot_temp.R";
+unlink "$outdir/plot_temp.R";
+}
+
+
+############################
+#InterS($bin,$max2,\%Bed,$bedName,\@Files,\%fName,$outdir);
+sub InterS
+{
+my($bin,$max2,$h1,$bedName,$h2,$h3,$outdir)=@_;
+my%intervals = %$h1;
+my@Files = @$h2;
+my%fName = %$h3;
+if (scalar(keys%Bed)!=0) {
+	my@allBins; my$i=0;
+	while ( ($i*$bin) <= $max2 ) {
+		push(@allBins,($bin*$i+1));
+		$i++;
+		}
+	my(%nPos,%nCov);
+	foreach (@allBins) 
+		{ $nPos{$_}=0; $nCov{$_}=0; }
+	#intersection
+	foreach my$chr (keys%intervals) {
+		#initialyzes %regCov
+		my%regCov;
+		foreach (@allBins) {
+			my$r=0; #idx of reg of $NM
+			foreach my$startReg (sort{$a<=>$b}keys%{ $intervals{$chr} }) {
+				my$pos=$startReg;
+				while ($pos <= $intervals{$chr}{$startReg} ) {
+					push (@{ $regCov{$_}{$r} }, 0);
+					$pos++;
+					}
+				$r++;
+				}
+			}
+		foreach my$file (@Files) {
+			#$depth{$loc} = depth
+			my@hashSub = intersect($file,$fName{$file},$outdir,$maxD,$chr,\@allBins,\%{ $intervals{$chr} });
+			my%depth = %{ $hashSub[0] };
+			#@{ $regCov{$threshold}{$nReg} } = [nber of covered samples foreach pos]
+			foreach (@allBins)
+				{ %{ $regCov{$_} } = covByThreshold($_,\%{ $intervals{$chr} },\%depth,\%{ $regCov{$_} }); }
+			}
+		foreach (@allBins) {
+			foreach my$r (keys%{ $regCov{$_} }) {
+				foreach my$d (@{ $regCov{$_}{$r} }) {
+					$nPos{$_}++;
+					if ($d==scalar@Files) 
+						{ $nCov{$_}++; }
+					}
+				}
+			}
+		}
+	#plot
+	my$hist = "depth\t";
+	$i=0;
+	while ( ($i*$bin) <= $max2 ) {
+		$hist .= ">".($bin*$i)."\t";
+		$i++;
+		}
+	chop $hist;
+	$hist .= "\ncov\t";
+	foreach (@allBins) 
+		{ $hist .=  ($nCov{$_}/$nPos{$_})."\t"; }
+	chop $hist; $hist .= "\n";
+	open(OUT, ">$outdir/covPlot/$bedName\_interPlot.txt") || die "can't create $outdir/covPlot/$bedName\_interPlot.txt\n";
+	print OUT $hist;
+	close(OUT); 
+
+	#R barplot -sum, 1graph / sample
+	interPlot($bin,$max2,$nPos{$allBins[0]},$outdir,$bedName);
+
+	}
+}
+##
+sub interPlot
+{
+my($bin,$max2,$lengthBed,$outdir,$bedName) = @_;
+print "doing interPlot\n";
+my$line="";
+my$i=0;
+while ( ($i*$bin) <= $max2 ) {
+	$line .= "\">".($bin*$i)."\",";
+	$i++;
+	}
+chop $line;
+open (CMDR, ">$outdir/hist_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+print CMDR "png(\"$outdir/covPlot/$bedName\_interPlot.png\", 800, 500)
+mat <- read.table(\"$outdir/covPlot/$bedName\_interPlot.txt\",header=T, row.names=1)\n";
+print CMDR "barplot(t(matrix(mat[\"cov\",])), names.arg=c(";
+print CMDR $line;
+print CMDR "), ylim=c(0,1), col=\"blue\", axis.lty=1, main=\"intersection of all samples\",xlab=\"Depth\", ylab=\"fraction of $bedName ($lengthBed bp)\", cex.lab=1.2, cex.main=1.5, cex.axis=1.2, cex.names=1.2)\n";
+print CMDR "dev.off();warnings();\n";
+close CMDR;
+system "Rscript $outdir/hist_temp.R";
+unlink "$outdir/hist_temp.R";
+}
+
+
+############################
+#print tests:
+
+#	print "Regions:\n";	# $Regions{chr}{NM}{start of region} = end of region
+#	foreach my$chr(sort(keys%Regions)) {
+#		foreach my$NM (sort(keys%{ $Regions{$chr} })) {
+#			foreach my$startR (sort{$a<=>$b}keys%{ $Regions{$chr}{$NM} })
+#				{ print $chr."\t".$NM."\t".$startR."\t".$Regions{$chr}{$NM}{$startR}."\n"; }
+#			}
+#		}
+
+#	print "NM_Ex:\n";	# %NM_Ex{NM}{start of region}{start of exon} = end of exon
+#	foreach (sort(keys%NM_Ex)) {
+#		foreach my$startR (sort{$a<=>$b}keys%{ $NM_Ex{$_} }) {
+#			foreach my$startN (sort{$a<=>$b}keys%{ $NM_Ex{$_}{$startR} })
+#				{ print $_."\t".$startR."\t".$Regions{$NMchr{$_}}{$NMgene{$_}}{$startR}."\n\t\t".$startN."\t".$NM_Ex{$_}{$startR}{$startN}."\n"; }
+#			}
+#		}
+
+#	print "introns:\n";	# $intron{$NM}{$startIntron} = $endIntron
+#	foreach my$NM (sort(keys%intron)) {
+#		foreach my$start (sort{$a<=>$b}(keys%{ $intron{$NM} }))
+#			{ print $NM."\t".$start."\t".$intron{$NM}{$start}."\n"; }
+#		}
+#	print "UTRs:\n";	# $UTR{$NM}{$startUTR} = $endUTR
+#	foreach my$NM (sort(keys%UTR)) {
+#		foreach my$start (sort{$a<=>$b}(keys%{ $UTR{$NM} }))
+#			{ print $NM."\t".$start."\t".$UTR{$NM}{$start}."\n"; }
+#		}
+#	print "Cods:\n";	# $Cod{$NM}{$startCod} = $endCod
+#	foreach my$NM (sort(keys%Cod)) {
+#		foreach my$start (sort{$a<=>$b}(keys%{ $Cod{$NM} }))
+#			{ print $NM."\t".$start."\t".$Cod{$NM}{$start}."\n"; }
+#		}
+
+
