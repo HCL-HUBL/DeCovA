@@ -64,6 +64,9 @@ GetOptions (\%opt,
 	"dedup:s",
 	"mbq=i",
 	"mmq=i",
+	"c_med",
+	"c_mean",
+	"c_std",
 	"compress|z",
 	"nGraph=i",
 	"version|v",
@@ -73,7 +76,7 @@ unless(%opt) { usage(); }
 
 if (exists $opt{help}) { usage(); }
 
-if (exists $opt{version}) { die "DeCovA 1.3g\n"; }
+if (exists $opt{version}) { die "1.3h1\n"; }
 
 if(@ARGV) {
 	print"Invalid parameters:\n";
@@ -83,8 +86,7 @@ if(@ARGV) {
 
 sub usage
 {
-die "version: DeCovA-1.3g.pl
-usage: perl /path/to/DeCovA-x [option]
+die "usage: perl /path/to/DeCovA-x [option]
 	-f / --file : list of bam files, either command line (comma separated), or as a file (\".list\")
 	-d / --dir : directory where to find bam files (optional)
 	-s / --suffix : suffix to add before opening bam files (optional)
@@ -125,6 +127,9 @@ usage: perl /path/to/DeCovA-x [option]
  	--dedup : do not take in account dup reads (optional; default keep all reads; enter \"do\" to perform deduplication) 
 	--mbq : minimum base quality (optional; default 0; requires gatk)
 	--mmq : minimum mapping quality (optional; default 0)
+	--c_med : foreach bed interval, % of median of mean depths all samples 
+	--c_mean : foreach bed interval, % of average of mean depths all samples
+	--c_std : foreach bed interval, % of standard deviation of mean depths all samples
 	--nGraph : max nber of graphs per sheet (default : all samples or all transcripts)
 	-z / --compress : archive output folder
 	-v / --version : current version 
@@ -135,18 +140,20 @@ unless (exists $opt{file} || exists $opt{dir}) { die "requires a list of bam fil
 #-d: directory
 my@dir = ();
 if (exists $opt{dir}) {
-	if ($opt{dir}[0] =~ /.list$/) {
-		open(LIST, $opt{dir}[0]) || die "can't open file ".$opt{dir}[0]."\n";
-		while (my$line=<LIST>) {
-			unless ($line =~ /^\s*$/) {
-				chomp $line;
-				push (@dir, $line);
+	foreach (@{ $opt{dir} }) {
+		if ($_ =~ /.list$/) {
+			open(LIST, $_) || die "can't open file $_\n";
+			while (my$line=<LIST>) {
+				unless ($line =~ /^\s*$/) {
+					chomp $line;
+					push (@dir, $line);
+					}
 				}
+			close LIST;
 			}
-		close LIST;
+		else
+			{ push(@dir, split(/,/, $_)); }
 		}
-	else
-		{ @dir = split(/,/, join(',',@{$opt{dir}})); }
 	foreach (@dir) {
 		unless( -d $_ ) 
 			{ die "$_ directory not found\n"; }
@@ -161,18 +168,20 @@ if (exists $opt{suffix}) {
 	}
 my@Files = ();
 if (exists $opt{file}) {
-	if ($opt{file}[0] =~ /.list$/) {
-		open(LIST, $opt{file}[0]) || die "can't open file ".$opt{file}[0]."\n";
-		while (my$line=<LIST>) {
-			unless ($line =~ /^\s*$/) {
-				chomp $line;
-				push (@Files, $line);
+	foreach (@{ $opt{file} }) {
+		if ($_ =~ /.list$/) {
+			open(LIST, $_) || die "can't open file $_\n";
+			while (my$line=<LIST>) {
+				unless ($line =~ /^\s*$/) {
+					chomp $line;
+					push (@Files, $line);
+					}
 				}
+			close LIST;
 			}
-		close LIST;
+		else
+			{ push(@Files, split(/,/, $_)); }
 		}
-	else
-		{ @Files = split(/,/, join(',',@{$opt{file}})); }
 	}
 else { 
 	foreach my$dir(@dir) {
@@ -663,7 +672,7 @@ if ($mutFile) {
 	}
 
 ##find and design transcripts:
-my(@hashSub,%geneNM,%NMgene,%NMchr,%NMsens,%NMstartCod,%NMendCod,%Regions,%txtRegions,%NM_Ex,%txt_NM_Ex,@Genes,%RegBed,%NMlength,%Reg_00,%NM_Ex00,%NMstartCod00,%NMendCod00,%intron,%UTR,%Cod,%RegMut,%NMbed00,%NMmut00,%coordBed);
+my(@hashSub,%geneNM,%NMgene,%NMchr,%NMsens,%NMstartCod,%NMendCod,%Regions,%txtRegions,%NM_Ex,%txt_NM_Ex,@Genes,%RegBed,%NMlength,%Reg_00,%NM_Ex00,%NMstartCod00,%NMendCod00,%intron,%UTR,%Cod,%RegMut,%NMbed00,%NMmut00,%coordBed,$id2Bed);
 
 if ($Sum || $allS || $byS || !$bedFile || $coordPlot || $printSummary || $printReports) 
 {
@@ -678,7 +687,8 @@ else
 ##for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
 ##for all analyses:
-@hashSub = Id2Coord($idFile,$len,1,$nonCod,$wUTR);
+#$id2Bed="";
+@hashSub = Id2Coord($idFile,$len,1,$nonCod,$wUTR,$id2Bed);
 #return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\@Genes,\%Bed);
 %geneNM = %{$hashSub[0]};		# @{ $geneNM{$gene} } = [$NM1,...]
 %NMgene = %{$hashSub[1]};		# $NMgene{$NM} = $gene;
@@ -704,7 +714,11 @@ if ($allS || $byS || $Sum) {
 		}
 	}
 ##for summary txt file:
-@hashSub = Id2Coord($idFile,$len,$expForTxt,$nonCod,$UTRinTxt);
+if ($cov_Bed && (!$bedFile)) {
+	$bedName="allID";
+	$id2Bed = "$outdir/$bedName.bed"; 
+	}
+@hashSub = Id2Coord($idFile,$len,$expForTxt,$nonCod,$UTRinTxt,$id2Bed);
 %txtRegions = %{$hashSub[6]};		# as %Regions, but for summary txt file
 %txt_NM_Ex = %{$hashSub[7]};		# as %NM_Ex, but for summary txt file
 %coordBed = %{$hashSub[9]};		# as %Bed, but for coordPlot
@@ -1223,7 +1237,7 @@ if ($allS || $byS || $Sum || (($wUTR eq $UTRinTxt) && ($expForTxt || ($len == 0)
 				my$txt="";
 				foreach my$file (@Files) { 
 					if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
-						{ $txt .= "\t$fName{$file} (".$NM_UC{$NM}{$fName{$file}}{$pThreshold}."\% notCov)"; }
+						{ $txt .= "\t$fName{$file} (".sprintf("%.1f",(100-$NM_UC{$NM}{$fName{$file}}{$pThreshold}))."\%)"; }
 					}
 				if ($txt)
 					{ print OUT "\t$NM : not covered in bam files :$txt\n"; }
@@ -1299,7 +1313,7 @@ if (($wUTR ne $UTRinTxt) || (!$expForTxt && ($len != 0))) {
 				my$txt="";
 				foreach my$file (@Files) { 
 					if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
-						{ $txt .= "\t$fName{$file} (".$NM_UC{$NM}{$fName{$file}}{$pThreshold}."\% notCov)"; }
+						{ $txt .= "\t$fName{$file} (".sprintf("%.1f",(100-$NM_UC{$NM}{$fName{$file}}{$pThreshold}))."\%)"; }
 					}
 				if ($txt)
 					{ print OUT "\t$NM : not covered in bam files :$txt\n"; }
@@ -1338,8 +1352,12 @@ if ($interS) {
 ###################
 #Job 4: cov of each bed interval
 
-if ($cov_Bed && $bedFile)
-	{ Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,$pThreshold,$gatk,\%gatkIdx); }
+if ($cov_Bed) {
+	if ($bedFile)
+		{ Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$gatk,\%gatkIdx); }
+	else
+		{ Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$gatk,\%gatkIdx); }
+	}
 
 
 ###################
@@ -1348,6 +1366,8 @@ foreach my$f ("regions","original","merge")
 	{ unlink "$outdir/$f\_0Chr.bed","$outdir/$f\_wChr.bed"; }
 if ($UTRinTxt && ($wUTR ne $UTRinTxt))
 	{ unlink "$outdir/txtRegions_0Chr.bed","$outdir/txtRegions_wChr.bed"; }
+if ($cov_Bed && (!$bedFile))
+	{ unlink "$outdir/$bedName.bed"; }
 
 if ($gatk)
 	{ unlink glob "$outdir/all.cov*"; }
@@ -1381,7 +1401,7 @@ open(BED, $bed) || die "can't open file $bed\n";
 print "open $bed\n";
 my$ok=0;
 while (my$line=<BED>) {
-	if ($line =~ /(^[\w]+)\t(\d+)\t(\d+)/) {
+	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
 		$ok++;
 		chomp $line;
 		my@tab = split(/\t/,$line);
@@ -1580,10 +1600,11 @@ return(@Transcripts);
 ##Id2Coord($idFile,$len,$expForTxt,$nonCod,$UTRinTxt)
 sub Id2Coord
 {
-my($idFile,$len,$expand,$nonCod,$wUTR) = @_;
+my($idFile,$len,$expand,$nonCod,$wUTR,$id2Bed) = @_;
 my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%Bed);
 unless ($expand) { $len = 0; }
 
+if ($id2Bed) { open(BED, ">$id2Bed") || die "can't create $id2Bed\n"; }
 open(IDS, "$idFile") || die "can't open file $idFile\n";
 while (my$line=<IDS>) {
 	chomp $line;
@@ -1620,19 +1641,53 @@ while (my$line=<IDS>) {
 		#expand exons +/-length:
 		my%interval;
 		if ($wUTR) {
-			for (my$i=0;$i<scalar(@Starts);$i++)
-				{ $interval{($Starts[$i]+1-$len)} = $Ends[$i]+$len; }	#in 1-based coord
+			for (my$i=0;$i<scalar(@Starts);$i++) {
+				$interval{($Starts[$i]+1-$len)} = $Ends[$i]+$len;	#in 1-based coord
+				if ($id2Bed) {
+					print BED "$chr\t".($Starts[$i]-$len)."\t".($Ends[$i]+$len)."\t$gene"."_$NM";
+					if ($tab[3] eq "+") { print BED "_exon".($i+1)."\n"; }
+					else { print BED "_exon".(scalar(@Starts)-$i)."\n"; }
+					}
+				}
 			}
 		else {
 			for (my$i=0;$i<scalar(@Starts);$i++) {
 				if ($Ends[$i] < $NMstartCod{$NM}) { next; }
 				elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
-					if ($Ends[$i] > $NMendCod{$NM}) { $interval{($NMstartCod{$NM}-$len)} = $NMendCod{$NM}+$len; }
-					else { $interval{($NMstartCod{$NM}-$len)} = $Ends[$i]+$len; }
+					if ($Ends[$i] > $NMendCod{$NM}) { 
+						$interval{($NMstartCod{$NM}-$len)} = $NMendCod{$NM}+$len;
+						if ($id2Bed) {
+							print BED "$chr\t".($tab[6]-$len)."\t".($tab[7]+$len)."\t$gene"."_$NM";
+							if ($tab[3] eq "+") { print BED "_exon".($i+1)."\n"; }
+							else { print BED  "_exon".(scalar(@Starts)-$i)."\n"; }
+							}
+						}
+					else { 
+						$interval{($NMstartCod{$NM}-$len)} = $Ends[$i]+$len;
+						if ($id2Bed) {
+							print BED "$chr\t".($tab[6]-$len)."\t".($Ends[$i]+$len)."\t$gene"."_$NM";
+							if ($tab[3] eq "+") { print BED "_exon".($i+1)."\n"; }
+							else { print BED  "_exon".(scalar(@Starts)-$i)."\n"; }
+							}
+						}
 					}
 				elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
-					if ($Ends[$i] < $NMendCod{$NM}) { $interval{($Starts[$i]+1-$len)} = $Ends[$i]+$len; }
-					else { $interval{($Starts[$i]+1-$len)} = $NMendCod{$NM}+$len; }
+					if ($Ends[$i] < $NMendCod{$NM}) { 
+						$interval{($Starts[$i]+1-$len)} = $Ends[$i]+$len;
+						if ($id2Bed) {
+							print BED "$chr\t".($Starts[$i]-$len)."\t".($Ends[$i]+$len)."\t$gene"."_$NM";
+							if ($tab[3] eq "+") { print BED "_exon".($i+1)."\n"; }
+							else { print BED "_exon".(scalar(@Starts)-$i)."\n"; }
+							}
+						}
+					else { 
+						$interval{($Starts[$i]+1-$len)} = $NMendCod{$NM}+$len;
+						if ($id2Bed) {
+							print BED "$chr\t".($Starts[$i]-$len)."\t".($tab[7]+$len)."\t$gene"."_$NM";
+							if ($tab[3] eq "+") { print BED "_exon".($i+1)."\n"; }
+							else { print BED "_exon".(scalar(@Starts)-$i)."\n"; }
+							}
+						}
 					}
 				else { last; }
 				}
@@ -1670,6 +1725,7 @@ while (my$line=<IDS>) {
 		}
 	}
 close(IDS);
+if ($id2Bed) { close BED; }
 @Genes = sort(keys%geneNM);
 foreach(@Genes)
 	{ @{ $geneNM{$_} } = sort@{ $geneNM{$_} }; }
@@ -3309,7 +3365,8 @@ foreach my$threshold (@Thresholds) {
 				}
 			}
 		}
-	$NM_UC{$threshold} = sprintf("%.1f", ($geneUC{$threshold}/$geneL*100));print"$gene\_$NM\t$NM_UC{$threshold}\n";
+	$NM_UC{$threshold} = ($geneUC{$threshold}/$geneL)*100;
+	print "$gene\_$NM\t".sprintf("%.1f",$NM_UC{$threshold})."\n";
 	}
 if($printReports) {
 	if ($pThreshold) {
@@ -3318,7 +3375,7 @@ if($printReports) {
 			print OUT $txt1; 
 			foreach my$threshold (@Thresholds) {
 				print OUT "\ndepth threshold = $threshold\n\n";
-				print OUT "not covered over $NM_UC{$threshold}% of exons\n\n";
+				print OUT "not covered over ".sprintf("%.1f",$NM_UC{$threshold})."% of exons\n\n";
 				print OUT $txt{$threshold};
 				}
 			close OUT;
@@ -3328,7 +3385,7 @@ if($printReports) {
 		open(OUT, ">$outdir/cov\_$sName2/$outfile$sName2\_$gene\_$NM.txt") || die "can't create file $outdir/$outfile$file2\_$NM.txt\n";
 		foreach my$threshold (@Thresholds) {
 			print OUT "\ndepth threshold = $threshold\n\n";
-			print OUT "not covered over $NM_UC{$threshold}% of exons:\n\n";
+			print OUT "not covered over ".sprintf("%.1f",$NM_UC{$threshold})."% of exons:\n\n";
 			print OUT $txt{$threshold};
 			}
 		 close OUT;
@@ -5488,41 +5545,46 @@ unlink "$outdir/hist_temp.R";
 
 sub Bed_Cov
 {
-my($h1,$h2,$h3,$outdir,$bedFile,$bedName,$threshold,$gatk,$h4) = @_;
+my($h1,$h2,$h3,$outdir,$bedFile,$bedName,$h4,$threshold,$gatk,$h5) = @_;
 my@Files = @$h1;
 my%fName = %$h2;
 my%sName2 = %$h3;
-my%gatkIdx = %$h4;
+my%mergeBed = %$h4;
+my%gatkIdx = %$h5;
 
 print "perform bed coverage by interval\n";
 open(BED, "$bedFile") || die "can't open file $bedFile\n";
 my(@allLines,%Chr,%Start,%End,%Intervals,%Intervals2);
 my$i=0;
 while (my$line=<BED>) {
-	chomp $line;
-	$allLines[$i]= $line;
-	if ($line =~ /(^[\w]+)\t(\d+)\t(\d+)/) {
+	$line =~ s/\s+$//;
+	$allLines[$i] = $line;
+	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
 		my@tab = split(/\t/,$line);
 		$tab[0] =~ s/chr//i;
 		$Chr{$i} = $tab[0]; $Start{$i} = ($tab[1]+1); $End{$i} = $tab[2];
-		push(@{ $Intervals{$Chr{$i}}{$Start{$i}} } , $End{$i});
+		$Intervals{$Chr{$i}}{$Start{$i}}{$End{$i}} = 1;
 		}
 	$i++;
 	}
 close BED;
-
+foreach my$chr (keys%mergeBed) {
+	foreach my$start (keys%{ $mergeBed{$chr} })
+		{ $Intervals{$chr}{$start}{$mergeBed{$chr}{$start}} = 1; }
+	}
 foreach my$chr (keys%Intervals) {
 	foreach my$start (keys%{ $Intervals{$chr} })
-		{ @{ $Intervals{$chr}{$start} } = sort{$a<=>$b}(@{ $Intervals{$chr}{$start} }); }
+		{ @{ $Intervals2{$chr}{$start} } = sort{$a<=>$b}(keys%{ $Intervals{$chr}{$start} }); }
 	}
 
-my(%cov,%min,%vals,%mean,%median);
+my(%cov,%min,%vals,%mean,%meanAdj,%depthMedian,%TotBases);
 foreach my$file (@Files) {
 	print "\tfile $fName{$file}\n";
 
 	foreach my$chr (keys%Intervals) {
 		foreach my$start (keys%{ $Intervals{$chr} }) {
-			foreach my$end (@{ $Intervals{$chr}{$start} }) { 
+			foreach my$end (@{ $Intervals2{$chr}{$start} }) {
+			#foreach my$end (keys%{ $Intervals{$chr}{$start} }) {
 				$cov{$file}{$chr}{$start}{$end} = 0;
 				$min{$file}{$chr}{$start}{$end} = 0;
 				@{ $vals{$file}{$chr}{$start}{$end} } = ();
@@ -5549,15 +5611,15 @@ foreach my$file (@Files) {
 					}
 				else { next; }
 				}
-			while ( ($tab2[1] > $Intervals{$chr}{$Starts[$c]}[0]) && ($c < (scalar@Starts-1)) )
+			while ( ($tab2[1] > $Intervals2{$chr}{$Starts[$c]}[0]) && ($c < (scalar@Starts-1)) )
 				{ $c++; }
 			my$c2 = $c;
 			if ($tab2[1] == $Starts[$c2]) {
-				foreach my$end (@{ $Intervals{$chr}{$Starts[$c2]} })
+				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} })
 					{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
 				}
 			while ( ($tab2[1] >= $Starts[$c2]) && ($c2 < (scalar@Starts-1)) ) {
-				foreach my$end (@{ $Intervals{$chr}{$Starts[$c2]} }) {
+				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
 					if ($tab2[1] <= $end) {
 						if ($tab[$gatkIdx{$file}] >= $threshold)
 							{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
@@ -5568,7 +5630,7 @@ foreach my$file (@Files) {
 				 	}
 				$c2++;
 				}
-			foreach my$end (@{ $Intervals{$chr}{$Starts[$c2]} }) {
+			foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
 				if (($tab2[1] >= $Starts[$c2]) && ($tab2[1] <= $end)) {
 					if ($tab[$gatkIdx{$file}] >= $threshold)
 						{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
@@ -5577,7 +5639,7 @@ foreach my$file (@Files) {
 					push(@{ $vals{$file}{$chr}{$Starts[$c2]}{$end} },$tab[$gatkIdx{$file}]);
 					}
 				}
-			if ( $tab2[1] > $Intervals{$chr}{$Starts[-1]}[-1] ) {
+			if ( $tab2[1] > $Intervals2{$chr}{$Starts[-1]}[-1] ) {
 				my%tmp;
 				foreach (keys%allChr) { 
 					unless ($_ eq $chr) { $tmp{$_} = 1; }
@@ -5603,15 +5665,15 @@ foreach my$file (@Files) {
 				else { next; }
 				}
 			my$pos=$tab[1]+$tab[-2];
-			while ( ($pos > $Intervals{$chr}{$Starts[$c]}[0]) && ($c < (scalar@Starts-1)) )
+			while ( ($pos > $Intervals2{$chr}{$Starts[$c]}[0]) && ($c < (scalar@Starts-1)) )
 				{ $c++; }
 			my$c2 = $c;
 			if ($pos == $Starts[$c2]) {
-				foreach my$end (@{ $Intervals{$chr}{$Starts[$c2]} })
+				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} })
 					{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[-1]; }
 				}
 			while ( ($pos >= $Starts[$c2]) && ($c2 < (scalar@Starts-1)) ) {
-				foreach my$end (@{ $Intervals{$chr}{$Starts[$c2]} }) {
+				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
 					if ($pos <= $end) {
 						if ($tab[-1] >= $threshold)
 							{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
@@ -5622,7 +5684,7 @@ foreach my$file (@Files) {
 				 	}
 				$c2++;
 				}
-			foreach my$end (@{ $Intervals{$chr}{$Starts[$c2]} }) {
+			foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
 				if (($pos >= $Starts[$c2]) && ($pos <= $end)) {
 					if ($tab[-1] >= $threshold)
 						{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
@@ -5631,7 +5693,7 @@ foreach my$file (@Files) {
 					push(@{ $vals{$file}{$chr}{$Starts[$c2]}{$end} },$tab[-1]);
 					}
 				 }
-			if ( $pos > $Intervals{$chr}{$Starts[-1]}[-1] ) {
+			if ( $pos > $Intervals2{$chr}{$Starts[-1]}[-1] ) {
 				my%tmp;
 				foreach (keys%allChr) { 
 					unless ($_ eq $chr) { $tmp{$_} = 1; }
@@ -5644,32 +5706,103 @@ foreach my$file (@Files) {
 		}
 	foreach my$chr (keys%Intervals) {
 		foreach my$start (keys%{ $Intervals{$chr} }) {
-			foreach my$end (@{ $Intervals{$chr}{$start} }) { 
+			foreach my$end (@{ $Intervals2{$chr}{$start} }) { 
 				my$len = $end-$start+1;
 				#mean
 				my$tot = 0;
 				foreach (@{ $vals{$file}{$chr}{$start}{$end} }) { $tot += $_; }
 				$mean{$file}{$chr}{$start}{$end} = ($tot / $len);
+				#$TotBases{$file} += $tot;
 				#median
-				my@vals=();
-				for (my$i=0;$i<($len - scalar@{ $vals{$file}{$chr}{$start}{$end} });$i++) { push(@vals,0); }
-				push(@vals,@{ $vals{$file}{$chr}{$start}{$end} });
-				@vals = sort{$a<=>$b}@vals;
+				#my@vals=();
+				#for (my$i=0;$i<($len - scalar@{ $vals{$file}{$chr}{$start}{$end} });$i++) { push(@vals,0); }
+				#push(@vals,@{ $vals{$file}{$chr}{$start}{$end} });
+				#@vals = sort{$a<=>$b}@vals;
 				#odd?
-				if($len%2) 
-					{ $median{$file}{$chr}{$start}{$end} = $vals[int($len/2)]; }
+				#if($len%2) 
+				#	{ $depthMedian{$file}{$chr}{$start}{$end} = $vals[int($len/2)]; }
 				#even
-				else 
-					{ $median{$file}{$chr}{$start}{$end} = (($vals[int($len/2)-1]+$vals[int($len/2)])/2 ); }
-				delete $vals{$file}{$chr}{$start}{$end};
+				#else 
+				#	{ $depthMedian{$file}{$chr}{$start}{$end} = (($vals[int($len/2)-1]+$vals[int($len/2)])/2 ); }
+				#delete $vals{$file}{$chr}{$start}{$end};
+				}
+			}
+		}
+	foreach my$chr (keys%mergeBed) {
+		foreach my$start (keys%{ $mergeBed{$chr} }) {
+			foreach (@{ $vals{$file}{$chr}{$start}{$mergeBed{$chr}{$start}} }) { $TotBases{$file} += $_; }
+			}
+		}
+	}
+#mean depth adjusted on total depth (=sequenced bases within bed)
+my$meanTotBases=0;
+foreach (@Files) { $meanTotBases += $TotBases{$_}; }
+if ($meanTotBases)
+	{ $meanTotBases /= scalar@Files; }
+else { print "no bases sequenced within bed in all samples!\n"; }
+foreach (@Files) {
+	foreach my$chr (keys%Intervals) {
+		foreach my$start (keys%{ $Intervals{$chr} }) {
+			foreach my$end (@{ $Intervals2{$chr}{$start} }) {
+				if ($TotBases{$_}) {
+					$meanAdj{$_}{$chr}{$start}{$end} = ($mean{$_}{$chr}{$start}{$end} * $meanTotBases / $TotBases{$_});
+					}
+				else { $meanAdj{$_}{$chr}{$start}{$end} = 0; }
+				}
+			}
+		}
+	}
+my(%Median,%meanByMed,%meanByMean,%Average,%std,%meanByStd);
+if (scalar@Files >=3) {
+	foreach my$chr (keys%Intervals) {
+		foreach my$start (keys%{ $Intervals{$chr} }) {
+			foreach my$end (@{ $Intervals2{$chr}{$start} }) {
+				#median/exon
+				my@allMeans=();
+				foreach (@Files) { push(@allMeans, $meanAdj{$_}{$chr}{$start}{$end}); }
+				@allMeans = sort{$a<=>$b}@allMeans;
+				#odd?
+				if((scalar@Files)%2) { $Median{$chr}{$start}{$end} = $allMeans[int((scalar@Files)/2)]; }
+				#even
+				else { $Median{$chr}{$start}{$end} = ( $allMeans[int((scalar@Files)/2)-1] + $allMeans[int((scalar@Files)/2)] )/2; }
+				#meanBymedian/exon
+				foreach (@Files) {
+					if ($Median{$chr}{$start}{$end})
+						{ $meanByMed{$_}{$chr}{$start}{$end} = $meanAdj{$_}{$chr}{$start}{$end} / $Median{$chr}{$start}{$end}; }
+					}
+				#meanByMean/exon 
+				foreach my$f1 (@Files) {
+					my$totMean=0;
+					foreach my$f2 (@Files) {
+						unless ($f1 eq $f2) { $totMean += $meanAdj{$f2}{$chr}{$start}{$end}; }
+						}
+					$totMean /= (scalar@Files -1);
+					if ($totMean)
+						{ $meanByMean{$f1}{$chr}{$start}{$end} = $meanAdj{$f1}{$chr}{$start}{$end} / $totMean; }
+					else
+						{ $meanByMean{$f1}{$chr}{$start}{$end} = "na"; }
+					}
+				#average and std/exon
+				$Average{$chr}{$start}{$end}=0;
+				foreach (@Files) { $Average{$chr}{$start}{$end} += $meanAdj{$_}{$chr}{$start}{$end}; }
+				$Average{$chr}{$start}{$end} /= scalar@Files;
+				my$sqtotal = 0;
+				foreach (@Files) { $sqtotal += ($Average{$chr}{$start}{$end}-$meanAdj{$_}{$chr}{$start}{$end}) ** 2; }
+				$std{$chr}{$start}{$end} = ($sqtotal / (scalar@Files-1)) ** 0.5;
+				#print "$chr $start $end\n\tmed: $Median{$chr}{$start}{$end}\n\tmoy: $Average{$chr}{$start}{$end}\n\tstd: $std{$chr}{$start}{$end}\n";
+				foreach (@Files) {
+					if ($std{$chr}{$start}{$end})
+						{ $meanByStd{$_}{$chr}{$start}{$end} = ($meanAdj{$_}{$chr}{$start}{$end}-$Average{$chr}{$start}{$end}) / $std{$chr}{$start}{$end}; }
+					}
 				}
 			}
 		}
 	}
 
+
 my$nCol;
 foreach my$line (@allLines) {
-	if ($line =~ /(^[\w]+)\t(\d+)\t(\d+)/)
+	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/))
 		{ $nCol = scalar(split(/\t/,$line)); last; }
 	}
 open(OUT1, ">$outdir/$bedName.cov.txt") || die "can't create file $outdir/$bedName.cov.bed\n";
@@ -5700,6 +5833,81 @@ for (my$i=0;$i<scalar@allLines;$i++) {
 		}
 	}
 close OUT1; close OUT2;
+
+open(OUT, ">$outdir/$bedName.adjCov.txt") || die "can't create file $outdir/$bedName.adjCov.bed\n";
+print OUT "##samples:";
+for (my$i=0;$i<($nCol-1);$i++) { print OUT "\t"; }
+print OUT "\tmedian\taverage\tstd";
+foreach (@Files) { print OUT "\t$sName2{$_}"; }
+print OUT "\n";
+for (my$i=0;$i<scalar@allLines;$i++) {
+	print OUT "$allLines[$i]";
+	if (exists $Chr{$i}) {
+		print OUT "\t".sprintf("%.3f",$Median{$Chr{$i}}{$Start{$i}}{$End{$i}})."\t".sprintf("%.3f",$Average{$Chr{$i}}{$Start{$i}}{$End{$i}})."\t".sprintf("%.3f",$std{$Chr{$i}}{$Start{$i}}{$End{$i}});
+		foreach (@Files) { print OUT "\t".sprintf("%.3f",$meanAdj{$_}{$Chr{$i}}{$Start{$i}}{$End{$i}})."\t"; }
+		}
+	print OUT "\n";
+	}
+close OUT;
+
+if (exists $opt{c_med}) {
+	open(OUT, ">$outdir/$bedName.CNVmed.txt") || die "can't create file $outdir/$bedName.CNVmed.bed\n";
+	print OUT "##samples:";
+	for (my$i=0;$i<($nCol-1);$i++) { print OUT "\t"; }
+	foreach (@Files) { print OUT "\t$sName2{$_}"; }
+	print OUT "\n";
+	for (my$i=0;$i<scalar@allLines;$i++) {
+		print OUT "$allLines[$i]";
+		if (exists $Chr{$i}) {
+			if ($Median{$Chr{$i}}{$Start{$i}}{$End{$i}}) {
+				foreach (@Files) { print OUT "\t".sprintf("%.3f",$meanByMed{$_}{$Chr{$i}}{$Start{$i}}{$End{$i}}); }
+				}
+			else 
+				{ foreach (@Files) { print OUT "\tna"; } }
+			}
+		print OUT "\n";
+		}
+	close OUT;
+	}
+if (exists $opt{c_mean}) {
+open(OUT, ">$outdir/$bedName.CNVmean.txt") || die "can't create file $outdir/$bedName.CNVmean.bed\n";
+print OUT "##samples:";
+for (my$i=0;$i<($nCol-1);$i++) { print OUT "\t"; }
+foreach (@Files) { print OUT "\t$sName2{$_}"; }
+print OUT "\n";
+for (my$i=0;$i<scalar@allLines;$i++) {
+	print OUT "$allLines[$i]";
+	if (exists $Chr{$i}) {
+		foreach (@Files) { 
+			if ($meanByMean{$_}{$Chr{$i}}{$Start{$i}}{$End{$i}} eq "na")
+				{ print OUT "\tna"; }
+			else
+				{ print OUT "\t".sprintf("%.3f",$meanByMean{$_}{$Chr{$i}}{$Start{$i}}{$End{$i}}); }
+			}
+		}
+	print OUT "\n";
+	}
+close OUT;
+	}
+if (exists $opt{c_std}) {
+	open(OUT, ">$outdir/$bedName.CNVstd.txt") || die "can't create file $outdir/$bedName.CNVstd.bed\n";
+	print OUT "##samples:";
+	for (my$i=0;$i<($nCol-1);$i++) { print OUT "\t"; }
+	foreach (@Files) { print OUT "\t$sName2{$_}"; }
+	print OUT "\n";
+	for (my$i=0;$i<scalar@allLines;$i++) {
+		print OUT "$allLines[$i]";
+		if (exists $Chr{$i}) {
+			if ($std{$Chr{$i}}{$Start{$i}}{$End{$i}}) {
+				foreach (@Files) { print OUT "\t".sprintf("%.3f",$meanByStd{$_}{$Chr{$i}}{$Start{$i}}{$End{$i}}); }
+				}
+			else 
+				{ foreach (@Files) { print OUT "\tna"; } }
+			}
+		print OUT "\n";
+		}
+	close OUT;
+	}
 
 }
 
