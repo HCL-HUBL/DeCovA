@@ -27,67 +27,99 @@ then
 $ DeCovA-x.pl [options]
 
 
-
 list of parameters:
 
-usage: perl /path/to/DeCovA-x [option]
+inputs:
 	-f / --file : list of bam files, either command line (comma separated), or as a file (\".list\")
-	-d / --dir : directory where to find bam files (optional)
-	-s / --suffix : suffix to add before opening bam files (optional)
+	-d / --dir : directory where to find bam files
+	-s / --suffix : suffix to add before opening bam files
 	-r / --refseq : RefSeq file (required)
 	-b / --bed : bed file, used to analyse depth coverage
-	-m / --mut : mut file, used to plot known mutation: format: chr	pos(1-based)	info
-	-o / --outfile : text outfile name (optional, default: covBySample.txt)
-	-O / --outdir : out directory (optional ; default: folder named with date)
+	-m / --mut : mut file, used to plot known mutations ; format: chr	pos(1-based)	info
+	-o / --outfile : text outfile name (default: cov_samplename.txt)
+	-O / --outdir : out directory (default: folder named with date)
 	-i / --id : list of of refseq genes/transcripts id, either command line (comma separated), or as a file (\".list\")
+	-g / --genome : path to genome.fa file, if available (required if using GATK)
+	--sex_file : format: patient\tsex
+	--cov_file : DeCovA's output .cov.txt file (to skip bam analysis in CNV detect)
+outputs:
+	-S / --graphSum : will perform graphSums (sum of covered samples by position)
+	-A / --allSample : will perform graphAllSample (depthline by gene and by sample, all samples graph on same .png file)
+	-X / --bySample : will perform graphBySample (depthline by gene and by sample, one sample by .png file)
+	-M / --noDepthMut : does not print, foreach file, depth at known mutations provided by opt -m (default: yes if -opt m)
+	-P / --covPlot : will perform covPlots
+	-B / --covBed : will output cov of bed intervals
+	-C / --CNV : will output CNV foreach bed intervals
+	--Reseq : float [0-1] : print region if cov < value (def: do not print)
+	--reports : will print all uncovered intervals (genomic coordinates) in 1 txt file per transcript (default: no)
+	--summary : Y/N : will print summary txt file (default: yes if -S -A -X -i)
+parameters:
+  *general:
 	-N / --nonCoding : analyse also Non coding transcripts (default: no)
 	-U / --noUTR : does not take into account UTR regions for all analyses (default: yes)
-	-u /--noUTRinTxt : does not take into account UTR regions for summary txt file (default: yes)
-	-t / --depthThreshold : depth thresholds, comma separated (at least 1 required)
-	-T / --printThreshold : depth threshold below which graph will be printed (one of the thresholds in opt -t)
+	-u / --noUTRinTxt : does not take into account UTR regions for summary txt file and plots (default: yes)
+	-t / --depthThreshold : depth thresholds, comma separated
+	-T / --printThreshold : depth threshold used for txt outputs (must be one of those in opt -t; default : the smallest one)
+	--noGraphThreshold : all graphs will be printed, whatever the coverage 
+		(default: only the genes not fully covered at threshold in -opt -T will be drawn)
+	--noAllTranscripts : does not print All transcripts on same file, in graphBySample (default: yes)
 	--maxDepth : max depth value when printing graph (optional)
 	-l / --expand2val : length to add out of exons, to inform on intron-exon junction (default: 20)
 	-L / --expand2bed : expand length of analysed regions to bed coord, if -l < bed (default: no)
 	--expandForTxt : does take into account expanded length (from -l and -L) for summary txt file (default: no)
 	-R / --noReverse : does not reverse regions if sens of transcript = (-) (default: yes)
-	-S / --noGraphSum : does not perform graphSum (default: yes)
-	-A / --noAllSample : does not perform graphAllSample (default: yes)
-	-X / --noBySample : does not perform graphBySample (default: yes)
-	-E / --noEachTranscript : does not print All transcripts on same file, in graphBySample (default: yes)
-	-M / --noDepthMut : does not print, foreach file, depth at known mutations provided by opt -M (default: yes)
-	-P / --noCovPlot : does not perform covPlots (default: yes)
-	-B / --noCovBed : does not output cov of bed intervals (default: yes)
-	--printReports : print all uncovered intervals in 1 txt file per transcript (default: no)
-	--noSummary : does not print summary txt file (default: yes)
-	--binPlot : bin width for covPlot (default=10)
-	--maxPlot : max depth for covPlot (default=100)
-	--genePlot : performs plots for regions extracted from genes coord, not only for bed intervals
-	--interPlot : intersection covPlot (default: no; enter yes to perform)
-	--bedtools : enter path to executable, if not installed as root or not in path
-	--samtools : enter path to executable, if not installed as root
-	--picard : enter path to executable .jar, if not installed as root
-	--gatk : cov analysis will be performed by gatk (default:bedtools; enter path to executable, if not installed as root)
-	-g / --genome : path to genome.fa file, if available (required if using GATK)
- 	--dedup : do not take in account dup reads (optional; default keep all reads; enter \"do\" to perform deduplication) 
-	--mbq : minimum base quality (optional; default 0; requires gatk)
-	--mmq : minimum mapping quality (optional; default 0)
 	--nGraph : max nber of graphs per sheet (default : all samples or all transcripts)
 	-z / --compress : archive output folder
 	-v / --version : current version 
 	-h / --help : help
+  *plot param:
+	--binPlot : bin width for covPlot (default=10)
+	--maxPlot : max depth for covPlot (default=100)
+	--genePlot : will perform plots for regions extracted from genes coord, not only for bed intervals (default: no)
+	--interPlot : will produce intersection covPlot (default: no)
+  *filters
+ 	--dedup : do not take in account dup reads (default keep all reads; enter \"do\" to perform Picard deduplication) 
+	--mbq : minimum base quality (default 0; requires gatk)
+	--mmq : minimum mapping quality (default 0)
+  *cov_bed param:
+	-F / --cov_fields : fields foreach intervals in covBed (comma separated), among: min, max, tot, mean, median, cov 
+		(default: min,mean,cov)
+	--split_bed : split overlapping bed intervals for Cov and CNV analyses
+  *CNV_detect param:
+	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 0.1)
+	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 0.15)
+	--seuil_cov : float [0-1] : region discarded if none of the samples have cov >value (def: 0)
+	--seuil_del : float ( [0-1] for normStat=mean/mediane (def: 0.8) ; <0 for normStat=std (def: -2) )
+	--seuil_dup : float ( >1 for normStat=mean/mediane (def: 1.2) ; >0 for normStat=std (def: 2) )
+	--min_CNV : min nber consecutive CNV
+	--normStat : MOY/STD/MED (def: MED)
+	--normByGender :	enter \"a\" : foreach region of all chrom, normalize separately for F and M ; 
+				enter \"g\" : foreach region on gonosomes only, normalize separately for F and M
+				def: no (normalize F and M together)
+	--totalBases : norm by sum of sequenced bp (def: sum of each region mean depths (in %))
+	--totalAllChr : norm by sum on all chr, whatever the sex (def: double the totalDepth for chrX if male, and skip chrY in the sum)
+	--CNV_byGene : graph; enter no to disable (def yes)
+	--CNV_byChr : graph; enter no to disable (def yes)
+  *external tools path:
+	--bedtools : enter path to executable, if not installed as root or not in path
+	--samtools : enter  path to executable, if not installed as root
+	--picard : enter path to executable .jar, if not installed as root
+	--gatk : cov analysis will be performed by gatk (default:bedtools; enter path to executable, if not installed as root)
+	-x / --ram : memory for gatk (def: 4Go)
+
 
 
 examples:
 
-$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -bed path/to/targets.bed -M path/to/mut.list -t 20,50,100
+$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
-$ perl DeCovA-x.pl -f path/to/file1.bam,path/to/file2.bam -r path/to/Refseq.txt -bed path/to/targets.bed -M path/to/mut.list -t 20,50,100
+$ perl DeCovA-x.pl -f path/to/file1.bam,path/to/file2.bam -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
-$ perl DeCovA-x.pl -f path/to/file.list -r path/to/Refseq.txt -bed path/to/targets.bed -M path/to/mut.list -t 20,50,100
+$ perl DeCovA-x.pl -f path/to/file.list -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
-$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -i GENE1,GENE2,NM_xxx1,NM_xxx2 -M path/to/mut.list -t 20,50,100
+$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -i GENE1,GENE2,NM_xxx1,NM_xxx2 -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
-$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -i GENE1,GENE2,NM_xxx1,NM_xxx2 -bed path/to/targets.bed -M path/to/mut.list -t 20,50,100
+$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -i GENE1,GENE2,NM_xxx1,NM_xxx2 -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
 
 
