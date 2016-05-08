@@ -62,15 +62,8 @@ GetOptions (\%opt,
 
 unless(%opt)
 	{ usage(); }
-foreach (keys%opt)
-	{
-	if ($_ =~ /help/)
-		{ usage(); }
-	#if ($_ !~ /[fdsoOrbMiNmlLtcSRTXAapPnqgI]/) {
-	#	print "opt -$_ not recognized\n";
-	#	usage();
-	#	} 
-	}
+
+if (exists $opt{help}) { usage(); }
 
 if(@ARGV) {
 	print"Invalid parameters:\n";
@@ -109,7 +102,6 @@ die "usage:
 	--genePlot : perform plots for regions extracted from genes coord, not only for bed intervals
 	--interPlot : intersection covPlot (default: no; enter yes to perform)
 	--bedtools : enter path to executable, if not installed as root or not in path
-	--samtools : enter path to executable, if not installed as root or not in path
 	--samtools : enter path to executable, if not installed as root
 	--picard : enter path to executable .jar, if not installed as root
 	--gatk : cov analysis will be performed by gatk (default:bedtools; enter path to executable, if not installed as root)
@@ -396,25 +388,28 @@ if ($allS || $Sum)
 #check progr installation
 
 if ($samT) {
-	$samT =~ s/samtools$//;
-	$samT =~ s/\/$//;
-	if (!$samT) { $samT = "."; }
-	$samT .= "/samtools";
-	system "$samT  > /dev/null 2>&1";
-	if ($? ne "-1") { print "samtools OK\n"; }
-	else { $samT = ""; }
+	system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
+	if ($? ne "-1") { print "picard-tools OK\n"; }
+	else {
+		$samT =~ s/samtools$//;
+		$samT =~ s/\/$//;
+		if (!$samT) { $samT = "."; }
+		$samT .= "/samtools";
+		system "$samT  > /dev/null 2>&1";
+		if ($? ne "-1") { print "samtools OK\n"; }
+		else { $samT = ""; }
+		}
 	}
 else {
 	system "samtools > /dev/null 2>&1";
 	if ($? ne "-1") { $samT = "samtools"; print "samtools OK\n"; }
 	else { $samT = ""; }
 	}	
-if ($mmq && !$gatk) {
-	unless ($samT) { die "samtools not installed or not found\n"; }
-	}
-if ($mbq && !$gatk) { die "GATK required for mbq filter\n"; }
-if ($dedup) {
-	if ($picard) {
+
+if ($picard) {
+	system "$picard"; #write the name of calling script of picard #> /dev/null 2>&1
+	if ($? ne "-1") { print "picard-tools OK\n"; }
+	else {
 		$picard =~ s/picard.jar$//;
 		$picard =~ s/\/$//;
 		$picard .= "/picard.jar";
@@ -422,36 +417,62 @@ if ($dedup) {
 			$picard = "java -jar $picard";
 			print "picard-tools OK\n"; 
 			}
-		else { die "picard-tools not found\n"; }
-		}
-	else {
-		system "picard-tools"; #write the name of calling script of picard #> /dev/null 2>&1
-		if ($? eq "-1") { die "picard-tools not installed or not found\n"; }
-		else { $picard = "picard-tools"; }
+		else { $picard = ""; }
 		}
 	}
+else {
+	system "picard-tools"; #write the name of calling script of picard #> /dev/null 2>&1
+	if ($? ne "-1") { $picard = "picard-tools"; print "picard-tools OK\n"; }
+	else { $picard = ""; }
+	}
+
+if ($gatk) {
+	if ($gatk ne "1") {
+		system "$gatk"; #write the name of calling script of picard #> /dev/null 2>&1
+		if ($? ne "-1") { print "GATK OK\n"; }
+		else {
+			$gatk =~ s/GenomeAnalysisTK.jar$//;
+			$gatk =~ s/\/$//;
+			$gatk .= "/GenomeAnalysisTK.jar";
+			if (-e $gatk) {
+				$gatk = "java -jar $gatk";
+				print "GATK OK\n"; 
+				}
+			else { $gatk = ""; }
+			}
+		}
+	else {
+		system "GenomeAnalysisTK"; #write the name of calling script of GATK
+		if ($? ne "-1") { $gatk = "GenomeAnalysisTK"; print "GATK OK\n"; }
+		else { $gatk = ""; }
+		}
+	}
+
+if ($bedT) {
+	system "$bedT";
+	if ($? ne "-1") { print "bedtools OK\n"; }
+	else {
+		$bedT =~ s/bedtools$//;
+		$bedT =~ s/\/$//;
+		if (!$bedT) { $bedT = "."; }
+		$bedT.="/bedtools";
+		system "$bedT"; 	#> /dev/null 2>&1";
+		if ($? ne "-1") { print "bedtools OK\n"; }
+		else { $bedT = ""; }
+		}
+	}
+else {
+	system "bedtools";
+	if ($? ne "-1") { $bedT="bedtools"; print "bedtools OK\n"; }
+	else { $bedT = ""; }
+	}
+
 if ($genom) {
 	if (-e $genom) { print "$genom OK\n"; }
 	else { die "$genom not found\n"; }
 	}
+
 if ($gatk) {
-	if ($gatk ne "1") {
-		$gatk =~ s/GenomeAnalysisTK.jar$//;
-		$gatk =~ s/\/$//;
-		$gatk .= "/GenomeAnalysisTK.jar";
-		if (-e $gatk) {
-			$gatk = "java -jar $gatk";
-			print "GATK OK\n"; 
-			}
-		else { die "GATK not found\n"; }
-		}
-	else {
-		system "GenomeAnalysisTK"; #write the name of calling script of GATK
-		if ($? ne "-1") { $gatk = "GenomeAnalysisTK"; }
-		else { die "GATK not installed or not found\n"; }
-		}
-	unless ($genom)
-		{ die "genome.fa required for GATK\n"; }
 	foreach (@Files) {
 		unless (-e "$path{$_}$fName{$_}$extenS.bai") {
 			if ($samT){
@@ -462,22 +483,7 @@ if ($gatk) {
 			else { die "samtools not installed or not found\n"; }
 			}
 		}
-	}
-else {
-	if ($bedT) {
-		$bedT =~ s/bedtools$//;
-		$bedT =~ s/\/$//;
-		if (!$bedT) { $bedT = "."; }
-		$bedT.="/bedtools";
-		system "$bedT > /dev/null 2>&1";
-		if ($? ne "-1") { print "bedtools OK\n"; }
-		else { die "bedtools not installed or not found\n"; }
-		}
-	else {
-		system "bedtools";
-		if ($? ne "-1") { $bedT="bedtools"; print "bedtools OK\n"; }
-		else { die "bedtools not installed or not found\n"; }
-		}	
+	unless ($genom) {  die "genome.fa required for GATK\n"; }
 	}
 my%fai=();
 if ($samT) {
@@ -491,6 +497,14 @@ if ($samT) {
 		chomp @{$fai{$_}};
 		}
 	}
+
+if ($mmq && !$gatk) {
+	unless ($samT) { die "samtools not installed or not found\n"; }
+	}
+if ($mbq && !$gatk) { die "GATK required for mbq filter\n"; }
+if ($dedup && !$picard) { die "picard tools not installed or not found\n"; }
+
+
 
 ###################
 #Job 1:find coordinates (genes, transcripts, bed, mut)
