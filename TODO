@@ -1,0 +1,7 @@
+- correctly indent the perl code
+- add tests
+- add a POD manpage for DeCovA
+- add a POD manpage for each additionnal module
+- fix the license (at least for perl modules)
+  Should be 'Artistic or GPLv1+' unless very specific needs
+- use 'Importer' in each modules
