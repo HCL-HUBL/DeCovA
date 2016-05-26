@@ -11,7 +11,7 @@
 #This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-our $VERSION="1.4.1d";
+our $VERSION="1.4.2";
 
 use warnings;
 use strict;
@@ -547,9 +547,15 @@ if (exists $opt{noCNV_byChr}) { $CNV_opt{"chromGraph"} = ""; }
 ##opt warnings according to actions 
 
 #unless (exists $opt{file} || exists $opt{dir}) { die "requires a list of bam files to analysed (opt -f), or a directory where to find such files (opt -d)\n"; }
+if ($fichier_cov) {
+	$CNV_tool=1;
+	if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed)
+		{ die "actions other than CNV_detect not allowed if .cov.txt file provided\n"; }
+	}
 unless ($CNV_tool && $fichier_cov) {
 	$cov_Bed=1;
 	}
+
 if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
 	unless (@Files) { die "no .bam files provided\n"; }
 	}
@@ -681,11 +687,13 @@ else {
 	if ($? eq "0") { $bedT="bedtools"; print "bedtools OK\n"; }
 	else { $bedT = ""; }
 	}
-my@bedTversion = split(/\./, `$bedT --version`);
-$bedTversion[0] =~ s/bedtools v//;
 my$bedTversion = "";
-if ( ($bedTversion[0]<2) || ($bedTversion[0]==2 && $bedTversion[1]<24) ) { $bedTversion = 1; }
-else	{ $bedTversion = 2; }
+if ($bedT) {
+	my@bedTversion = split(/\./, `$bedT --version`);
+	$bedTversion[0] =~ s/bedtools v//;
+	if ( ($bedTversion[0]<2) || ($bedTversion[0]==2 && $bedTversion[1]<24) ) { $bedTversion = 1; }
+	else	{ $bedTversion = 2; }
+	}
 
 if ($genom) {
 	if (-e $genom) { print "$genom OK\n"; }
@@ -726,7 +734,9 @@ if ($mmq && !$gatk) {
 	}
 if ($CNV_tool && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
 if ($dedup && !$picard) { die "picard tools not installed or not found\n"; }
-if (!$bedT && !$gatk) { die "bedtools or GATK required\n"; }
+if (!$bedT && !$gatk) {
+	unless ($CNV_tool && $fichier_cov) { die "bedtools or GATK required\n"; }
+	}
 
 #find sample names in bam
 my(%sName,%sName2);	#sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
@@ -790,13 +800,19 @@ if ($fichier_sexe) {
 #create output dirs
 use POSIX qw/strftime/;
 my$outdir = "";
-if (exists $opt{outdir})
-	{ $outdir = $opt{outdir}; }
+if (exists $opt{outdir}) { 
+	$outdir = $opt{outdir}; 
+	$outdir =~ s/\/$//;
+	if (-d $outdir) {
+		if ($CNV_tool && $fichier_cov) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+		else { $outdir .= "/covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+		}
+	}
 else {
 	if ($CNV_tool && $fichier_cov) { $outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 	else { $outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 	}
-unless ( -d $outdir) { mkdir($outdir); }
+mkdir($outdir);
 if ($byS || $printReports) { 
 	foreach (@Files)
 		{ mkdir("$outdir/cov\_$sName2{$_}"); }
@@ -1355,7 +1371,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($wUTR eq $U
 		##graph covByGene
 		if ($Sum) { 
 			if ($All)
-				{ graphSumG($nGraf,$gene,$suff,$outdir,$sens,$chr,$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $NM_Ex{"rev"} },\%{ $RegBed{"rev"}{$gene} },\%intron,\%UTR,\%Cod,\%{ $RegMut{"rev"}{$gene} },\%{ $NMCovEnd{$gene} },\%{ $NMCovVal{$gene} }); }
+				{ graphSumG($nGraf,$gene,$suff,$outdir,$sens,$chr,$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $NM_Ex{"rev"} },\%{ $RegBed{"rev"}{$gene} },\%{ $intron{"rev"} },\%{ $UTR{"rev"} },\%{ $Cod{"rev"} },\%{ $RegMut{"rev"}{$gene} },\%{ $NMCovEnd{$gene} },\%{ $NMCovVal{$gene} }); }
 			else
 				{ graphSumN($nGraf,$gene,$suff,$outdir,$sens,$chr,\%NMlength,\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{"raw"} },\%{ $NM_Ex{"rev"} },\%{ $RegBed{"rev"} },\%{ $intron{"rev"} },\%{ $UTR{"rev"} },\%{ $Cod{"rev"} },\%{ $RegMut{"rev"} },\%NMCovEnd,\%NMCovVal); }
 			}
@@ -2019,16 +2035,14 @@ foreach my$chr (sort(keys%interval)) {
 	my@bedStarts = sort{$a<=>$b}keys%{ $interval{$chr} };
 	my@refStarts = sort{$a<=>$b}keys%{ $RefNames{$chr} };
 	my$c=0;	#idx of @refStarts
-	my@RefEnds = sort{$a<=>$b}keys%{ $RefNames{$chr}{$refStarts[$c]} };
-	my$refEnd=$RefEnds[-1];
+	my@RefEnds = sort{$b<=>$a}keys%{ $RefNames{$chr}{$refStarts[$c]} };
 	foreach my$bedstart(@bedStarts) {
-		while ( ($c<(scalar@refStarts-1)) && ($bedstart > $refEnd) ) { 
+		while ( ($c<(scalar@refStarts-1)) && ($bedstart > $RefEnds[0]) ) { 
 			$c++; 
-			@RefEnds = sort{$a<=>$b}keys%{ $RefNames{$chr}{$refStarts[$c]} };
-			$refEnd=$RefEnds[-1];
+			@RefEnds = sort{$b<=>$a}keys%{ $RefNames{$chr}{$refStarts[$c]} };
 			}
 		my$c2=$c;
-		while (($c2<(scalar@refStarts-1))&&($bedstart<=$refEnd)&&($interval{$chr}{$bedstart}>=$refStarts[$c2])) {
+		while (($c2<(scalar@refStarts-1)) && ($interval{$chr}{$bedstart}>=$refStarts[$c2])) {
 			foreach my$end (@RefEnds) {
 				if ($bedstart<=$end) { 
 					foreach(@{ $RefNames{$chr}{$refStarts[$c2]}{$end} }) 
@@ -2036,17 +2050,20 @@ foreach my$chr (sort(keys%interval)) {
 					foreach(@{ $RefLines{$chr}{$refStarts[$c2]}{$end} }) 
 						{ $newLines{$_}=1;}
 					}
+				else { last; }
 				}
 			$c2++;
-			@RefEnds = sort{$a<=>$b}keys%{ $RefNames{$chr}{$refStarts[$c2]} };
-			$refEnd=$RefEnds[-1];
+			@RefEnds = sort{$b<=>$a}keys%{ $RefNames{$chr}{$refStarts[$c2]} };
 			}
-		foreach my$end (@RefEnds) {
-			if ($bedstart<=$end) { 
-				foreach(@{ $RefNames{$chr}{$refStarts[$c2]}{$end} }) 
-					{ $NM{$_}=1; }
-				foreach(@{ $RefLines{$chr}{$refStarts[$c2]}{$end} }) 
-					{ $newLines{$_}=1;}
+		if ($interval{$chr}{$bedstart}>=$refStarts[$c2]) {
+			foreach my$end (@RefEnds) {
+				if ($bedstart<=$end) { 
+					foreach(@{ $RefNames{$chr}{$refStarts[$c2]}{$end} }) 
+						{ $NM{$_}=1; }
+					foreach(@{ $RefLines{$chr}{$refStarts[$c2]}{$end} }) 
+						{ $newLines{$_}=1;}
+					}
+				else { last; }
 				}
 			}
 		}
@@ -6333,7 +6350,7 @@ for (my$i=0;$i<scalar@allLines;$i++) {
 				elsif ($_ eq "median") { print OUT1 "\t".sprintf("%.1f",$median{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}); }
 				elsif ($_ eq "cov") { print OUT1 "\t".100*(sprintf("%.3f", $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}))."%"; }
 				}
-			if ($toReseq && $bedLines[$i]{$file}{"Cov"} < $toReseq) 
+			if ($toReseq && $bedLines[$j]{$file}{"Cov"} < $toReseq) 
 				{ push(@{ $reseq{$i} },"$sName2{$file} (".100*(sprintf("%.3f", $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}))."%)"); }
 			}
 		$j++;

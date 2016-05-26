@@ -220,8 +220,10 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 	print SORTIE "Chrom"."\t";
 	print SORTIE "Start"."\t";
 	print SORTIE "End"."\t";
-	print SORTIE "Infos";
-	for (0..($nCol-3)) { print SORTIE "\t"; }
+	if ($nCol>3) {
+		print SORTIE "Infos";
+		for (0..($nCol-4)) { print SORTIE "\t"; }
+		}
 	print SORTIE "Numero_Region"."\t";
 	foreach my$file (@Files)
 		{ print SORTIE $sampleName{$file}."\t"; }
@@ -1433,8 +1435,12 @@ if ($graphByChr) {
 		unless (exists $tmpCoord{$Regions[$region]{"Chromosome"}}{$Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"}})
 			{ push (@{ $regionOrder{$Regions[$region]{"Chromosome"}} },$region); }
 		$tmpCoord{$Regions[$region]{"Chromosome"}}{$Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"}} = 1;
-		if ($Regions[$region]{"Gene"} eq "NA") { $Regions[$region]{"label"} = $Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"}; }
-		else { $Regions[$region]{"label"} = $Regions[$region]{"Gene"}.":".$Regions[$region]{"Borne_5P"}; }
+		if ($Regions[$region]{"Gene"} eq "NA") { $Regions[$region]{"label"} = $Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"}; } 
+		else { 
+			my@tab = split(/:/,$Regions[$region]{"Gene"});
+			$Regions[$region]{"label"} = $tab[0].":".$Regions[$region]{"Borne_5P"};
+			$Regions[$region]{"geneID"} = $tab[0];
+			}
 		}
 	for my$Chrom (keys%regionOrder) {
 		##sort by region ends (in case several regions with same start) then by starts
@@ -1506,18 +1512,26 @@ foreach my$Chrom (@ChromOrder) {
 	
 	if (exists $RegionOrder{$Chrom}) {
 
-		my$maxY=0;	
+		my$maxYsup=$seuil_duplication; my$maxYinf=$seuil_deletion;	
 		foreach my$region (@{ $RegionOrder{$Chrom} }) {
 			foreach my$f (@Files) {
-				if ( (exists$Regions[$region]{$f}{"Moyenne_Inter"}) && ($Regions[$region]{$f}{"Moyenne_Inter"} > $maxY) )
-					{ $maxY = $Regions[$region]{$f}{"Moyenne_Inter"}; }
+				if (exists$Regions[$region]{$f}{"Moyenne_Inter"}) {
+					if ($Regions[$region]{$f}{"Moyenne_Inter"} > $maxYsup)
+						{ $maxYsup = $Regions[$region]{$f}{"Moyenne_Inter"}; }
+					if ($norm eq "std") {
+						if ($Regions[$region]{$f}{"Moyenne_Inter"} < $maxYinf)
+							{ $maxYinf = $Regions[$region]{$f}{"Moyenne_Inter"}; }
+						}
+					}
 				}
 			}
 
 		my$Nbr_Reg = scalar@{ $RegionOrder{$Chrom} };
 
-		$cmdR .= "par(fig=c(0,1,".(1-(($n-0.05)/$nGraf)).",".(1-(($n-0.95)/$nGraf))."), new=TRUE)
-	plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxY), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$norm\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";		#ou xlim=c(0,$Nbr_Reg)
+		if ($norm eq "std") { $cmdR .= "par(fig=c(0,1,".(1-(($n-0.05)/$nGraf)).",".(1-(($n-0.95)/$nGraf))."), new=TRUE)
+	plot (c(0,0), xlim=c(0,$maxX), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$norm\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
+		else { $cmdR .= "par(fig=c(0,1,".(1-(($n-0.05)/$nGraf)).",".(1-(($n-0.95)/$nGraf))."), new=TRUE)
+	plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$norm\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
 
 		#region labels, in red if put aside
 		my@printReg=();
@@ -1616,22 +1630,21 @@ foreach my$Chrom (@ChromOrder) {
 		$points .= "), type =\"p\", pch = 16, lwd=3, col=\"red\")\n";
 		if ($someCNV) { $cmdR .= $points; }
 		#thereshold lines
-		$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
 		$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
-		$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; 
+		$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
+		if ($norm eq "std") { $cmdR .= "abline(h=0, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; }
+		else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; }
 		#gene lines
 		my$currentGene="";
 		for (my$r=0;$r<$Nbr_Reg;$r++) {
 			if ($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"}) {
-				if ($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$RegionOrder{$Chrom}[$r]]{"Gene"} ne $currentGene)
-					{
+				if ($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$RegionOrder{$Chrom}[$r]]{"geneID"} ne $currentGene) {
 					$cmdR .= "abline(v=".($r+0.5).", col=\"blue\", lty = \"dotted\", lwd=2)\n";
-					$currentGene = $Regions[$RegionOrder{$Chrom}[$r]]{"Gene"};
+					$currentGene = $Regions[$RegionOrder{$Chrom}[$r]]{"geneID"};
 					}
 				}
 			}
 
-		#print "$cmdR\n";
 		if ($c==$Nbr_Chr || $n==$nGraf) {
 			open (CMDR, ">$outdir/$sampleName{$file}\_temp.R") || die;
 			print CMDR "#!/usr/bin/env Rscript\n\n" ;
