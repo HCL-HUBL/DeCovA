@@ -19,7 +19,7 @@ use Getopt::Long;
 use File::Basename;
 use File::Find;
 use Cwd 'abs_path';
-use lib dirname(abs_path($0));
+use lib dirname(abs_path($0))."/../lib";
 use Bio::NGS::HCL::DeCovA::CNV_tool;
 
 
