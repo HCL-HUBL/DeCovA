@@ -587,155 +587,155 @@ my(%pathCmd);
 $pathCmd{"R"} = `which "R"`;
 if ($? eq "0") { print "R tools OK\n"; }
 else { die "R tools not installed or not found\n"; }
-#samtools
-if ($samT) {
-	#system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
-	$pathCmd{$samT} = `which "$samT"`;
-	if ($? eq "0") { print "samtools OK\n"; }
-	else {
-		$samT =~ s/samtools$//;
-		$samT =~ s/\/$//;
-		if ($samT eq "") { $samT = "."; }
-		$samT .= "/samtools";
+
+my%fai=(); my$bedTversion = "";
+unless ($fichier_cov) {
+	#samtools
+	if ($samT) {
+		#system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
 		$pathCmd{$samT} = `which "$samT"`;
 		if ($? eq "0") { print "samtools OK\n"; }
-		else { $samT = ""; }
-		}
-	}
-else {
-	$pathCmd{$samT} = `which "samtools"`;
-	if ($? eq "0") { $samT = "samtools"; print "samtools OK\n"; }
-	else { $samT = ""; }
-	}	
-#picard tools
-if ($picard) {
-	my$picardName = $picard;
-	$picardName =~ s/\.jar$//;
-	$picardName =~ s/picard$//;
-	$picardName =~ s/\/$//;
-	$picardName .= "/picard\.jar";
-	if (-e $picardName) { 
-		$picard = "java -jar $picardName";
-		print "picard-tools OK\n"; 
+		else {
+			$samT =~ s/samtools$//;
+			$samT =~ s/\/$//;
+			if ($samT eq "") { $samT = "."; }
+			$samT .= "/samtools";
+			$pathCmd{$samT} = `which "$samT"`;
+			if ($? eq "0") { print "samtools OK\n"; }
+			else { $samT = ""; }
+			}
 		}
 	else {
-		print "$picardName .jar file not found; test for command\n";
-		$pathCmd{$picard} = `which "$picard"`; 
-		if ($? eq "0") { print "picard-tools OK\n"; }
-		else { $picard = ""; }
-		}
-	}
-else {
-	$pathCmd{"picard-tools"} = `which "picard-tools"`; 
-	if ($? eq "0") { $picard = "picard-tools"; print "picard-tools OK\n"; }
-	else { $picard = ""; }
-	}
-#gatk
-#gatk == 1 if want to use gatk; so that it won't test for existing command if don't want to use it
-if ($mbq && !$gatk) { $gatk = 1; }
-if ($gatk) {
-	if ($gatk ne "1") {
-		my$gatkName = $gatk;
-		$gatkName =~ s/\.jar$//;
-		$gatkName =~ s/GenomeAnalysisTK$//;
-		$gatkName =~ s/\/$//;
-		$gatkName .= "/GenomeAnalysisTK\.jar";
-		if (-e $gatkName) {
-			if ($ram) { $gatk = "java -jar -Xmx$ram"."g $gatkName"; }
-			else { $gatk = "java -jar $gatkName"; }
-			print "GATK OK\n"; 
+		$pathCmd{$samT} = `which "samtools"`;
+		if ($? eq "0") { $samT = "samtools"; print "samtools OK\n"; }
+		else { $samT = ""; }
+		}	
+	#picard tools
+	if ($picard) {
+		my$picardName = $picard;
+		$picardName =~ s/\.jar$//;
+		$picardName =~ s/picard$//;
+		$picardName =~ s/\/$//;
+		$picardName .= "/picard\.jar";
+		if (-e $picardName) { 
+			$picard = "java -jar $picardName";
+			print "picard-tools OK\n"; 
 			}
 		else {
-			print "$gatkName .jar file not found; test for command\n";
-			$pathCmd{$gatk} = `which "$gatk"`; 
-			if ($? eq "0") {
-				if ($ram) { $gatk .= " -Xmx$ram"."g"; }
+			print "$picardName .jar file not found; test for command\n";
+			$pathCmd{$picard} = `which "$picard"`; 
+			if ($? eq "0") { print "picard-tools OK\n"; }
+			else { $picard = ""; }
+			}
+		}
+	else {
+		$pathCmd{"picard-tools"} = `which "picard-tools"`; 
+		if ($? eq "0") { $picard = "picard-tools"; print "picard-tools OK\n"; }
+		else { $picard = ""; }
+		}
+	#gatk
+	#gatk == 1 if want to use gatk; so that it won't test for existing command if don't want to use it
+	if ($mbq && !$gatk) { $gatk = 1; }
+	if ($gatk) {
+		if ($gatk ne "1") {
+			my$gatkName = $gatk;
+			$gatkName =~ s/\.jar$//;
+			$gatkName =~ s/GenomeAnalysisTK$//;
+			$gatkName =~ s/\/$//;
+			$gatkName .= "/GenomeAnalysisTK\.jar";
+			if (-e $gatkName) {
+				if ($ram) { $gatk = "java -jar -Xmx$ram"."g $gatkName"; }
+				else { $gatk = "java -jar $gatkName"; }
 				print "GATK OK\n"; 
 				}
-			else { die "GATK .jar file not found\n"; } #$gatk = ""; }
+			else {
+				print "$gatkName .jar file not found; test for command\n";
+				$pathCmd{$gatk} = `which "$gatk"`; 
+				if ($? eq "0") {
+					if ($ram) { $gatk .= " -Xmx$ram"."g"; }
+					print "GATK OK\n"; 
+					}
+				else { die "GATK .jar file not found\n"; } #$gatk = ""; }
+				}
+			}
+		else {
+			$pathCmd{"GenomeAnalysisTK"} = `which "GenomeAnalysisTK"`; 
+			if ($? eq "0") {
+				if ($ram) { $gatk = "GenomeAnalysisTK -Xmx$ram"."g"; }
+				else { $gatk = "GenomeAnalysisTK"; }
+				print "GATK OK\n"; 
+				}
+			else { die "GATK cmd not found\n"; } #$gatk = ""; }
 			}
 		}
-	else {
-		$pathCmd{"GenomeAnalysisTK"} = `which "GenomeAnalysisTK"`; 
-		if ($? eq "0") {
-			if ($ram) { $gatk = "GenomeAnalysisTK -Xmx$ram"."g"; }
-			else { $gatk = "GenomeAnalysisTK"; }
-			print "GATK OK\n"; 
-			}
-		else { die "GATK cmd not found\n"; } #$gatk = ""; }
-		}
-	}
-if ($mbq && !$gatk) { die "need GATK in order to filter for mbq\n"; }
+	if ($mbq && !$gatk) { die "need GATK in order to filter for mbq\n"; }
 
-#bedtools
-if ($bedT) {
-	#system "$bedT";
-	$pathCmd{$bedT} = `which "$bedT"`; 
-	if ($? eq "0") { print "bedtools OK\n"; }
-	else {
-		$bedT =~ s/bedtools$//;
-		$bedT =~ s/\/$//;
-		if ($bedT eq "") { $bedT = "."; }
-		$bedT.="/bedtools";
+	#bedtools
+	if ($bedT) {
+		#system "$bedT";
 		$pathCmd{$bedT} = `which "$bedT"`; 
-		if ($? eq "0")  { print "bedtools OK\n"; }
+		if ($? eq "0") { print "bedtools OK\n"; }
+		else {
+			$bedT =~ s/bedtools$//;
+			$bedT =~ s/\/$//;
+			if ($bedT eq "") { $bedT = "."; }
+			$bedT.="/bedtools";
+			$pathCmd{$bedT} = `which "$bedT"`; 
+			if ($? eq "0")  { print "bedtools OK\n"; }
+			else { $bedT = ""; }
+			}
+		}
+	else {
+		$pathCmd{"bedtools"} = `which "bedtools"`; 
+		if ($? eq "0") { $bedT="bedtools"; print "bedtools OK\n"; }
 		else { $bedT = ""; }
 		}
-	}
-else {
-	$pathCmd{"bedtools"} = `which "bedtools"`; 
-	if ($? eq "0") { $bedT="bedtools"; print "bedtools OK\n"; }
-	else { $bedT = ""; }
-	}
-my$bedTversion = "";
-if ($bedT) {
-	my@bedTversion = split(/\./, `$bedT --version`);
-	$bedTversion[0] =~ s/bedtools v//;
-	if ( ($bedTversion[0]<2) || ($bedTversion[0]==2 && $bedTversion[1]<24) ) { $bedTversion = 1; }
-	else	{ $bedTversion = 2; }
-	}
+	if ($bedT) {
+		my@bedTversion = split(/\./, `$bedT --version`);
+		$bedTversion[0] =~ s/bedtools v//;
+		if ( ($bedTversion[0]<2) || ($bedTversion[0]==2 && $bedTversion[1]<24) ) { $bedTversion = 1; }
+		else	{ $bedTversion = 2; }
+		}
 
-if ($genom) {
-	if (-e $genom) { print "$genom OK\n"; }
-	else { die "$genom not found\n"; }
-	}
-
-if ($gatk) {
-	foreach (@Files) {
-		unless (-e "$path{$_}$fName{$_}$extenS.bai") {
-			if ($samT){
-				my$cmd = "$samT index $path{$_}$fName{$_}$extenS";
+	if ($genom) {
+		if (-e $genom) { print "$genom OK\n"; }
+		else { die "$genom not found\n"; }
+		}
+	#genome index
+	if ($gatk) {
+		foreach (@Files) {
+			unless (-e "$path{$_}$fName{$_}$extenS.bai") {
+				if ($samT){
+					my$cmd = "$samT index $path{$_}$fName{$_}$extenS";
+					print "$cmd\n";
+					system "$cmd";
+					}
+				else { die "samtools not installed or not found\n"; }
+				}
+			}
+		unless ($genom) {  die "genome.fa required for GATK\n"; }
+		}
+	if ($samT) {
+		foreach my$file (@Files) {
+			unless (-e "$path{$file}$fName{$file}$extenS.bai") {
+				my$cmd = "$samT index $path{$file}$fName{$file}$extenS";
 				print "$cmd\n";
 				system "$cmd";
 				}
-			else { die "samtools not installed or not found\n"; }
+			my@tmp = `$samT idxstats $path{$file}$fName{$file}$extenS | cut -f1`;
+			chomp @tmp;
+			foreach (@tmp) {
+				if ($_ =~ /^\w/) { push(@{ $fai{$file} }, $_); }
+				}
 			}
 		}
-	unless ($genom) {  die "genome.fa required for GATK\n"; }
-	}
-my%fai=();
-if ($samT) {
-	foreach my$file (@Files) {
-		unless (-e "$path{$file}$fName{$file}$extenS.bai") {
-			my$cmd = "$samT index $path{$file}$fName{$file}$extenS";
-			print "$cmd\n";
-			system "$cmd";
-			}
-		my@tmp = `$samT idxstats $path{$file}$fName{$file}$extenS | cut -f1`;
-		chomp @tmp;
-		foreach (@tmp) {
-			if ($_ =~ /^\w/) { push(@{ $fai{$file} }, $_); }
-			}
-		}
-	}
 
-if ($mmq && !$gatk) {
-	unless ($samT) { die "samtools not installed or not found\n"; }
-	}
-if ($CNV_tool && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
-if ($dedup && !$picard) { die "picard tools not installed or not found\n"; }
-if (!$bedT && !$gatk) {
-	unless ($CNV_tool && $fichier_cov) { die "bedtools or GATK required\n"; }
+	if ($mmq && !$gatk) {
+		unless ($samT) { die "samtools not installed or not found\n"; }
+		}
+	if ($CNV_tool && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
+	if ($dedup && !$picard) { die "picard tools not installed or not found\n"; }
+	if (!$bedT && !$gatk) { die "bedtools or GATK required\n"; }
 	}
 
 #find sample names in bam
