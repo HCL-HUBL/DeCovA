@@ -552,7 +552,7 @@ if ($fichier_cov) {
 	if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed)
 		{ die "actions other than CNV_detect not allowed if .cov.txt file provided\n"; }
 	}
-unless ($CNV_tool && $fichier_cov) {
+unless ($CNV_tool && !$fichier_cov) {
 	$cov_Bed=1;
 	}
 
@@ -734,7 +734,7 @@ unless ($fichier_cov) {
 		unless ($samT) { die "samtools not installed or not found\n"; }
 		}
 	if ($CNV_tool && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
-	if ($dedup && !$picard) { die "picard tools not installed or not found\n"; }
+	if ($dedup eq "do" && !$picard) { die "picard tools not installed or not found\n"; }
 	if (!$bedT && !$gatk) { die "bedtools or GATK required\n"; }
 	}
 
@@ -1044,14 +1044,6 @@ if ($mutFile)
 %{ $RegBed{"coord0"} } = %{$hashSub[0]};
 %{ $RegMut{"coord0"} } = %{$hashSub[1]};
 
-
-%{ $Regions{"rev"} } = %{ $Regions{"coord0"} };
-%{ $NM_Ex{"rev"} } = %{ $NM_Ex{"coord0"} };
-%{ $intron{"rev"} } = %{ $intron{"coord0"} };
-%{ $UTR{"rev"} } = %{ $UTR{"coord0"} };
-%{ $Cod{"rev"} } = %{ $Cod{"coord0"} };
-%{ $RegBed{"rev"} } = %{ $RegBed{"coord0"} };
-%{ $RegMut{"rev"} } = %{ $RegMut{"coord0"} };
 foreach my$gene (keys%Genes) {
 	my@NMs =  @{ $geneNM{$gene} };
 	my$chr = $NMchr{$NMs[0]};
@@ -1083,6 +1075,15 @@ foreach my$gene (keys%Genes) {
 				%{ $RegMut{"rev"}{$NM} } = %{$hashSub[6]};
 				}
 			}
+		}
+	else {
+		%{ $Regions{"rev"} } = %{ $Regions{"coord0"} };
+		%{ $NM_Ex{"rev"} } = %{ $NM_Ex{"coord0"} };
+		%{ $intron{"rev"} } = %{ $intron{"coord0"} };
+		%{ $UTR{"rev"} } = %{ $UTR{"coord0"} };
+		%{ $Cod{"rev"} } = %{ $Cod{"coord0"} };
+		%{ $RegBed{"rev"} } = %{ $RegBed{"coord0"} };
+		%{ $RegMut{"rev"} } = %{ $RegMut{"coord0"} };
 		}
 	}
 
