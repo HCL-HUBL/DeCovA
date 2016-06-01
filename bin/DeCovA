@@ -108,7 +108,7 @@ if(@ARGV) {
 
 sub usage
 {
-die "usage: perl /path/to/DeCovA-x [option]
+die "usage: perl /path/to/DeCovA [option]
 options:
 inputs:
 	-f / --file : list of bam files, either command line (comma separated), or as a file (\".list\")
@@ -552,7 +552,7 @@ if ($fichier_cov) {
 	if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed)
 		{ die "actions other than CNV_detect not allowed if .cov.txt file provided\n"; }
 	}
-unless ($CNV_tool && !$fichier_cov) {
+if ($CNV_tool && !$fichier_cov) {
 	$cov_Bed=1;
 	}
 
@@ -697,11 +697,12 @@ unless ($fichier_cov) {
 		else	{ $bedTversion = 2; }
 		}
 
+	#genome index
 	if ($genom) {
 		if (-e $genom) { print "$genom OK\n"; }
 		else { die "$genom not found\n"; }
 		}
-	#genome index
+	
 	if ($gatk) {
 		foreach (@Files) {
 			unless (-e "$path{$_}$fName{$_}$extenS.bai") {
@@ -955,7 +956,7 @@ if ($All) {
 
 	@hashSub = NM2GeneRegion(\%Genes,\%geneNM,\%NMchr,\%txtRegions,\%txt_NM_Ex);
 	%txtRegions = %{$hashSub[0]};
-	%txt_NM_Ex = %{$hashSub[1]}
+	%txt_NM_Ex = %{$hashSub[1]};
 	}
 
 #links bed intervals to Regions, eventually changes Regions according to bed (with -L Y)
@@ -969,7 +970,7 @@ if ($Expand) {
 			@hashSub = changeRegion2G(\@NMs,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $NM_Ex{"raw"} },\%{ $Bed{$chr} });
 			%{ $Regions{"raw"}{$chr}{$gene} } = %{$hashSub[0]};
 			%{ $NM_Ex{"raw"} } = %{$hashSub[1]};
-			%{ $RegBed{$gene} } = %{$hashSub[2]};	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
+			%{ $RegBed{"raw"}{$gene} } = %{$hashSub[2]};	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
 			}
 		}
 	else {
@@ -977,18 +978,18 @@ if ($Expand) {
 			@hashSub = changeRegion2N(\%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} },\%{ $NM_Ex{"raw"}{$NM} },\%{ $Bed{$NMchr{$NM}} });
 			%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} } = %{$hashSub[0]};
 			%{ $NM_Ex{"raw"}{$NM} } = %{$hashSub[1]};
-			%{ $RegBed{$NM} } = %{$hashSub[2]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
+			%{ $RegBed{"raw"}{$NM} } = %{$hashSub[2]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
 			}
 		}
 	}
 else {
 	print "change bed intervals according to genes\n";
-	%RegBed = linkBed(\%{ $Regions{"raw"} },\%Bed);
+	%{ $RegBed{"raw"} } = linkBed(\%{ $Regions{"raw"} },\%Bed);
 	}
 
 #eliminates $NM with no corresponding cov bed
-if ($All) { @hashSub = notAnalysedG(\%Genes,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%RegBed); }
-else  { @hashSub = notAnalysedN(\%Genes,\%NMgene,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%RegBed); }
+if ($All) { @hashSub = notAnalysedG(\%Genes,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
+else  { @hashSub = notAnalysedN(\%Genes,\%NMgene,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
 %Genes = %{$hashSub[0]};
 %{ $Regions{"raw"} } = %{$hashSub[1]};
 %{ $NM_Ex{"raw"} } = %{$hashSub[2]};
@@ -1051,7 +1052,7 @@ foreach my$gene (keys%Genes) {
 	if ($Rev && $sens eq "-") {
 		if ($All) {
 			@hashSub = ReverseGene1($gene,$NMlength{$gene},\%{ $Regions{"coord0"}{$gene} },\%{ $RegBed{"coord0"}{$gene} },\%{ $RegMut{"coord0"}{$gene} });
-			my%RegR = %{$hashSub[0]};
+			%{ $Regions{"rev"}{$gene} } = %{$hashSub[0]};
 			%{ $RegBed{"rev"}{$gene} } = %{$hashSub[1]};
 			%{ $RegMut{"rev"}{$gene} } = %{$hashSub[2]};
 			foreach my$NM (@NMs) {
@@ -1061,7 +1062,6 @@ foreach my$gene (keys%Genes) {
 				%{ $UTR{"rev"}{$NM} } = %{$hashSub[2]};
 				%{ $Cod{"rev"}{$NM} } = %{$hashSub[3]};
 				}
-			%{ $Regions{"rev"}{$gene} } = %RegR;
 			}
 		else {
 			foreach my$NM (@NMs) {
@@ -1077,13 +1077,24 @@ foreach my$gene (keys%Genes) {
 			}
 		}
 	else {
-		%{ $Regions{"rev"} } = %{ $Regions{"coord0"} };
-		%{ $NM_Ex{"rev"} } = %{ $NM_Ex{"coord0"} };
-		%{ $intron{"rev"} } = %{ $intron{"coord0"} };
-		%{ $UTR{"rev"} } = %{ $UTR{"coord0"} };
-		%{ $Cod{"rev"} } = %{ $Cod{"coord0"} };
-		%{ $RegBed{"rev"} } = %{ $RegBed{"coord0"} };
-		%{ $RegMut{"rev"} } = %{ $RegMut{"coord0"} };
+		if ($All) {
+			%{ $Regions{"rev"}{$gene} } = %{ $Regions{"coord0"}{$gene} };
+			if (exists $RegBed{"coord0"}{$gene}) { %{ $RegBed{"rev"}{$gene} } = %{ $RegBed{"coord0"}{$gene} }; }
+			if (exists $RegMut{"coord0"}{$gene}) { %{ $RegMut{"rev"}{$gene} } = %{ $RegMut{"coord0"}{$gene} }; }
+			}
+		else {
+			foreach my$NM (@NMs) {
+				%{ $Regions{"rev"}{$NM} } = %{ $Regions{"coord0"}{$NM} };
+				if (exists $RegBed{"coord0"}{$NM}) { %{ $RegBed{"rev"}{$NM} } = %{ $RegBed{"coord0"}{$NM} }; }
+				if (exists $RegMut{"coord0"}{$NM}) { %{ $RegMut{"rev"}{$NM} } = %{ $RegMut{"coord0"}{$NM} }; }
+				}
+			}
+		foreach my$NM (@NMs) {
+			if (exists $NM_Ex{"coord0"}{$NM}) { %{ $NM_Ex{"rev"}{$NM} } = %{ $NM_Ex{"coord0"}{$NM} }; }
+			if (exists $intron{"coord0"}{$NM}) { %{ $intron{"rev"}{$NM} } = %{ $intron{"coord0"}{$NM} }; }
+			if (exists $UTR{"coord0"}{$NM}) { %{ $UTR{"rev"}{$NM} } = %{ $UTR{"coord0"}{$NM} }; }
+			if (exists $Cod{"coord0"}{$NM}) { %{ $Cod{"rev"}{$NM} } = %{ $Cod{"coord0"}{$NM} }; }
+			}
 		}
 	}
 
@@ -1261,8 +1272,8 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($wUTR eq $U
 
 				##transposition and splicing: 1st position of 1st exon = 1, 
 				##and	if end of exon = x, start of next exon = x+1
-				## $covEnd01{$file}{$NM}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
-				## @{ $covStart01{$file}{$NM}{$threshold}{$ex} } = [ordered $notCovStarts00]
+				## $covEnd01{$NM}{$file}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+				## @{ $covStart01{$NM}{$file}{$threshold}{$ex} } = [ordered $notCovStarts00]
 				if ($allS || $byS) {
 					if ($All) {
 						@hashSub = transposeCov(\@Thresholds,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $Regions{"coord0"}{$gene} },\%{ $NMcovStart{$gene} },\%{ $NMcovEnd{$gene} });
@@ -1954,7 +1965,7 @@ if ($ref) {
 else { die "RefSeq file required\n"; }
 my@Ref2;
 foreach my$id (@IDs) { 
-	my@tmp = grep(/\t$id\t/, @Ref); 
+	my@tmp = grep(/\t$id\t/i, @Ref); 
 	if (@tmp) { push(@Ref2, @tmp); }
 	else { die "can't find $id in $ref file\n"; }
 	}
@@ -3349,19 +3360,20 @@ my%NMbed00 = %$h2;
 my%NMmut00 = %$h3;
 
 print "reverse $gene\n";
-my(%RegR);
+my%RegR;
 foreach my$startReg (keys%Reg_00)
 	{ $RegR{($length-$Reg_00{$startReg})} = $length-$startReg; }
-%Reg_00 = %RegR;
-%NMbed00 = reverseEx($length,\%NMbed00);
-#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
-my(%mutR); 
-foreach (keys%NMmut00)
-	{ $mutR{($length-$_)} = $NMmut00{$_}; }
-%NMmut00 = %mutR;
 
-return(\%Reg_00,\%NMbed00,\%NMmut00);
+my%NMbedR = reverseEx($length,\%NMbed00);
+
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+my%NMmutR; 
+foreach (keys%NMmut00)
+	{ $NMmutR{($length-$_)} = $NMmut00{$_}; }
+
+return(\%RegR,\%NMbedR,\%NMmutR);
 }
+
 ##########################
 sub ReverseGene2
 {
@@ -3374,17 +3386,18 @@ my%UTR = %$h4;
 my%Cod = %$h5;
 
 print "reverse $NM\n";
-my(%NM_ExR);
+my%NM_ExR;
 foreach my$startReg (keys%Reg_00)
 	{ %{ $NM_ExR{($length-$Reg_00{$startReg})} } = reverseEx( $length,\%{ $NM_Ex00{$startReg} } ); }
-%NM_Ex00 = %NM_ExR;	
+	
 # $intron{$NM}{$startIntron} = $endIntron (for start of region = 0)
 %intron = reverseEx($length,\%intron);
 # $UTR{$NM}{$startUTR} = $endUTR (for start of region = 0)
 %UTR = reverseEx($length,\%UTR);
 # $Cod{$NM}{$startCod} = $endCod (for start of region = 0)}
 %Cod = reverseEx($length,\%Cod);
-return(\%NM_Ex00,\%intron,\%UTR,\%Cod);
+
+return(\%NM_ExR,\%intron,\%UTR,\%Cod);
 }
 
 ##########################
@@ -3402,28 +3415,26 @@ my%NMmut00 = %$h7;
 
 print "reverse $NM\n";
 my(%RegR,%NM_ExR);
-foreach my$startReg (keys%Reg_00)
-	{
+foreach my$startReg (keys%Reg_00) {
 	$RegR{($length-$Reg_00{$startReg})} = $length-$startReg;
 	%{ $NM_ExR{($length-$Reg_00{$startReg})} } = reverseEx( $length,\%{ $NM_Ex00{$startReg} } );
 	}
-%Reg_00 = %RegR;
-%NM_Ex00 = %NM_ExR;
+
 # $intron{$NM}{$startIntron} = $endIntron (for start of region = 0)
 %intron = reverseEx($length,\%intron);
 # $UTR{$NM}{$startUTR} = $endUTR (for start of region = 0)
 %UTR = reverseEx($length,\%UTR);
 # $Cod{$NM}{$startCod} = $endCod (for start of region = 0)}
 %Cod = reverseEx($length,\%Cod);
-#$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
-%NMbed00 = reverseEx($length,\%NMbed00);
-#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
-my(%mutR); 
-foreach (keys%NMmut00)
-	{ $mutR{($length-$_)} = $NMmut00{$_}; }
-%NMmut00 = %mutR;
 
-return(\%Reg_00,\%NM_Ex00,\%intron,\%UTR,\%Cod,\%NMbed00,\%NMmut00);
+#$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
+my%NMbedR = reverseEx($length,\%NMbed00);
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+my%NMmutR; 
+foreach (keys%NMmut00)
+	{ $NMmutR{($length-$_)} = $NMmut00{$_}; }
+
+return(\%RegR,\%NM_ExR,\%intron,\%UTR,\%Cod,\%NMbedR,\%NMmutR);
 }
 
 
@@ -4017,7 +4028,7 @@ if($printReports) {
 			foreach my$threshold (@Thresholds) {
 				print OUT "\ndepth threshold = $threshold\n\n";
 				print OUT "not covered over ".sprintf("%.1f",$NM_UC{$threshold})."% of exons\n\n";
-				print OUT $txt{$threshold};
+				if (exists $txt{$threshold}) { print OUT $txt{$threshold}; }
 				}
 			close OUT;
 			}
