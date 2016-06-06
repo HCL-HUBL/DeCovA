@@ -1435,7 +1435,7 @@ if ($graphByChr) {
 		unless (exists $tmpCoord{$Regions[$region]{"Chromosome"}}{$Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"}})
 			{ push (@{ $regionOrder{$Regions[$region]{"Chromosome"}} },$region); }
 		$tmpCoord{$Regions[$region]{"Chromosome"}}{$Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"}} = 1;
-		if ($Regions[$region]{"Gene"} eq "NA") { $Regions[$region]{"label"} = $Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"}; } 
+		if ($Regions[$region]{"Gene"} eq "NA") { $Regions[$region]{"label"} = $Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"}; }
 		else { 
 			my@tab = split(/:/,$Regions[$region]{"Gene"});
 			$Regions[$region]{"label"} = $tab[0].":".$Regions[$region]{"Borne_5P"};
@@ -1704,18 +1704,35 @@ my$cmdR = "";
 my$c=0; #chr iteration
 for my$Chrom (@ChrOrder) {
 
-	my$maxY=0;	
+	#my$maxY=0;	
+	#foreach my$region (@{ $regionOrder{$Chrom} }) {
+	#	for (my$p=0;$p<scalar(keys%Patients);$p++) {
+	#		if ( (exists $Regions[$region]{$p}{"Moyenne_Inter"}) && ($Regions[$region]{$p}{"Moyenne_Inter"} > $maxY) )
+	#			{ $maxY = $Regions[$region]{$p}{"Moyenne_Inter"}; }
+	#		}
+	#	}
+	my$maxYsup=$seuil_duplication; my$maxYinf=$seuil_deletion;	
 	foreach my$region (@{ $regionOrder{$Chrom} }) {
 		for (my$p=0;$p<scalar(keys%Patients);$p++) {
-			if ( (exists$Regions[$region]{$p}{"Moyenne_Inter"}) && ($Regions[$region]{$p}{"Moyenne_Inter"} > $maxY) )
-				{ $maxY = $Regions[$region]{$p}{"Moyenne_Inter"}; }
+			if (exists $Regions[$region]{$p}{"Moyenne_Inter"}) {
+				if ($Regions[$region]{$p}{"Moyenne_Inter"} > $maxYsup)
+					{ $maxYsup = $Regions[$region]{$p}{"Moyenne_Inter"}; }
+				if ($norm eq "std") {
+					if ($Regions[$region]{$p}{"Moyenne_Inter"} < $maxYinf)
+						{ $maxYinf = $Regions[$region]{$p}{"Moyenne_Inter"}; }
+					}
+				}
 			}
 		}
 
 	my$ChrName = $Chrom; $ChrName =~ s/^chr//;
 	my$Nbr_Reg = scalar@{ $regionOrder{$Chrom} };
-	$cmdR .= "par(fig=c(0,1,".(1-(($c+0.95)/$Nbr_Chr)).",".(1-(($c+0.05)/$Nbr_Chr))."), new=TRUE)
-plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxY), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$norm\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";	#
+	#$cmdR .= "par(fig=c(0,1,".(1-(($c+0.95)/$Nbr_Chr)).",".(1-(($c+0.05)/$Nbr_Chr))."), new=TRUE)
+#plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxY), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$norm\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";	#
+	if ($norm eq "std") { $cmdR .= "par(fig=c(0,1,".(1-(($c+0.95)/$Nbr_Chr)).",".(1-(($c+0.05)/$Nbr_Chr))."), new=TRUE)
+plot (c(0,0), xlim=c(0,$maxX), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$norm\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
+	else { $cmdR .= "par(fig=c(0,1,".(1-(($c+0.95)/$Nbr_Chr)).",".(1-(($c+0.05)/$Nbr_Chr))."), new=TRUE)
+plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$norm\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
 	#x labels
 	my@printReg=();
 	for (my$r=0;$r<$Nbr_Reg;$r++) { 
@@ -1829,15 +1846,21 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxY), type =\"n\", main=\"chrom: $ChrN
 	$points .= "), type =\"p\", pch = 16, lwd=3, col=\"red\")\n";
 	if ($someCNV) { $cmdR .= $points; }
 
-	$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
+	#$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
+	#$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
+	#$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
 	$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
 	$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
+	if ($norm eq "std") { $cmdR .= "abline(h=0, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; }
+	else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; }
 	
 	my$currentGene="";
 	for (my$r=0;$r<$Nbr_Reg;$r++) {
-		if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne $currentGene) {
+		#if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne $currentGene) {
+		if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"geneID"} ne $currentGene) {
 			$cmdR .= "abline(v=".($r+0.5).", col=\"blue\", lty = \"dotted\", lwd=2)\n";
-			$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"Gene"};
+			#$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"Gene"};
+			$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"geneID"};
 			}
 		}
 

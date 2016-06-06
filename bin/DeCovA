@@ -6291,6 +6291,7 @@ foreach my$file (@Files) {
 				#cov
 				$cov{$file}{$chr}{$start}{$end} /= $len;
 				#sum
+				$sum{$file}{$chr}{$start}{$end} = 0;
 				foreach (@{ $vals{$file}{$chr}{$start}{$end} }) 
 					{ $sum{$file}{$chr}{$start}{$end} += $_; }
 				#mean
