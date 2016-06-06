@@ -2155,7 +2155,7 @@ while (my$line=<IDS>) {
 					if ($Ends[$i] > $NMendCod{$NM}) { 
 						$interval{($NMstartCod{$NM}-$len)} = $NMendCod{$NM}+$len;
 						if ($id2Bed) {
-							print BED "$chr\t".($tab[6]-$len)."\t".($tab[7]+$len)."\t$gene"."_$NM";
+							print BED "$chr\t".($tab[6]-$len)."\t".($tab[7]+$len)."\t$gene".":$NM";
 							if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
 							else { print BED  ":exon".(scalar(@Starts)-$i)."\n"; }
 							}
@@ -2163,7 +2163,7 @@ while (my$line=<IDS>) {
 					else { 
 						$interval{($NMstartCod{$NM}-$len)} = $Ends[$i]+$len;
 						if ($id2Bed) {
-							print BED "$chr\t".($tab[6]-$len)."\t".($Ends[$i]+$len)."\t$gene"."_$NM";
+							print BED "$chr\t".($tab[6]-$len)."\t".($Ends[$i]+$len)."\t$gene".":$NM";
 							if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
 							else { print BED  ":exon".(scalar(@Starts)-$i)."\n"; }
 							}
@@ -2173,7 +2173,7 @@ while (my$line=<IDS>) {
 					if ($Ends[$i] < $NMendCod{$NM}) { 
 						$interval{($Starts[$i]+1-$len)} = $Ends[$i]+$len;
 						if ($id2Bed) {
-							print BED "$chr\t".($Starts[$i]-$len)."\t".($Ends[$i]+$len)."\t$gene"."_$NM";
+							print BED "$chr\t".($Starts[$i]-$len)."\t".($Ends[$i]+$len)."\t$gene".":$NM";
 							if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
 							else { print BED ":exon".(scalar(@Starts)-$i)."\n"; }
 							}
@@ -2182,7 +2182,7 @@ while (my$line=<IDS>) {
 						$lastCodingEx = $i;
 						$interval{($Starts[$i]+1-$len)} = $NMendCod{$NM}+$len;
 						if ($id2Bed) {
-							print BED "$chr\t".($Starts[$i]-$len)."\t".($tab[7]+$len)."\t$gene"."_$NM";
+							print BED "$chr\t".($Starts[$i]-$len)."\t".($tab[7]+$len)."\t$gene".":$NM";
 							if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
 							else { print BED ":exon".(scalar(@Starts)-$i)."\n"; }
 							}
