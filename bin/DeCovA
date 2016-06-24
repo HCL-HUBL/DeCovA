@@ -109,7 +109,9 @@ if(@ARGV) {
 
 sub usage
 {
-die "usage: perl /path/to/DeCovA [option]
+die "usage: 
+	as a script:		perl /path/to/DeCovA [option]
+	or after installation:	DeCovA [option]
 options:
 inputs:
 	-f / --file : list of bam files, either command line (comma separated), or as a file (\".list\")

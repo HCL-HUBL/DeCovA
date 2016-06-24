@@ -1,4 +1,4 @@
-DeCovA_1.2g.pl
+DeCovA_1.4.3
 
 DeCovA script requires at least R and bedtools softawres to be installed;
 additionnally, it can use picard tools (for deduplication), samtools (for mapq filter), and GATK (alternatively to bedtools; required if a base-q filter is needed).
@@ -12,7 +12,7 @@ $ wget http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz
 then unzip 
 $ gunzip refGene.txt.gz
 
-ftp://ftp.ensembl.org/pub/release-79/gtf/homo_sapiens/
+(ftp://ftp.ensembl.org/pub/release-79/gtf/homo_sapiens/)
 
 DeCovA can be executed via command-line execution of the perl DeCovA-x.pl script:
 $ perl path/to/script/DeCovA-x.pl [options]
@@ -25,6 +25,14 @@ and if the dir has been added to the path:
 $ echo 'export PATH=$PATH:/home/me/path/to/script' >> /home/me/.bashrc
 then
 $ DeCovA-x.pl [options]
+
+DeCovA can be installed:
+change directory to DeCovA folder, then
+$ perl Makefile.PL
+$ make
+then, as root:
+$ sudo make install
+then just enter $ DeCovA
 
 
 list of parameters:
@@ -56,7 +64,7 @@ outputs:
 parameters:
   *general:
 	-N / --nonCoding : analyse also Non coding transcripts (default: no)
-	-U / --noUTR : does not take into account UTR regions for all analyses (default: yes)
+	-U / --noUTR : does not take into account UTR regions for graphs (default: yes)
 	-u / --noUTRinTxt : does not take into account UTR regions for summary txt file and plots (default: yes)
 	-t / --depthThreshold : depth thresholds, comma separated
 	-T / --printThreshold : depth threshold used for txt outputs (must be one of those in opt -t; default : the smallest one)
@@ -64,9 +72,10 @@ parameters:
 		(default: only the genes not fully covered at threshold in -opt -T will be drawn)
 	--noAllTranscripts : does not print All transcripts on same file, in graphBySample (default: yes)
 	--maxDepth : max depth value when printing graph (optional)
-	-l / --expand2val : length to add out of exons, to inform on intron-exon junction (default: 20)
+	-l / --expand2val : length added out of exon ends (default: 0)
 	-L / --expand2bed : expand length of analysed regions to bed coord, if -l < bed (default: no)
-	--expandForTxt : does take into account expanded length (from -l and -L) for summary txt file (default: no)
+	--Ltxt : does take into account expanded length (from -l and -L) for txt outputs (default: no), or add a different length
+	--Lbed : length added out of bed interval ends (default: 0)
 	-R / --noReverse : does not reverse regions if sens of transcript = (-) (default: yes)
 	--nGraph : max nber of graphs per sheet (default : all samples or all transcripts)
 	-z / --compress : archive output folder
@@ -98,8 +107,8 @@ parameters:
 				def: no (normalize F and M together)
 	--totalBases : norm by sum of sequenced bp (def: sum of each region mean depths (in %))
 	--totalAllChr : norm by sum on all chr, whatever the sex (def: double the totalDepth for chrX if male, and skip chrY in the sum)
-	--CNV_byGene : graph; enter no to disable (def yes)
-	--CNV_byChr : graph; enter no to disable (def yes)
+	--noCNV_byGene : to disable graph for gene affected by a CNV
+	--noCNV_byChr : to disable graph by chr
   *external tools path:
 	--bedtools : enter path to executable, if not installed as root or not in path
 	--samtools : enter  path to executable, if not installed as root
