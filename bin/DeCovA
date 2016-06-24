@@ -109,7 +109,7 @@ if(@ARGV) {
 
 sub usage
 {
-die "usage: 
+die "usage:
 	as a script:		perl /path/to/DeCovA [option]
 	or after installation:	DeCovA [option]
 options:
@@ -569,18 +569,19 @@ if (exists $opt{noCNV_byChr}) { $CNV_opt{"chromGraph"} = ""; }
 #unless (exists $opt{file} || exists $opt{dir}) { die "requires a list of bam files to analysed (opt -f), or a directory where to find such files (opt -d)\n"; }
 if ($fichier_cov) {
 	$CNV_tool=1;
-	if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed)
+	if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut)
 		{ die "actions other than CNV_detect not allowed if .cov.txt file provided\n"; }
 	}
 if ($CNV_tool && !$fichier_cov) {
 	$cov_Bed=1;
 	}
 
-if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
+if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) {
 	unless (@Files) { die "no .bam files provided\n"; }
 	}
 
-unless ($mutFile || ($CNV_tool && $fichier_cov)) {
+#unless ($mutFile || ($CNV_tool && $fichier_cov)) {
+if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
 	unless ($bedFile || exists $opt{id} ) 
 		{ die ".bed file (opt -b) or list of genes or transcripts id required (opt -i)\n"; }
 	}
