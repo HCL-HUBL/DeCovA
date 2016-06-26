@@ -21,7 +21,9 @@ my$normByGender = $CNV_opt{"normByGender"};
 my$Ref = $CNV_opt{"RefDepth"};
 my$RefByGender = $CNV_opt{"RefByGender"};
 my$seuil_region = $CNV_opt{"seuil_region"};
+if ($seuil_region < (1/scalar@Files)) { $seuil_region = (1/scalar@Files); }
 my$seuil_patient = $CNV_opt{"seuil_patient"};
+if ($seuil_patient < (1/scalar@Regions)) { $seuil_patient = (1/scalar@Regions); }
 my$minCov = $CNV_opt{"seuil_cov"};
 my$seuil_deletion = $CNV_opt{"seuil_deletion"};
 my$seuil_duplication = $CNV_opt{"seuil_duplication"};
@@ -955,6 +957,9 @@ while (my $line = <DECOVA>) {
 	}
 }
 close(DECOVA);
+
+if ($seuil_region < (1/$nombre_patients)) { $seuil_region = (1/$nombre_patients); }
+if ($seuil_patient < (1/$nombre_regions)) { $seuil_patient = (1/$nombre_regions); }
 
 for (my $patient = 0 ; $patient < $nombre_patients ; $patient++) {
 	print $Patients{$patient}{"ID"}.":\n";
