@@ -6171,7 +6171,9 @@ my%mergeBed = %$h4;
 my@covFields = @$h5;
 my%gatkIdx = %$h6;
 
-print "perform bed coverage by interval ($threshold X)\n";
+print "perform bed coverage by interval";
+if ($threshold) { print " ($threshold X)\n"; }
+else { print "\n"; }
 open(BED, "$bedFile") || die "can't open file $bedFile\n";
 my(@allLines,@bedLines,%Chr,%Start,%End,%Intervals,%Intervals2);
 my$i=0;my$j=0;

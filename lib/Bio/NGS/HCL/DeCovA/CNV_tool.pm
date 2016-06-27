@@ -709,7 +709,7 @@ foreach my$Chrom (keys%RegInArray) {
 my%orderedCNV;
 foreach my$file (keys%Results) {
 	my(%uniqCNV,%CNVinArray);
-	foreach my$r (keys%{ $Results{$file} }) {
+	foreach my$r (sort{$a<=>$b}keys%{ $Results{$file} }) {
 		if (!exists $uniqCNV{$Regions[$r]{"Chrom"}."-".$Regions[$r]{"Start"}."-".$Regions[$r]{"End"}}) { 
 			push (@{ $CNVinArray{ $Regions[$r]{"Chrom"} } }, $r);
 			$uniqCNV{ $Regions[$r]{"Chrom"}."-".$Regions[$r]{"Start"}."-".$Regions[$r]{"End"} } = 1;
@@ -757,12 +757,11 @@ foreach my$file (keys%Results) {
 						$Result3{$file}{$Chrom}{$Regions[$nextReg[0]]{"Start"}}{$Regions[$nextReg[0]]{"End"}} = $Results{$file}{$nextReg[0]};
 						if (exists $regionIndice{$nextReg[0]}) {
 							print CNV1 $Chrom.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[0]]{"End"}."\t".$tab[0]."\t1\n";
-							print CNV2 $Chrom.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[0]]{"End"}."\t".$Regions[$nextReg[0]]{"label"}."\t".($regionIndice{$nextReg[0]}+1)."\t".$Results{$file}{$nextReg[0]}."\t".($Regions[$nextReg[0]]{"End"}-$Regions[$nextReg[0]]{"Start"}+1)." bp\n\n";
+							print CNV2 $Chrom."\t".$Regions[$nextReg[0]]{"Start"}."\t".$Regions[$nextReg[0]]{"End"}."\t".$Regions[$nextReg[0]]{"label"}."\t".($regionIndice{$nextReg[0]}+1)."\t".$Results{$file}{$nextReg[0]}."\t".($Regions[$nextReg[0]]{"End"}-$Regions[$nextReg[0]]{"Start"}+1)." bp\n\n";
 							}
 						}
 					else {
 						print CNV1 $Chrom.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[$cnvOK]]{"End"}."\t".$tab[0]."\t".($cnvOK+1)."\n";
-						#print CNV2 $Chrom.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[$cnvOK]]{"End"}."\t".$tab[0]."\n";
 						for (my$j=0;$j<=$cnvOK;$j++) {
 							if (exists $Results{$file}{$nextReg[$j]}) {
 								$Result2{$file}{$nextReg[$j]} = $Results{$file}{$nextReg[$j]};
@@ -860,6 +859,7 @@ my $sexe_courant;
 # PREMIER PARCOURS #
 # PERMET DE CALCULER LA PROFONDEUR TOTALE POUR CHAQUE PATIENT, EN TENANT UNIQUEMENT COMPTE DES REGIONS CORRECTEMENT SEQUENCEES
 my$l=0; #N° ligne
+unless (-f "$fichier_cov") { die "Fichier $fichier_cov inexistant\n"; }
 open(DECOVA, "<$fichier_cov") or die "Fichier $fichier_cov inexistant ou impossible a lire\n";
 while (my $line = <DECOVA>) {
 	$l++;
@@ -1495,7 +1495,7 @@ for my$Chrom (keys%RegInArray) {
 my%orderedCNV;
 foreach my$patient (keys%results) {
 	my(%uniqCNV,%CNVinArray);
-	foreach my$region (keys%{ $results{$patient} }) {
+	foreach my$region (sort{$a<=>$b}keys%{ $results{$patient} }) {
 		if (!exists $uniqCNV{ $Regions[$region]{"Chromosome"}."-".$Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"} }) { 
 			push (@{ $CNVinArray{ $Regions[$region]{"Chromosome"} } }, $region);
 			$uniqCNV{ $Regions[$region]{"Chromosome"}."-".$Regions[$region]{"Borne_5P"}."-".$Regions[$region]{"Borne_3P"} } = 1;
@@ -1542,12 +1542,11 @@ foreach my$patient (keys%results) {
 						$Result2{$patient}{$nextReg[0]} = $results{$patient}{$nextReg[0]};
 						if (exists $regionIndice{$nextReg[0]}) {
 							print CNV1 $Chrom.":".$Regions[$nextReg[0]]{"Borne_5P"}."-".$Regions[$nextReg[0]]{"Borne_3P"}."\t".$tab[0]."\t1\n";
-							print CNV2 $Chrom.":".$Regions[$nextReg[0]]{"Borne_5P"}."-".$Regions[$nextReg[0]]{"Borne_3P"}."\t".$Regions[$nextReg[0]]{"label"}."\t".($regionIndice{$nextReg[0]}+1)."\t".$results{$patient}{$nextReg[0]}."\t".($Regions[$nextReg[0]]{"Borne_3P"}-$Regions[$nextReg[0]]{"Borne_5P"})." bp\n\n";
+							print CNV2 $Chrom."\t".$Regions[$nextReg[0]]{"Borne_5P"}."\t".$Regions[$nextReg[0]]{"Borne_3P"}."\t".$Regions[$nextReg[0]]{"label"}."\t".($regionIndice{$nextReg[0]}+1)."\t".$results{$patient}{$nextReg[0]}."\t".($Regions[$nextReg[0]]{"Borne_3P"}-$Regions[$nextReg[0]]{"Borne_5P"})." bp\n\n";
 							}
 						}
 					else {
 						print CNV1 $Chrom.":".$Regions[$nextReg[0]]{"Borne_5P"}."-".$Regions[$nextReg[$cnvOK]]{"Borne_3P"}."\t".$tab[0]."\t".($cnvOK+1)."\n";
-						#print CNV2 $Chrom.":".$Regions[$nextReg[0]]{"Borne_5P"}."-".$Regions[$nextReg[$cnvOK]]{"Borne_3P"}."\t".$tab[0]."\n";
 						for (my$j=0;$j<=$cnvOK;$j++) {
 							if (exists $results{$patient}{$nextReg[$j]}) {
 								$Result2{$patient}{$nextReg[$j]} = $results{$patient}{$nextReg[$j]};
