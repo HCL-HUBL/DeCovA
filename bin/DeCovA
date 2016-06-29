@@ -881,13 +881,22 @@ my(%Bed);	#$Bed{$chr}{$start} = $end , in 1-based
 if ($bedFile) {
 	print "read $bedFile\n"; 
 	#transform in 1-based coord; keep longest intervals
-	%Bed = readBed($bedFile);
+	%Bed = readBed($bedFile,$lenForBed);
 	#merge overlapping inyervals
 	foreach my$chr (keys%Bed)
 		{ %{ $Bed{$chr} } = merge(\%{ $Bed{$chr} }); }
 	#print merged bed
 	printBed("original",\%Bed);
+	if ($lenForBed) {
+		print "add $lenForBed bp to $bedFile intervals ends\n";
+		my$expandedBed = "$outdir/$bedName";
+		$expandedBed =~ s/.bed$//;
+		$expandedBed .= "_w$lenForBed.bed";
+		addLength2Bed($bedFile,$expandedBed,$lenForBed);
+		$bedFile = $expandedBed;
+		}
 	if ($splitBed) {
+		print "split overlapping intervals from $bedFile\n";
 		$splitBed = "$outdir/$bedName";
 		$splitBed =~ s/.bed$//;
 		$splitBed .= "_split.bed";
@@ -1154,7 +1163,7 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 				close BED;
 				}
 			close MERGE; 
-			my%Merge = readBed("$outdir/$intervalName.bed");
+			my%Merge = readBed("$outdir/$intervalName.bed",0);
 			foreach my$chr (keys%Merge)
 				{ %{ $Merge{$chr} } = merge(\%{ $Merge{$chr} }); }
 			printBed($intervalName,\%Merge);
@@ -1635,7 +1644,7 @@ if ($CNV_tool) {
 				#open (BED, "$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt") || die "can't open $outdir/CNV_analysis/CNV_$sName2{$file}.txt\n";
 				#while (my$line=<BED>) { print MERGE $line; }
 				#close BED;
-				#%{ $CNVbed{$file} } = readBed("$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt");
+				#%{ $CNVbed{$file} } = readBed("$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt",0);
 				foreach my$chr (keys%{ $cnv_Results{$file} }) {
 					foreach my$start (keys%{ $cnv_Results{$file}{$chr} }) {
 						foreach my$end (keys%{ $cnv_Results{$file}{$chr}{$start} }) {
@@ -1660,7 +1669,7 @@ if ($CNV_tool) {
 					}
 				}
 			close MERGE;
-			%{ $CNVbed{"allFiles"} } = readBed("$outdir/allCNVs.bed");
+			%{ $CNVbed{"allFiles"} } = readBed("$outdir/allCNVs.bed",0);
 			foreach my$chr (keys%{ $CNVbed{"allFiles"} }) {
 				%{ $CNVbed{"allFiles"}{$chr} } = merge(\%{ $CNVbed{"allFiles"}{$chr} }); 
 				}
@@ -1805,7 +1814,7 @@ exit;
 ######################
 sub readBed
 {
-my($bed) = @_;
+my($bed,$len) = @_;
 my%covBed;			#$covbed{$chr}{$start} = $end;	transform in 1-based coord
 open(BED, $bed) || die "can't open file $bed\n";
 print "open $bed\n";
@@ -1817,18 +1826,39 @@ while (my$line=<BED>) {
 		my@tab = split(/\t/,$line);
 		$tab[0] =~ s/chr//i;
 		#keep longest interval
-		if ( exists $covBed{$tab[0]}{($tab[1]+1)} ) {
-			if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)}) 
-				{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }	
+		if ( exists $covBed{$tab[0]}{($tab[1]+1-$len)} ) {
+			if ( ($tab[2]+$len) > $covBed{$tab[0]}{($tab[1]+1-$len)}) 
+				{ $covBed{$tab[0]}{($tab[1]+1-$len)} = $tab[2]+$len; }	
 			else { next; }
 			}
 		else
-			{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }
+			{ $covBed{$tab[0]}{($tab[1]+1-$len)} = $tab[2]+$len; }
 		}
 	}
 unless ($ok) { die "no bed formatted line in $bed file";}
 close BED;
 return(%covBed);
+}
+
+
+######################
+sub addLength2Bed
+{
+my($bedFile,$newBed,$len) = @_;
+open(BED, $bedFile) || die "can't open file $bedFile\n";
+open(OUT, ">$newBed") || die "can't create file $newBed\n";
+while (my$line=<BED>) {
+	if ( ($line !~ /^\w+\t\d+\t\d+/) || ($line =~ /^#/) )
+		{ print OUT "$line"; }
+	else {
+		chomp $line;
+		my@tab = split(/\t/,$line);
+		print OUT $tab[0]."\t".($tab[1]-$len)."\t".($tab[2]+$len);
+		for my$i (3..$#tab) { print OUT "\t".$tab[$i]; }
+		print OUT "\n";
+		}
+	}
+close BED; close OUT;
 }
 
 
