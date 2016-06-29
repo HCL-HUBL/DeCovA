@@ -190,7 +190,7 @@ parameters:
 	--samtools : enter  path to executable, if not installed as root
 	--picard : enter path to executable .jar, if not installed as root
 	--gatk : cov analysis will be performed by gatk (default:bedtools; enter path to executable, if not installed as root)
-	-x / --ram : memory for gatk (def: 4Go)
+	-x / --ram : memory for gatk (in Go)
 	\n";
 }
 
@@ -489,7 +489,7 @@ if (exists $opt{genome}) {
 	}
 my$ram = "";
 if (exists $opt{ram}) { 
-	$ram = $opt{ram}; 
+	$ram = $opt{ram};
 	}
 my$dedup = "";
 if (exists $opt{dedup}) { 

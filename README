@@ -1,7 +1,10 @@
 DeCovA_1.4.3
 
-DeCovA script requires at least R and bedtools softawres to be installed;
-additionnally, it can use picard tools (for deduplication), samtools (for mapq filter), and GATK (alternatively to bedtools; required if a base-q filter is needed).
+
+DeCovA requires at least R and bedtools softwares to be installed;
+additionnally, it can use picard-tools (for deduplication), samtools (for mapq filter), and GATK (alternatively to bedtools; required if a base-q filter is needed).
+The script will first attempt to run programs installed as root with the following names: samtools, bedtools, picard-tools, GenomeAnalysisTK;
+if not found, it will try to find them accordind to the paths provided
 
 
 a refSeq file need to be provided (-r option), for all the options that use gene coordinates:
@@ -12,21 +15,20 @@ $ wget http://hgdownload.soe.ucsc.edu/goldenPath/hg19/database/refGene.txt.gz
 then unzip 
 $ gunzip refGene.txt.gz
 
-(ftp://ftp.ensembl.org/pub/release-79/gtf/homo_sapiens/)
 
-DeCovA can be executed via command-line execution of the perl DeCovA-x.pl script:
-$ perl path/to/script/DeCovA-x.pl [options]
+DeCovA can be executed via command-line execution of the perl script:
+$ perl path/to/script/DeCovA [options]
 if the script has been changed to executable:
-$ chmod 755 path/to/script/DeCovA-x.pl
+$ chmod 755 path/to/script/DeCovA
 then:
-$ path/to/script/DeCovA-x.pl [options]
-(in the current directory: $ ./DeCovA-x.pl [options])
+$ path/to/script/DeCovA [options]
+(in the current directory: $ ./DeCovA [options])
 and if the dir has been added to the path:
 $ echo 'export PATH=$PATH:/home/me/path/to/script' >> /home/me/.bashrc
 then
-$ DeCovA-x.pl [options]
+$ DeCovA [options]
 
-DeCovA can be installed:
+DeCovA can also be installed:
 change directory to DeCovA folder, then
 $ perl Makefile.PL
 $ make
@@ -38,8 +40,8 @@ then just enter $ DeCovA
 list of parameters:
 
 inputs:
-	-f / --file : list of bam files, either command line (comma separated), or as a file (\".list\")
-	-d / --dir : directory where to find bam files
+	-f / --file : list of bam files, either command line (comma separated or several -f), or as a file (\".list\")
+	-d / --dir : list of directories where to find bam files
 	-s / --suffix : suffix to add before opening bam files
 	-r / --refseq : RefSeq file (required)
 	-b / --bed : bed file, used to analyse depth coverage
@@ -50,6 +52,7 @@ inputs:
 	-g / --genome : path to genome.fa file, if available (required if using GATK)
 	--sex_file : format: patient\tsex
 	--cov_file : DeCovA's output .cov.txt file (to skip bam analysis in CNV detect)
+
 outputs:
 	-S / --graphSum : will perform graphSums (sum of covered samples by position)
 	-A / --allSample : will perform graphAllSample (depthline by gene and by sample, all samples graph on same .png file)
@@ -61,7 +64,9 @@ outputs:
 	--Reseq : float [0-1] : print region if cov < value (def: do not print)
 	--reports : will print all uncovered intervals (genomic coordinates) in 1 txt file per transcript (default: no)
 	--summary : Y/N : will print summary txt file (default: yes if -S -A -X -i)
+
 parameters:
+
   *general:
 	-N / --nonCoding : analyse also Non coding transcripts (default: no)
 	-U / --noUTR : does not take into account UTR regions for graphs (default: yes)
@@ -81,19 +86,23 @@ parameters:
 	-z / --compress : archive output folder
 	-v / --version : current version 
 	-h / --help : help
+
   *plot param:
 	--binPlot : bin width for covPlot (default=10)
 	--maxPlot : max depth for covPlot (default=100)
 	--genePlot : will perform plots for regions extracted from genes coord, not only for bed intervals (default: no)
 	--interPlot : will produce intersection covPlot (default: no)
+
   *filters
  	--dedup : do not take in account dup reads (default keep all reads; enter \"do\" to perform Picard deduplication) 
 	--mbq : minimum base quality (default 0; requires gatk)
 	--mmq : minimum mapping quality (default 0)
+
   *cov_bed param:
 	-F / --cov_fields : fields foreach intervals in covBed (comma separated), among: min, max, tot, mean, median, cov 
 		(default: min,mean,cov)
 	--split_bed : split overlapping bed intervals for Cov and CNV analyses
+
   *CNV_detect param:
 	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 0.1)
 	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 0.15)
@@ -109,6 +118,7 @@ parameters:
 	--totalAllChr : norm by sum on all chr, whatever the sex (def: double the totalDepth for chrX if male, and skip chrY in the sum)
 	--noCNV_byGene : to disable graph for gene affected by a CNV
 	--noCNV_byChr : to disable graph by chr
+
   *external tools path:
 	--bedtools : enter path to executable, if not installed as root or not in path
 	--samtools : enter  path to executable, if not installed as root
@@ -120,15 +130,15 @@ parameters:
 
 examples:
 
-$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
+$ ./path/to/DeCovA -d path/to/dir/ -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
-$ perl DeCovA-x.pl -f path/to/file1.bam,path/to/file2.bam -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
+$ ./path/to/DeCovA -f path/to/file1.bam -f path/to/file2.bam -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
-$ perl DeCovA-x.pl -f path/to/file.list -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
+$ ./path/to/DeCovA -f path/to/file.list -r path/to/Refseq.txt -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
-$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -i GENE1,GENE2,NM_xxx1,NM_xxx2 -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
+$ ./path/to/DeCovA -d path/to/dir/ -r path/to/Refseq.txt -i GENE1,GENE2,NM_xxx1,NM_xxx2 -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
 
-$ perl DeCovA-x.pl -d path/to/dir/ -r path/to/Refseq.txt -i GENE1,GENE2,NM_xxx1,NM_xxx2 -b path/to/targets.bed -M path/to/mut.list -t 20,50,100 -A -S -P -B -C
+$ ./path/to/DeCovA -d path/to/dir/ -r path/to/Refseq.txt -i genes.list -b path/to/targets.bed -t 20,50,100 -A -S -P -B -C
 
 
 
