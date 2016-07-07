@@ -11,7 +11,7 @@
 #This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-our $VERSION="1.4.3";
+our $VERSION="1.4.4";
 
 use warnings;
 use strict;
@@ -57,6 +57,7 @@ GetOptions (\%opt,
 	"noDepthMut|M",
 	"covPlot|P",
 	"covBed|B",
+	"bedReport",
 	"Reseq=f",
 	"cov_fields|F=s@",
 	"reports",
@@ -93,7 +94,7 @@ GetOptions (\%opt,
 	"compress|z",
 	"nGraph:i",
 	"version|v",
-	"help|h");
+	"help|h") or usage();
 
 unless(%opt) { usage(); }
 
@@ -170,6 +171,7 @@ parameters:
 	-F / --cov_fields : fields foreach intervals in covBed (comma separated), among: min, max, tot, mean, median, cov 
 		(default: min,mean,cov)
 	--split_bed : split overlapping bed intervals for Cov and CNV analyses
+	--bedReport : will print all uncovered intervals (genomic coordinates) in 1 txt file per sample (default: no)
   *CNV_detect param:
 	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 0.1)
 	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 0.15)
@@ -356,6 +358,11 @@ my$lenForBed = 0;
 if (exists $opt{Lbed}) {
 	if ($opt{Lbed} =~ /^\d+$/) { $lenForBed = $opt{Lbed}; }
 	else { die "--Lbed value need to be an integer\n"; }
+	}
+
+my$bedReport = 0;
+if (exists $opt{bedReport}) {
+	$bedReport = 1;
 	}
 
 my$spacer = 0;
@@ -576,6 +583,10 @@ if ($CNV_tool && !$fichier_cov) {
 	$cov_Bed=1;
 	}
 
+if ($bedReport) {
+	$cov_Bed=1;
+	}
+
 if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) {
 	unless (@Files) { die "no .bam files provided\n"; }
 	}
@@ -593,6 +604,7 @@ unless (@Thresholds) {
 		foreach(@covFields) {
 			if ($_ eq "cov") { die "at least 1 threshold value required (opt -t)\n"; }
 			}
+		if ($bedReport)  { die "at least 1 threshold value required (opt -t)\n"; }
 		}
 	}
 
@@ -879,14 +891,7 @@ if (@Files) {
 ##if bedFile provided:
 my(%Bed);	#$Bed{$chr}{$start} = $end , in 1-based
 if ($bedFile) {
-	print "read $bedFile\n"; 
-	#transform in 1-based coord; keep longest intervals
-	%Bed = readBed($bedFile,$lenForBed);
-	#merge overlapping inyervals
-	foreach my$chr (keys%Bed)
-		{ %{ $Bed{$chr} } = merge(\%{ $Bed{$chr} }); }
-	#print merged bed
-	printBed("original",\%Bed);
+	print "read $bedFile\n";
 	if ($lenForBed) {
 		print "add $lenForBed bp to $bedFile intervals ends\n";
 		my$expandedBed = "$outdir/$bedName";
@@ -895,6 +900,13 @@ if ($bedFile) {
 		addLength2Bed($bedFile,$expandedBed,$lenForBed);
 		$bedFile = $expandedBed;
 		}
+	#transform in 1-based coord; keep longest intervals
+	%Bed = readBed($bedFile);
+	#merge overlapping inyervals
+	foreach my$chr (keys%Bed)
+		{ %{ $Bed{$chr} } = merge(\%{ $Bed{$chr} }); }
+	#print merged bed
+	printBed("original",\%Bed);
 	if ($splitBed) {
 		print "split overlapping intervals from $bedFile\n";
 		$splitBed = "$outdir/$bedName";
@@ -1163,7 +1175,7 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 				close BED;
 				}
 			close MERGE; 
-			my%Merge = readBed("$outdir/$intervalName.bed",0);
+			my%Merge = readBed("$outdir/$intervalName.bed");
 			foreach my$chr (keys%Merge)
 				{ %{ $Merge{$chr} } = merge(\%{ $Merge{$chr} }); }
 			printBed($intervalName,\%Merge);
@@ -1578,8 +1590,9 @@ if ( ($printReports || $printSummary) && (($wUTR != $UTRinTxt) || ($lenForTxt !=
 		}							
 	}
 
+
 ###################
-#Job 3: Plots:
+#Job 4: Plots:
 
 #classiq
 if ($covPlot) { 
@@ -1603,16 +1616,16 @@ if ($interS) {
 	}
 
 ###################
-#Job 4: cov of each bed interval
+#Job 5: cov of each bed interval
 
 my($refBedLines);
 if ($cov_Bed) {
 	if ($bedFile) {
-		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$toReseq,\@covFields,$gatk,\%gatkIdx);
+		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$toReseq,$bedReport,\@covFields,$gatk,\%gatkIdx);
 		#%bedLines = %{$hashSub[0]};		
 		}
 	else {
-		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$toReseq,\@covFields,$gatk,\%gatkIdx);
+		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$toReseq,$bedReport,\@covFields,$gatk,\%gatkIdx);
 		#%bedLines = %{$hashSub[0]};		
 
 		}
@@ -1644,7 +1657,7 @@ if ($CNV_tool) {
 				#open (BED, "$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt") || die "can't open $outdir/CNV_analysis/CNV_$sName2{$file}.txt\n";
 				#while (my$line=<BED>) { print MERGE $line; }
 				#close BED;
-				#%{ $CNVbed{$file} } = readBed("$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt",0);
+				#%{ $CNVbed{$file} } = readBed("$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt");
 				foreach my$chr (keys%{ $cnv_Results{$file} }) {
 					foreach my$start (keys%{ $cnv_Results{$file}{$chr} }) {
 						foreach my$end (keys%{ $cnv_Results{$file}{$chr}{$start} }) {
@@ -1669,7 +1682,7 @@ if ($CNV_tool) {
 					}
 				}
 			close MERGE;
-			%{ $CNVbed{"allFiles"} } = readBed("$outdir/allCNVs.bed",0);
+			%{ $CNVbed{"allFiles"} } = readBed("$outdir/allCNVs.bed");
 			foreach my$chr (keys%{ $CNVbed{"allFiles"} }) {
 				%{ $CNVbed{"allFiles"}{$chr} } = merge(\%{ $CNVbed{"allFiles"}{$chr} }); 
 				}
@@ -1814,7 +1827,7 @@ exit;
 ######################
 sub readBed
 {
-my($bed,$len) = @_;
+my($bed) = @_;
 my%covBed;			#$covbed{$chr}{$start} = $end;	transform in 1-based coord
 open(BED, $bed) || die "can't open file $bed\n";
 print "open $bed\n";
@@ -1826,13 +1839,13 @@ while (my$line=<BED>) {
 		my@tab = split(/\t/,$line);
 		$tab[0] =~ s/chr//i;
 		#keep longest interval
-		if ( exists $covBed{$tab[0]}{($tab[1]+1-$len)} ) {
-			if ( ($tab[2]+$len) > $covBed{$tab[0]}{($tab[1]+1-$len)}) 
-				{ $covBed{$tab[0]}{($tab[1]+1-$len)} = $tab[2]+$len; }	
+		if ( exists $covBed{$tab[0]}{($tab[1]+1)} ) {
+			if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)}) 
+				{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }	
 			else { next; }
 			}
 		else
-			{ $covBed{$tab[0]}{($tab[1]+1-$len)} = $tab[2]+$len; }
+			{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }
 		}
 	}
 unless ($ok) { die "no bed formatted line in $bed file";}
@@ -6193,7 +6206,7 @@ unlink "$outdir/hist_temp.R";
 
 sub Bed_Cov
 {
-my($h1,$h2,$h3,$outdir,$bedFile,$bedName,$h4,$threshold,$toReseq,$h5,$gatk,$h6) = @_;
+my($h1,$h2,$h3,$outdir,$bedFile,$bedName,$h4,$threshold,$toReseq,$bedReport,$h5,$gatk,$h6) = @_;
 my@Files = @$h1;
 my%fName = %$h2;
 my%sName2 = %$h3;
@@ -6231,10 +6244,10 @@ foreach my$chr (keys%Intervals) {
 		{ @{ $Intervals2{$chr}{$start} } = sort{$a<=>$b}(keys%{ $Intervals{$chr}{$start} }); }
 	}
 
-my(%vals,%min,%max,%sum,%mean,%median,%cov,%TotBases);
+my(%min,%max,%sum,%mean,%median,%cov,%notCov,%TotBases,%TotByCov);
 foreach my$file (@Files) {
 	print "\tfile $fName{$file}\n";
-
+	my(%vals);
 	foreach my$chr (keys%Intervals) {
 		foreach my$start (keys%{ $Intervals{$chr} }) {
 			foreach my$end (@{ $Intervals2{$chr}{$start} }) {
@@ -6242,14 +6255,15 @@ foreach my$file (@Files) {
 				$cov{$file}{$chr}{$start}{$end} = 0;
 				$min{$file}{$chr}{$start}{$end} = 0;
 				$max{$file}{$chr}{$start}{$end} = 0;
-				@{ $vals{$file}{$chr}{$start}{$end} } = ();
+				@{ $vals{$chr}{$start}{$end} } = ();
 				}
 			}
 		}
 	my$c=0;			#idx of $startByChr
 	my$chr = "";
-	my(%allChr,@Starts);
+	my(%allChr,@Starts,%noCovStart,%noCovEnd);
 	foreach (keys%Intervals) { $allChr{$_} = 1; }
+
 	if ($gatk) {
 		unless ( -s "$outdir/all.cov" ) { die "$outdir/all.cov not found or empty\n"; }
 		open(COV, "$outdir/all.cov") || die "can't open file $outdir/all.cov\n";
@@ -6258,49 +6272,74 @@ foreach my$file (@Files) {
 			my@tab = split(/\t/,$line);
 			$tab[0] =~ s/chr//;
 			my@tab2 = split(/:/,$tab[0]);
+			my$pos = $tab2[1];
 			if ($chr ne $tab2[0]) {
-				if (exists $allChr{$tab2[0]}) {	
-					$chr = $tab2[0];	
+				if (exists $allChr{$tab2[0]}) {
+					$chr = $tab2[0];
 					@Starts = sort{$a<=>$b}(keys%{ $Intervals{$chr} });
+					undef(%noCovStart); undef(%noCovEnd);
+					foreach (@Starts) { $noCovStart{$_}=0; $noCovEnd{$_}=0; }
 					$c=0;
 					}
 				else { next; }
 				}
-			while ( ($tab2[1] > $Intervals2{$chr}{$Starts[$c]}[-1]) && ($c < (scalar@Starts-1)) )
+			while ( ($pos > $Intervals2{$chr}{$Starts[$c]}[-1]) && ($c < (scalar@Starts-1)) )
 				{ $c++; }
 			my$c2 = $c;
-			if ($tab2[1] == $Starts[$c2]) {
+			if ($pos == $Starts[$c2]) {
 				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
 					$min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}];
 					$max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}];
 					}
 				}
-			while ( ($tab2[1] >= $Starts[$c2]) && ($c2 < (scalar@Starts-1)) ) {
+			while ( ($pos >= $Starts[$c2]) && ($c2 < (scalar@Starts-1)) ) {
 				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
-					if ($tab2[1] <= $end) {
+					if ($pos <= $end) {
 						if ($threshold && $tab[$gatkIdx{$file}] >= $threshold)
 							{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
+						else {
+							if ( $pos == ($noCovEnd{$Starts[$c2]} + 1) ) { 
+								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}} = $pos ; 
+								$noCovEnd{$Starts[$c2]} = $pos; 
+								}
+							else { 
+								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$pos} = $pos ; 
+								$noCovStart{$Starts[$c2]} = $pos; 
+								$noCovEnd{$Starts[$c2]} = $pos; 
+								}
+							}
 						if ($tab[$gatkIdx{$file}] < $min{$file}{$chr}{$Starts[$c2]}{$end})
 							{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
 						if ($tab[$gatkIdx{$file}] > $max{$file}{$chr}{$Starts[$c2]}{$end})
 							{ $max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
-						push(@{ $vals{$file}{$chr}{$Starts[$c2]}{$end} },$tab[$gatkIdx{$file}]);
+						push(@{ $vals{$chr}{$Starts[$c2]}{$end} },$tab[$gatkIdx{$file}]);
 						}
 				 	}
 				$c2++;
 				}
 			foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
-				if (($tab2[1] >= $Starts[$c2]) && ($tab2[1] <= $end)) {
+				if (($pos >= $Starts[$c2]) && ($pos <= $end)) {
 					if ($threshold && $tab[$gatkIdx{$file}] >= $threshold)
 						{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
+					else {
+						if ( $pos == ($noCovEnd{$Starts[$c2]} + 1) ) { 
+							$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}} = $pos ; 
+							$noCovEnd{$Starts[$c2]} = $pos; 
+							}
+						else { 
+							$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$pos} = $pos ; 
+							$noCovStart{$Starts[$c2]} = $pos; 
+							$noCovEnd{$Starts[$c2]} = $pos; 
+							}
+						}
 					if ($tab[$gatkIdx{$file}] < $min{$file}{$chr}{$Starts[$c2]}{$end})
 						{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
 					if ($tab[$gatkIdx{$file}] > $max{$file}{$chr}{$Starts[$c2]}{$end})
 						{ $max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
-					push(@{ $vals{$file}{$chr}{$Starts[$c2]}{$end} },$tab[$gatkIdx{$file}]);
+					push(@{ $vals{$chr}{$Starts[$c2]}{$end} },$tab[$gatkIdx{$file}]);
 					}
 				}
-			if ( $tab2[1] > $Intervals2{$chr}{$Starts[-1]}[-1] ) {
+			if ( $pos > $Intervals2{$chr}{$Starts[-1]}[-1] ) {
 				my%tmp;
 				foreach (keys%allChr) { 
 					unless ($_ eq $chr) { $tmp{$_} = 1; }
@@ -6310,6 +6349,7 @@ foreach my$file (@Files) {
 			if (scalar(keys%allChr) == 0) { last; }
 			}
 		}
+
 	else {
 		unless ( -s "$outdir/$fName{$file}.cov" ) { die "$outdir/$fName{$file}.cov not found or empty\n"; }
 		open(COV, "$outdir/$fName{$file}.cov") || die "can't open file $outdir/$fName{$file}.cov\n";
@@ -6321,6 +6361,8 @@ foreach my$file (@Files) {
 				if (exists $allChr{$tab[0]}) {
 					$chr = $tab[0];
 					@Starts = sort{$a<=>$b}(keys%{ $Intervals{$chr} });
+					undef(%noCovStart); undef(%noCovEnd);
+					foreach (@Starts) { $noCovStart{$_}=0; $noCovEnd{$_}=0; }
 					$c=0;
 					}
 				else { next; }
@@ -6340,11 +6382,22 @@ foreach my$file (@Files) {
 					if ($pos <= $end) {
 						if ($threshold && $tab[-1] >= $threshold)
 							{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
+						else {
+							if ( $pos == ($noCovEnd{$Starts[$c2]} + 1) ) { 
+								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}} = $pos ; 
+								$noCovEnd{$Starts[$c2]} = $pos; 
+								}
+							else { 
+								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$pos} = $pos ; 
+								$noCovStart{$Starts[$c2]} = $pos; 
+								$noCovEnd{$Starts[$c2]} = $pos; 
+								}
+							}
 						if ($tab[-1] < $min{$file}{$chr}{$Starts[$c2]}{$end}) 
 							{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[-1]; }
 						if ($tab[-1] > $max{$file}{$chr}{$Starts[$c2]}{$end}) 
 							{ $max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[-1]; }
-						push(@{ $vals{$file}{$chr}{$Starts[$c2]}{$end} },$tab[-1]);
+						push(@{ $vals{$chr}{$Starts[$c2]}{$end} },$tab[-1]);
 						}
 				 	}
 				$c2++;
@@ -6353,11 +6406,22 @@ foreach my$file (@Files) {
 				if (($pos >= $Starts[$c2]) && ($pos <= $end)) {
 					if ($threshold && $tab[-1] >= $threshold)
 						{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
+					else {
+						if ( $pos == ($noCovEnd{$Starts[$c2]} + 1) ) { 
+							$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}} = $pos ; 
+							$noCovEnd{$Starts[$c2]} = $pos; 
+							}
+						else { 
+							$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$pos} = $pos ; 
+							$noCovStart{$Starts[$c2]} = $pos; 
+							$noCovEnd{$Starts[$c2]} = $pos; 
+							}
+						}
 					if ($tab[-1] < $min{$file}{$chr}{$Starts[$c2]}{$end})
 						{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[-1]; }
 					if ($tab[-1] > $max{$file}{$chr}{$Starts[$c2]}{$end})
 						{ $max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[-1]; }
-					push(@{ $vals{$file}{$chr}{$Starts[$c2]}{$end} },$tab[-1]);
+					push(@{ $vals{$chr}{$Starts[$c2]}{$end} },$tab[-1]);
 					}
 				 }
 			if ( $pos > $Intervals2{$chr}{$Starts[-1]}[-1] ) {
@@ -6379,14 +6443,14 @@ foreach my$file (@Files) {
 				$cov{$file}{$chr}{$start}{$end} /= $len;
 				#sum
 				$sum{$file}{$chr}{$start}{$end} = 0;
-				foreach (@{ $vals{$file}{$chr}{$start}{$end} }) 
+				foreach (@{ $vals{$chr}{$start}{$end} }) 
 					{ $sum{$file}{$chr}{$start}{$end} += $_; }
 				#mean
 				$mean{$file}{$chr}{$start}{$end} = ($sum{$file}{$chr}{$start}{$end} / $len);
 				#median
 				my@sortDepth=();
-				for (my$i=0;$i<($len - scalar@{ $vals{$file}{$chr}{$start}{$end} });$i++) { push(@sortDepth,0); }
-				push(@sortDepth,@{ $vals{$file}{$chr}{$start}{$end} });
+				for (my$i=0;$i<($len - scalar@{ $vals{$chr}{$start}{$end} });$i++) { push(@sortDepth,0); }
+				push(@sortDepth,@{ $vals{$chr}{$start}{$end} });
 				@sortDepth = sort{$a<=>$b}@sortDepth;
 				#odd?
 				if($len%2) 
@@ -6399,7 +6463,11 @@ foreach my$file (@Files) {
 		}
 	foreach my$chr (keys%mergeBed) {
 		foreach my$start (keys%{ $mergeBed{$chr} }) {
-			foreach (@{ $vals{$file}{$chr}{$start}{$mergeBed{$chr}{$start}} }) { $TotBases{$file} += $_; }
+			foreach (@{ $vals{$chr}{$start}{$mergeBed{$chr}{$start}} }) {
+				$TotBases{$file} += $_;
+				if ($threshold && $_ >= $threshold)
+					{ $TotByCov{$file} ++; }
+				}
 			}
 		}
 	}
@@ -6409,6 +6477,12 @@ foreach (@Files) { $meanTotBases += $TotBases{$_}; }
 if ($meanTotBases)
 	{ $meanTotBases /= scalar@Files; }
 else { print "no bases sequenced within bed in all samples!\n"; }
+
+my$TotLength = 0;
+foreach my$chr (keys%mergeBed) {
+	foreach my$start (keys%{ $mergeBed{$chr} })
+		{ $TotLength += ($mergeBed{$chr}{$start} - $start + 1); }
+	}
 
 
 my$nCol;
@@ -6465,6 +6539,28 @@ for (my$i=0;$i<scalar@allLines;$i++) {
 	}
 close OUT1; 
 if ($toReseq) { close OUT2; }
+
+if ($bedReport && $threshold) {
+	foreach my$file (@Files) {
+		open(OUT, ">$outdir/$bedName.$sName2{$file}.notCov.txt") || die "can't create file $outdir/$bedName.$sName2{$file}.notCov.bed\n";
+		print OUT "depthAnd Coverage report on $bedName.bed for $sName2{$file} sample\n\n";
+		print OUT "total length of bed : $TotLength bp\n\n";
+		print OUT "total cov >=$threshold"."x : ".100*(sprintf("%.3f", ($TotByCov{$file}/$TotLength)))." %\n\n";
+		print OUT "mean depth : ".sprintf("%.1f", ($TotBases{$file}/$TotLength))." x\n\n";
+		print OUT "domains covered less than $threshold"."x\n";
+		for (my$i=0;$i<scalar@allLines;$i++) {
+			if (exists $Chr{$i}) {
+				if (exists $notCov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}) {
+					print OUT "\n".$allLines[$i]."\n";
+					foreach (sort{$a<=>$b}keys%{ $notCov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}} }) {
+						print OUT "\t".($_-1)."\t".$notCov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}{$_}."\n";
+						}
+					}
+				}
+			}
+		close OUT;
+		}
+	}
 
 return(\@bedLines);
 }
