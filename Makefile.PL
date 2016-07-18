@@ -1,7 +1,7 @@
 use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME            => 'DeCovA',
-    ABSTRACT        => "To be filled...",
+    ABSTRACT        => "depth and coverage analysis and CNV detection for NGS data",
     #VERSION_FROM    => 'lib/Your/Module.pm'
     VERSION_FROM    => 'bin/DeCovA',
     AUTHOR          => [
