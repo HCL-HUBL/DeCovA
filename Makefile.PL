@@ -1,6 +1,6 @@
 use ExtUtils::MakeMaker;
 WriteMakefile(
-    NAME            => 'Bio::NGS::HCL::DeCovA',
+    NAME            => 'DeCovA',
     ABSTRACT        => "To be filled...",
     #VERSION_FROM    => 'lib/Your/Module.pm'
     VERSION_FROM    => 'bin/DeCovA',

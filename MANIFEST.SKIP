@@ -4,15 +4,25 @@
 ,v$
 \B\.svn\b
 \.git\b
+\.gitignore
 
-# Makemaker generated files and dirs.
-^MANIFEST\.
-^Makefile$
-^blib/
-^MakeMaker-\d
-^MYMETA.json$
-^MYMETA.yml$
-^Bio-NGS-HCL-DeCovA-.*\.tar\.gz$
+# Avoid VMS specific MakeMaker generated files
+\bDescrip.MMS$
+\bDESCRIP.MMS$
+\bdescrip.mms$
+
+# Avoid Makemaker generated and utility files.
+\bMANIFEST\.bak
+\bMakefile$
+\bblib/
+\bMakeMaker-\d
+\bpm_to_blib\.ts$
+\bpm_to_blib$
+\bblibdirs\.ts$         # 6.18 through 6.25 generated this
+
+# Distributions
+^DeCovA-.*\.tar\.gz$
+^DeCovA-.*/
 
 # Temp, old and emacs backup files.
 ~$
@@ -21,3 +31,11 @@
 ^#.*#$
 ^\.#
 
+# Avoid OS-specific files/dirs
+# Mac OSX metadata
+\B\.DS_Store
+# Mac OSX SMB mount metadata files
+\B\._
+
+# Avoid MYMETA files
+^MYMETA\.

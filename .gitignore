@@ -1,4 +1,5 @@
-/Bio-NGS-HCL-DeCovA-1.4.1d.tar.gz
+/DeCovA-*.tar.gz
+/DeCovA-*/
 /MANIFEST
 /MANIFEST.bak
 /MYMETA.json
