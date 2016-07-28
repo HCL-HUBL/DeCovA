@@ -28,6 +28,7 @@ my$minCov = $CNV_opt{"seuil_cov"};
 my$seuil_deletion = $CNV_opt{"seuil_deletion"};
 my$seuil_duplication = $CNV_opt{"seuil_duplication"};
 my$minCNV = $CNV_opt{"min_following_CNV"};
+my$maxNonCNV = $CNV_opt{"max_Non_CNV"};
 my$CNVgraph = $CNV_opt{"chromGraph"};
 
 my$maxDepthGraph = 10;
@@ -733,7 +734,7 @@ foreach my$file (keys%Results) {
 		if (exists $orderedCNV{$file}{$Chrom}) {
 			my$r=0;		##index in @{ $orderedCNV{$file}{$Chrom} }
 			while ($r < scalar@{ $orderedCNV{$file}{$Chrom} } ) {
-				my$ok=1; my$i=0; my$cnvOK=0;
+				my$ok=1; my$i=0; my$cnvOK=0; my$nonCNV=0;
 				my@nextReg=($orderedCNV{$file}{$Chrom}[$r]);
 				while ($ok) {
 					$i++;
@@ -745,7 +746,13 @@ foreach my$file (keys%Results) {
 							else { $ok=0; }
 							}
 						else {
-							unless (exists $Regions[$nextReg[$i]]{"Appel"}) { $ok=0; }
+							if (!exists $Regions[$nextReg[$i]]{"Appel"}) {
+								if ($maxNonCNV) {
+									$nonCNV++;
+									if ($nonCNV > $maxNonCNV) { $ok=0; }
+									}
+								else { $ok=0; }
+								}
 							}
 						}
 					else { $ok=0; }
@@ -835,6 +842,7 @@ my$seuil_cov = $CNV_opt{"seuil_cov"};
 my$seuil_deletion = $CNV_opt{"seuil_deletion"};
 my$seuil_duplication = $CNV_opt{"seuil_duplication"};
 my$minCNV = $CNV_opt{"min_following_CNV"};
+my$maxNonCNV = $CNV_opt{"max_Non_CNV"};
 my$graphByChr = $CNV_opt{"chromGraph"};
 
 my$maxDepthGraph = 10;
@@ -1532,7 +1540,7 @@ foreach my$patient (keys%results) {
 		if (exists $orderedCNV{$patient}{$Chrom}) {
 			my$r=0;		##index in @{ $orderedCNV{$patient}{$Chrom} }
 			while ($r < scalar@{ $orderedCNV{$patient}{$Chrom} } ) {
-				my$ok=1; my$i=0; my$cnvOK=0;
+				my$ok=1; my$i=0; my$cnvOK=0; my$nonCNV=0;
 				my@nextReg=($orderedCNV{$patient}{$Chrom}[$r]);
 				while ($ok) {
 					$i++;
@@ -1544,7 +1552,13 @@ foreach my$patient (keys%results) {
 							else { $ok=0; }
 							}
 						else {
-							unless (exists $Regions[$nextReg[$i]]{"Appel"}) { $ok=0; }
+							if (!exists $Regions[$nextReg[$i]]{"Appel"}) { 
+								if ($maxNonCNV) {
+									$nonCNV++;
+									if ($nonCNV > $maxNonCNV) { $ok=0; }
+									}
+								else { $ok=0; }
+								}
 							}
 						}
 					else { $ok=0; }

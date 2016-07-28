@@ -85,6 +85,7 @@ GetOptions (\%opt,
 	"seuil_del=f",
 	"seuil_dup=f",
 	"min_CNV=i",
+	"max_nonCNV=i",
 	"normStat=s",
 	"normByGender=s",
 	"totalBases",
@@ -179,6 +180,7 @@ parameters:
 	--seuil_del : float ( [0-1] for normStat=mean/mediane (def: 0.8) ; <0 for normStat=std (def: -2) )
 	--seuil_dup : float ( >1 for normStat=mean/mediane (def: 1.2) ; >0 for normStat=std (def: 2) )
 	--min_CNV : min nber consecutive CNV
+	--max_nonCNV : max nber non-CNV intervals tolerated within a CNV 
 	--normStat : MOY/STD/MED (def: MED)
 	--normByGender :	enter \"a\" : foreach region of all chrom, normalize separately for F and M ; 
 				enter \"g\" : foreach region on gonosomes only, normalize separately for F and M
@@ -566,6 +568,8 @@ if ($CNV_opt{"norm"} eq "std") { $CNV_opt{"seuil_duplication"} = 2; }
 if (exists $opt{seuil_dup}) { $CNV_opt{"seuil_duplication"} = $opt{seuil_dup}; }
 $CNV_opt{"min_following_CNV"} = "";
 if (exists $opt{min_CNV}) { $CNV_opt{"min_following_CNV"} = $opt{min_CNV}; }
+$CNV_opt{"max_Non_CNV"} = "";
+if (exists $opt{max_nonCNV}) { $CNV_opt{"max_Non_CNV"} = $opt{max_nonCNV}; }
 $CNV_opt{"geneGraph"} = 1;
 if (exists $opt{noCNV_byGene} || $fichier_cov) { $CNV_opt{"geneGraph"} = ""; }
 $CNV_opt{"chromGraph"} = 1;
