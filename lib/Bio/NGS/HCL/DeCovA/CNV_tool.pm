@@ -781,7 +781,9 @@ foreach my$file (keys%Results) {
 								$Result2{$file}{$nextReg[$j]} = "NA";
 								$Result3{$file}{$Chrom}{$Regions[$nextReg[$j]]{"Start"}}{$Regions[$nextReg[$j]]{"End"}} = "NA";
 								if (exists $regionIndice{$nextReg[$j]}) {
-									print CNV2 $Chrom."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\tNA\t";
+									print CNV2 $Chrom."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t";
+									if (exists $Regions[$nextReg[$j]]{"Appel"}) { print CNV2 "NA\t"; }
+									else { print CNV2 "no\t"; }
 									if (exists $Regions[$nextReg[$j]]{$file}{"Moyenne_Inter"}) {
 										print CNV2 sprintf("%.3f",$Regions[$nextReg[$j]]{$file}{"Moyenne_Inter"});
 										push(@dirtyCNV, $Regions[$nextReg[$j]]{$file}{"Moyenne_Inter"});
@@ -1585,7 +1587,9 @@ foreach my$patient (keys%results) {
 							else	{ 
 								$Result2{$patient}{$nextReg[$j]} = "NA";
 								if (exists $regionIndice{$nextReg[$j]}) {
-									print CNV2 $Chrom."\t".$Regions[$nextReg[$j]]{"Borne_5P"}."\t".$Regions[$nextReg[$j]]{"Borne_3P"}."\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\tNA\t";
+									print CNV2 $Chrom."\t".$Regions[$nextReg[$j]]{"Borne_5P"}."\t".$Regions[$nextReg[$j]]{"Borne_3P"}."\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t";
+									if (exists $Regions[$nextReg[$j]]{"Appel"}) { print CNV2 "NA\t"; }
+									else { print CNV2 "no\t"; }
 									if (exists $Regions[$nextReg[$j]]{$patient}{"Moyenne_Inter"}) {
 										print CNV2 sprintf("%.3f",$Regions[$nextReg[$j]]{$patient}{"Moyenne_Inter"});
 										push(@dirtyCNV, $Regions[$nextReg[$j]]{$patient}{"Moyenne_Inter"});
