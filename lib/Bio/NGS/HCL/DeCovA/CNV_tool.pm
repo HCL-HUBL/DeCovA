@@ -6,7 +6,7 @@ use strict;
 use warnings;
 
 
-#@hashSub = CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$pThreshold,$nGraf,$fichier_sexe,\%CNV_opt,$mbq,$mmq,$refBedLines,\@ChromOrder,\%fai);
+#@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$mbq,$mmq,$refBedLines,\@ChromOrder,\%fai);
 sub CNV_detect
 {
 my($h1,$h2,$outdir,$nGraf,$fichier_sexe,$h3,$mbq,$mmq,$h4,$h5,$h6)=@_;
@@ -677,7 +677,8 @@ for my$file (@Files) {
 
 ##print CNV foreach sample
 
-## @{ $regionOrder{$Chrom} } = [ regions sorted by pos ]
+## $Results{$file}{$r} = "DEL";
+## @{ $RegionOrder{$Chrom} } = [ regions sorted by pos ]
 my(%uniqReg,%RegInArray,%RegionOrder,%regionIndice);
 for my$r (0..$#Regions) {
 	unless (exists $uniqReg{ $Regions[$r]{"Chrom"}."-".$Regions[$r]{"Start"}."-".$Regions[$r]{"End"} }) {
@@ -705,8 +706,7 @@ foreach my$Chrom (keys%RegInArray) {
 	for (my$i=0;$i<scalar@{ $RegionOrder{$Chrom} };$i++) { $regionIndice{ $RegionOrder{$Chrom}[$i] } = $i; }
 	}
 
-##print CNV foreach sample
-#$results{$patient}{$region} = "DUP";
+## @{ $orderedCNV{$patient}{$Chrom} } = [r1, r2,...]
 my%orderedCNV;
 foreach my$file (keys%Results) {
 	my(%uniqCNV,%CNVinArray);
@@ -730,7 +730,8 @@ foreach my$file (keys%Results) {
 	print CNV1 "#Region\tCNV\tclean_intervals_Nbr\tclean_ratio_to_$norm\tdirty_intervals_Nbr\tdirty_ratio_to_$norm\n";
 	open (CNV2,">$outdir/$sampleName{$file}/CNV_$sampleName{$file}.allIntervals.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
 	print CNV2 "#Chrom\tStart\tEnd\tInfo\tinterval_Order\tCNV_type\tratio_to_$norm\tinterval_Length\n";
-	foreach my$Chrom (@ChromOrder) {
+	foreach my$Chromosome (@ChromOrder) {
+		my$Chrom = $Chromosome ; $Chrom =~ s/chr//i;
 		if (exists $orderedCNV{$file}{$Chrom}) {
 			my$r=0;		##index in @{ $orderedCNV{$file}{$Chrom} }
 			while ($r < scalar@{ $orderedCNV{$file}{$Chrom} } ) {
@@ -762,8 +763,8 @@ foreach my$file (keys%Results) {
 						$Result2{$file}{$nextReg[0]} = $Results{$file}{$nextReg[0]};
 						$Result3{$file}{$Chrom}{$Regions[$nextReg[0]]{"Start"}}{$Regions[$nextReg[0]]{"End"}} = $Results{$file}{$nextReg[0]};
 						if (exists $regionIndice{$nextReg[0]}) {
-							print CNV1 $Chrom.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[0]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t1\t".sprintf("%.3f",$Regions[$nextReg[0]]{$file}{"Moyenne_Inter"})."\t.\t.\n";
-							print CNV2 $Chrom."\t".$Regions[$nextReg[0]]{"Start"}."\t".$Regions[$nextReg[0]]{"End"}."\t".$Regions[$nextReg[0]]{"label"}."\t".($regionIndice{$nextReg[0]}+1)."\t".$Results{$file}{$nextReg[0]}."\t".sprintf("%.3f",$Regions[$nextReg[0]]{$file}{"Moyenne_Inter"})."\t".($Regions[$nextReg[0]]{"End"}-$Regions[$nextReg[0]]{"Start"}+1)." bp\n\n";
+							print CNV1 $Chromosome.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[0]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t1\t".sprintf("%.3f",$Regions[$nextReg[0]]{$file}{"Moyenne_Inter"})."\t.\t.\n";
+							print CNV2 $Chromosome."\t".$Regions[$nextReg[0]]{"Start"}."\t".$Regions[$nextReg[0]]{"End"}."\t".$Regions[$nextReg[0]]{"label"}."\t".($regionIndice{$nextReg[0]}+1)."\t".$Results{$file}{$nextReg[0]}."\t".sprintf("%.3f",$Regions[$nextReg[0]]{$file}{"Moyenne_Inter"})."\t".($Regions[$nextReg[0]]{"End"}-$Regions[$nextReg[0]]{"Start"}+1)." bp\n\n";
 							}
 						}
 					else {
@@ -775,13 +776,13 @@ foreach my$file (keys%Results) {
 								push(@cleanCNV, $Regions[$nextReg[$j]]{$file}{"Moyenne_Inter"});
 								push(@dirtyCNV, $Regions[$nextReg[$j]]{$file}{"Moyenne_Inter"});
 								if (exists $regionIndice{$nextReg[$j]})
-									{ print CNV2 $Chrom."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t".$Results{$file}{$nextReg[$j]}."\t".($Regions[$nextReg[$j]]{"End"}-$Regions[$nextReg[$j]]{"Start"}+1)." bp\n"; }
+									{ print CNV2 $Chromosome."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t".$Results{$file}{$nextReg[$j]}."\t".($Regions[$nextReg[$j]]{"End"}-$Regions[$nextReg[$j]]{"Start"}+1)." bp\n"; }
 								}
 							else {
 								$Result2{$file}{$nextReg[$j]} = "NA";
 								$Result3{$file}{$Chrom}{$Regions[$nextReg[$j]]{"Start"}}{$Regions[$nextReg[$j]]{"End"}} = "NA";
 								if (exists $regionIndice{$nextReg[$j]}) {
-									print CNV2 $Chrom."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t";
+									print CNV2 $Chromosome."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t";
 									if (exists $Regions[$nextReg[$j]]{"Appel"}) { print CNV2 "NA\t"; }
 									else { print CNV2 "no\t"; }
 									if (exists $Regions[$nextReg[$j]]{$file}{"Moyenne_Inter"}) {
@@ -800,7 +801,7 @@ foreach my$file (keys%Results) {
 						my$dirtyAverage = 0;
 						foreach (@dirtyCNV) { $dirtyAverage += $_; }
 						$dirtyAverage /= scalar@dirtyCNV;
-						print CNV1 $Chrom.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[$cnvOK]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage)."\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage)."\n";
+						print CNV1 $Chromosome.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[$cnvOK]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage)."\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage)."\n";
 						}
 					}
 				if ($i > 1) { $r += ($i-1); }
@@ -1683,7 +1684,7 @@ my$maxGeneSep=500;
 
 foreach my$Chrom (@ChromOrder) { 
 	
-	$Chrom =~ s/^chr//;
+	$Chrom =~ s/^chr//i;
 	
 	if (exists $RegionOrder{$Chrom}) {
 
