@@ -3768,11 +3768,11 @@ if ($dedup eq "do") {
 			if ($?) { die "samtools not happy\n"; }
 			}
 		}
-	$cmd = "$gatk -T DepthOfCoverage -R $genom -L $outdir/$intervalFile$withChr -o $outdir/$outName";
+	$cmd = "$gatk -T DepthOfCoverage -R $genom -L $outdir/$intervalFile$withChr";
 	foreach (@Files) { $cmd .= " -I $outdir/$fName{$_}-dedup.bam"; }
 	}
 else { 
-	$cmd = "$gatk -T DepthOfCoverage -R $genom -L $outdir/$intervalFile$withChr -o $outdir/$outName";
+	$cmd = "$gatk -T DepthOfCoverage -R $genom -L $outdir/$intervalFile$withChr";
 	foreach (@Files) { $cmd .= " -I $path{$_}$fName{$_}$extenS"; }
 	}
 unless ($dedup) { $cmd .= " -drf DuplicateRead"; }
@@ -3782,7 +3782,7 @@ else { $cmd .= "0"; }
 $cmd .= " -mmq ";
 if ($mmq) { $cmd .= "$mmq"; }
 else { $cmd .= "0"; }
-$cmd .= " -omitLocusTable -omitSampleSummary -omitIntervals";
+$cmd .= " --countType COUNT_FRAGMENTS -omitLocusTable -omitSampleSummary -omitIntervals -o $outdir/$outName";
 print "$cmd\n";
 system "$cmd";
 if ($?) { die "GATK not happy\n"; }
