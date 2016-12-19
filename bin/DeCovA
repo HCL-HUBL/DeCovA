@@ -11,7 +11,7 @@
 #This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-our $VERSION="1.4.4";
+our $VERSION="1.4.4c";
 
 use warnings;
 use strict;
@@ -62,6 +62,7 @@ GetOptions (\%opt,
 	"cov_fields|F=s@",
 	"reports",
 	"summary=s",
+	"keepCov|k",
 	"binPlot=i",
 	"maxPlot=i",
 	"genePlot",
@@ -95,7 +96,7 @@ GetOptions (\%opt,
 	"compress|z",
 	"nGraph:i",
 	"version|v",
-	"help|h") or usage();
+	"help|h") or die "Invalid parameters: $? \n";
 
 unless(%opt) { usage(); }
 
@@ -139,6 +140,7 @@ outputs:
 	--Reseq : float [0-1] : print region if cov < value (def: do not print)
 	--reports : will print all uncovered intervals (genomic coordinates) in 1 txt file per transcript (default: no)
 	--summary : Y/N : will print summary txt file (default: yes if -S -A -X -i)
+	-k / --keepCov : do not erase coverage file at the end of the process
 parameters:
   *general:
 	-N / --nonCoding : analyse also Non coding transcripts (default: no)
@@ -435,6 +437,10 @@ if (exists $opt{summary}) {
 	elsif ($opt{summary} =~ /^n$|^no$|^non$/i) { $printSummary = ""; }
 	else { die "opt summary no recognized (y/n)"; }
 	}
+
+my$keepCov = "";
+if (exists $opt{keepCov}) { $keepCov = 1; }
+
 
 my(@Thresholds,$pThreshold);
 if (exists $opt{printThreshold})
@@ -1801,16 +1807,19 @@ if ($cov_Bed && (!$bedFile))
 if ($splitBed)
 	{ unlink "$splitBed"; }
 
-if ($gatk) {
-	unlink glob "$outdir/all.cov*"; 
-	if ($CNV_tool) { unlink glob "$outdir/all.norm.cov*"; }
-	}
-else {
-	foreach (@Files) {
-		unlink glob "$outdir/$fName{$_}.cov*";
-		if ($CNV_tool) { unlink glob "$outdir/$fName{$_}.norm.cov*"; }
+unless ($keepCov) {
+	if ($gatk) {
+		unlink glob "$outdir/all.cov*"; 
+		if ($CNV_tool) { unlink glob "$outdir/all.norm.cov*"; }
+		}
+	else {
+		foreach (@Files) {
+			unlink glob "$outdir/$fName{$_}.cov*";
+			if ($CNV_tool) { unlink glob "$outdir/$fName{$_}.norm.cov*"; }
+			}
 		}
 	}
+
 if ($dedup eq "do") {
 	foreach (@Files) 
 		{ unlink "$outdir/$fName{$_}-dedup.bam","$outdir/$fName{$_}-dedup.bam.bai","$outdir/$fName{$_}.dedup-metrics"; }
@@ -6232,7 +6241,7 @@ while (my$line=<BED>) {
 		$tab[0] =~ s/chr//i;
 		$bedLines[$j]{"allLine"} = $line;
 		$bedLines[$j]{"Chrom"} = $tab[0]; $bedLines[$j]{"Start"} = ($tab[1]+1); $bedLines[$j]{"End"} = $tab[2];
-		$Chr{$i} = $tab[0]; $Start{$i} = ($tab[1]+1); $End{$i} = $tab[2];
+		$Chr{$i} = $tab[0]; $Start{$i} = ($tab[1]+1); $End{$i} = $tab[2];		##1-based
 		$Intervals{$Chr{$i}}{$Start{$i}}{$End{$i}} = 1;
 		$j++;
 		}
@@ -6282,14 +6291,17 @@ foreach my$file (@Files) {
 					$chr = $tab2[0];
 					@Starts = sort{$a<=>$b}(keys%{ $Intervals{$chr} });
 					undef(%noCovStart); undef(%noCovEnd);
-					foreach (@Starts) { $noCovStart{$_}=0; $noCovEnd{$_}=0; }
-					$c=0;
+					foreach my$start (@Starts) {
+						foreach (@{ $Intervals2{$chr}{$start} })
+							{ $noCovStart{$start}{$_}=0; $noCovEnd{$start}{$_}=0; }
+						}
+					$c=0;		##@Starts iteration
 					}
 				else { next; }
 				}
 			while ( ($pos > $Intervals2{$chr}{$Starts[$c]}[-1]) && ($c < (scalar@Starts-1)) )
 				{ $c++; }
-			my$c2 = $c;
+			my$c2 = $c;			##@Starts iteration within while loop
 			if ($pos == $Starts[$c2]) {
 				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
 					$min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}];
@@ -6302,14 +6314,14 @@ foreach my$file (@Files) {
 						if ($threshold && $tab[$gatkIdx{$file}] >= $threshold)
 							{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
 						else {
-							if ( $pos == ($noCovEnd{$Starts[$c2]} + 1) ) { 
-								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}} = $pos ; 
-								$noCovEnd{$Starts[$c2]} = $pos; 
+							if ( $pos == ($noCovEnd{$Starts[$c2]}{$end} + 1) ) { 
+								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}{$end}} = $pos ; 
+								$noCovEnd{$Starts[$c2]}{$end} = $pos; 
 								}
 							else { 
-								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$pos} = $pos ; 
-								$noCovStart{$Starts[$c2]} = $pos; 
-								$noCovEnd{$Starts[$c2]} = $pos; 
+								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$pos} = $pos;
+								$noCovStart{$Starts[$c2]}{$end} = $pos;
+								$noCovEnd{$Starts[$c2]}{$end} = $pos;
 								}
 							}
 						if ($tab[$gatkIdx{$file}] < $min{$file}{$chr}{$Starts[$c2]}{$end})
@@ -6326,14 +6338,14 @@ foreach my$file (@Files) {
 					if ($threshold && $tab[$gatkIdx{$file}] >= $threshold)
 						{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
 					else {
-						if ( $pos == ($noCovEnd{$Starts[$c2]} + 1) ) { 
-							$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}} = $pos ; 
-							$noCovEnd{$Starts[$c2]} = $pos; 
+						if ( $pos == ($noCovEnd{$Starts[$c2]}{$end} + 1) ) { 
+							$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}{$end}} = $pos ; 
+							$noCovEnd{$Starts[$c2]}{$end} = $pos; 
 							}
 						else { 
 							$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$pos} = $pos ; 
-							$noCovStart{$Starts[$c2]} = $pos; 
-							$noCovEnd{$Starts[$c2]} = $pos; 
+							$noCovStart{$Starts[$c2]}{$end} = $pos; 
+							$noCovEnd{$Starts[$c2]}{$end} = $pos; 
 							}
 						}
 					if ($tab[$gatkIdx{$file}] < $min{$file}{$chr}{$Starts[$c2]}{$end})
@@ -6366,7 +6378,10 @@ foreach my$file (@Files) {
 					$chr = $tab[0];
 					@Starts = sort{$a<=>$b}(keys%{ $Intervals{$chr} });
 					undef(%noCovStart); undef(%noCovEnd);
-					foreach (@Starts) { $noCovStart{$_}=0; $noCovEnd{$_}=0; }
+					foreach my$start (@Starts) {
+						foreach (@{ $Intervals2{$chr}{$start} })
+							{ $noCovStart{$start}{$_}=0; $noCovEnd{$start}{$_}=0; }
+						}
 					$c=0;
 					}
 				else { next; }
@@ -6387,14 +6402,14 @@ foreach my$file (@Files) {
 						if ($threshold && $tab[-1] >= $threshold)
 							{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
 						else {
-							if ( $pos == ($noCovEnd{$Starts[$c2]} + 1) ) { 
-								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}} = $pos ; 
-								$noCovEnd{$Starts[$c2]} = $pos; 
+							if ( $pos == ($noCovEnd{$Starts[$c2]}{$end} + 1) ) { 
+								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$noCovStart{$Starts[$c2]}{$end}} = $pos ; 
+								$noCovEnd{$Starts[$c2]}{$end} = $pos; 
 								}
 							else { 
 								$notCov{$file}{$chr}{$Starts[$c2]}{$end}{$pos} = $pos ; 
-								$noCovStart{$Starts[$c2]} = $pos; 
-								$noCovEnd{$Starts[$c2]} = $pos; 
+								$noCovStart{$Starts[$c2]}{$end} = $pos; 
+								$noCovEnd{$Starts[$c2]}{$end} = $pos; 
 								}
 							}
 						if ($tab[-1] < $min{$file}{$chr}{$Starts[$c2]}{$end}) 
