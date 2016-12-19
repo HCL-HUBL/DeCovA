@@ -63,12 +63,14 @@ GetOptions (\%opt,
 	"reports",
 	"summary=s",
 	"keepCov|k",
+	"raw_cov=s@",
 	"binPlot=i",
 	"maxPlot=i",
 	"genePlot",
 	"interPlot",
 	"gatk:s",
 	"ram|x=i",
+	"cpu=i",
 	"bedtools=s",
 	"samtools=s",
 	"picard=s",
@@ -78,7 +80,7 @@ GetOptions (\%opt,
 	"mmq=i",
 	"CNV|C",
 	"sex_file=s",
-	"cov_file=s",
+	"bed_cov=s",
 	"split_bed",
 	"seuil_region=f",
 	"seuil_patient=f",
@@ -117,18 +119,19 @@ die "usage:
 	or after installation:	DeCovA [option]
 options:
 inputs:
-	-f / --file : list of bam files, either command line (comma separated), or as a file (\".list\")
-	-d / --dir : directory where to find bam files
+	-f / --file : list of bam files (comma separated, or set several times), or file with such a list (ended with \".list\"; one bam per line)
+	-d / --dir : directory(ies) where to find bam files (comma separated, or set several times)
 	-s / --suffix : suffix to add before opening bam files
 	-r / --refseq : RefSeq file (required)
 	-b / --bed : bed file, used to analyse depth coverage
-	-m / --mut : mut file, used to plot known mutations ; format: chr	pos(1-based)	info
+	-m / --mut : mut file, used to plot known mutations ; format: \"chr	pos(1-based)	info\"
 	-o / --outfile : text outfile name (default: cov_samplename.txt)
 	-O / --outdir : out directory (default: folder named with date)
-	-i / --id : list of of refseq genes/transcripts id, either command line (comma separated), or as a file (\".list\")
+	-i / --id : list of of refseq genes/transcripts id (comma separated, or set several times), or file with such a list (\".list\")
 	-g / --genome : path to genome.fa file, if available (required if using GATK)
 	--sex_file : format: patient\tsex
-	--cov_file : DeCovA's output .cov.txt file (to skip bam analysis in CNV detect)
+	--raw_cov : use this coverage tool output .cov file (to skip bam analysis) (gatk output only supported)
+	--bed_cov : use this DeCovA's output .cov.txt file (to skip cov bed analysis in CNV detect)
 outputs:
 	-S / --graphSum : will perform graphSums (sum of covered samples by position)
 	-A / --allSample : will perform graphAllSample (depthline by gene and by sample, all samples graph on same .png file)
@@ -197,6 +200,7 @@ parameters:
 	--picard : enter path to executable .jar, if not installed as root
 	--gatk : cov analysis will be performed by gatk (default:bedtools; enter path to executable, if not installed as root)
 	-x / --ram : memory for gatk (in Go)
+	--cpu : multi-thread for gatk (def: 1)
 	\n";
 }
 
@@ -441,6 +445,13 @@ if (exists $opt{summary}) {
 my$keepCov = "";
 if (exists $opt{keepCov}) { $keepCov = 1; }
 
+my@raw_cov_file = ();
+if (exists $opt{raw_cov}) {
+	foreach (@{ $opt{raw_cov} }) {
+		push(@raw_cov_file, split(/,/, $_));
+		}
+	}
+
 
 my(@Thresholds,$pThreshold);
 if (exists $opt{printThreshold})
@@ -506,6 +517,10 @@ my$ram = "";
 if (exists $opt{ram}) { 
 	$ram = $opt{ram};
 	}
+my$threads = "";
+if (exists $opt{cpu}) { 
+	$threads = $opt{cpu};
+	}
 my$dedup = "";
 if (exists $opt{dedup}) { 
 	if ($opt{dedup} eq "do") { $dedup = "do"; }
@@ -534,13 +549,16 @@ if (exists $opt{sex_file}) {
 	if (-e $opt{sex_file}) { $fichier_sexe = $opt{sex_file}; }
 	else { die "$fichier_sexe file not found\n"; }
 	}
-my$fichier_cov = "";
-if (exists $opt{cov_file}) { 
-	if (-e $opt{cov_file}) { $fichier_cov = $opt{cov_file}; }
-	else { die "$fichier_cov file not found\n"; }
+
+my$bed_cov_file = "";
+if (exists $opt{bed_cov}) { 
+	if (-e $opt{bed_cov}) { $bed_cov_file = $opt{bed_cov}; }
+	else { die "$bed_cov_file file not found\n"; }
 	}
+
 my$splitBed = "";
 if (exists $opt{split_bed}) { $splitBed = 1; }
+
 my%CNV_opt;
 $CNV_opt{"norm"} = "med";
 if (exists $opt{normStat}) {
@@ -577,19 +595,19 @@ if (exists $opt{min_CNV}) { $CNV_opt{"min_following_CNV"} = $opt{min_CNV}; }
 $CNV_opt{"max_Non_CNV"} = "";
 if (exists $opt{max_nonCNV}) { $CNV_opt{"max_Non_CNV"} = $opt{max_nonCNV}; }
 $CNV_opt{"geneGraph"} = 1;
-if (exists $opt{noCNV_byGene} || $fichier_cov) { $CNV_opt{"geneGraph"} = ""; }
+if (exists $opt{noCNV_byGene} || $bed_cov_file) { $CNV_opt{"geneGraph"} = ""; }
 $CNV_opt{"chromGraph"} = 1;
 if (exists $opt{noCNV_byChr}) { $CNV_opt{"chromGraph"} = ""; }
 
 ##opt warnings according to actions 
 
 #unless (exists $opt{file} || exists $opt{dir}) { die "requires a list of bam files to analysed (opt -f), or a directory where to find such files (opt -d)\n"; }
-if ($fichier_cov) {
+if ($bed_cov_file) {
 	$CNV_tool=1;
 	if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut)
 		{ die "actions other than CNV_detect not allowed if .cov.txt file provided\n"; }
 	}
-if ($CNV_tool && !$fichier_cov) {
+if ($CNV_tool && !$bed_cov_file) {
 	$cov_Bed=1;
 	}
 
@@ -601,7 +619,7 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 	unless (@Files) { die "no .bam files provided\n"; }
 	}
 
-#unless ($mutFile || ($CNV_tool && $fichier_cov)) {
+#unless ($mutFile || ($CNV_tool && $bed_cov_file)) {
 if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
 	unless ($bedFile || exists $opt{id} ) 
 		{ die ".bed file (opt -b) or list of genes or transcripts id required (opt -i)\n"; }
@@ -631,197 +649,240 @@ $pathCmd{"R"} = `which "R"`;
 if ($? eq "0") { print "R tools OK\n"; }
 else { die "R tools not installed or not found\n"; }
 
-my(%sName,%sName2,%fai); my$bedTversion = "";
-if (!$fichier_cov) {
-	#samtools
-	if ($samT) {
-		#system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
-		$pathCmd{$samT} = `which "$samT"`;
-		if ($? eq "0") { print "samtools OK\n"; }
-		else {
-			$samT =~ s/samtools$//;
-			$samT =~ s/\/$//;
-			if ($samT eq "") { $samT = "."; }
-			$samT .= "/samtools";
+my(%sName,%sName2,%gatkIdx); 
+my(@ChromOrder,@chromLength,%chromLength,%withChr,%faIdx);
+my$bedTversion = "";
+if (!$bed_cov_file) {
+
+	if ($raw_cov_file[0]) {
+		open(COV, "$raw_cov_file[0]") or die "cannot open $raw_cov_file[0]\n";;
+		my$firstLine = <COV>;
+		my%allChr = ();
+		while (my$line=<COV>) {
+			my@tab = split(/\t/,$line);
+			my@tab2 = split(/:/,$tab[0]);
+			unless (exists $allChr{$tab2[0]}) {
+				push(@ChromOrder,$tab2[0]);
+				$allChr{$tab2[0]} = 1;
+				}
+			}
+		close COV;
+		print $firstLine;
+		chomp $firstLine;
+		my@tab = split(/\t/,$firstLine);
+		foreach my$i (0..$#tab) {
+			if ($tab[$i] =~ /^Depth_for_(.+)/) {
+				push(@Files,$1);
+				$sName2{$1} = $1;
+				$gatkIdx{$1} = $i;
+				}
+			}
+		$keepCov = "";
+		}
+
+	else {
+
+		##check external softwares:
+		##samtools
+		if ($samT) {
+			#system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
 			$pathCmd{$samT} = `which "$samT"`;
 			if ($? eq "0") { print "samtools OK\n"; }
-			else { $samT = ""; }
-			}
-		}
-	else {
-		$pathCmd{$samT} = `which "samtools"`;
-		if ($? eq "0") { $samT = "samtools"; print "samtools OK\n"; }
-		else { $samT = ""; }
-		}	
-	#picard tools
-	if ($picard) {
-		my$picardName = $picard;
-		$picardName =~ s/\.jar$//;
-		$picardName =~ s/picard$//;
-		$picardName =~ s/\/$//;
-		$picardName .= "/picard\.jar";
-		if (-e $picardName) { 
-			$picard = "java -jar $picardName";
-			print "picard-tools OK\n"; 
+			else {
+				$samT =~ s/samtools$//;
+				$samT =~ s/\/$//;
+				if ($samT eq "") { $samT = "."; }
+				$samT .= "/samtools";
+				$pathCmd{$samT} = `which "$samT"`;
+				if ($? eq "0") { print "samtools OK\n"; }
+				else { $samT = ""; }
+				}
 			}
 		else {
-			print "$picardName .jar file not found; test for command\n";
-			$pathCmd{$picard} = `which "$picard"`; 
-			if ($? eq "0") { print "picard-tools OK\n"; }
+			$pathCmd{$samT} = `which "samtools"`;
+			if ($? eq "0") { $samT = "samtools"; print "samtools OK\n"; }
+			else { $samT = ""; }
+			}	
+		##picard tools
+		if ($picard) {
+			my$picardName = $picard;
+			$picardName =~ s/\.jar$//;
+			$picardName =~ s/picard$//;
+			$picardName =~ s/\/$//;
+			$picardName .= "/picard\.jar";
+			if (-e $picardName) { 
+				$picard = "java -jar $picardName";
+				print "picard-tools OK\n"; 
+				}
+			else {
+				print "$picardName .jar file not found; test for command\n";
+				$pathCmd{$picard} = `which "$picard"`; 
+				if ($? eq "0") { print "picard-tools OK\n"; }
+				else { $picard = ""; }
+				}
+			}
+		else {
+			$pathCmd{"picard-tools"} = `which "picard-tools"`; 
+			if ($? eq "0") { $picard = "picard-tools"; print "picard-tools OK\n"; }
 			else { $picard = ""; }
 			}
-		}
-	else {
-		$pathCmd{"picard-tools"} = `which "picard-tools"`; 
-		if ($? eq "0") { $picard = "picard-tools"; print "picard-tools OK\n"; }
-		else { $picard = ""; }
-		}
-	#gatk
-	#gatk == 1 if want to use gatk; so that it won't test for existing command if don't want to use it
-	if ($mbq && !$gatk) { $gatk = 1; }
-	if ($gatk) {
-		if ($gatk ne "1") {
-			my$gatkName = $gatk;
-			$gatkName =~ s/\.jar$//;
-			$gatkName =~ s/GenomeAnalysisTK$//;
-			$gatkName =~ s/\/$//;
-			$gatkName .= "/GenomeAnalysisTK\.jar";
-			if (-e $gatkName) {
-				if ($ram) { $gatk = "java -jar -Xmx$ram"."g $gatkName"; }
-				else { $gatk = "java -jar $gatkName"; }
-				print "GATK OK\n"; 
-				}
-			else {
-				print "$gatkName .jar file not found; test for command\n";
-				$pathCmd{$gatk} = `which "$gatk"`; 
-				if ($? eq "0") {
-					if ($ram) { $gatk .= " -Xmx$ram"."g"; }
+		##gatk
+		## gatk == 1 if want to use gatk; so that it won't test for existing command if don't want to use it
+		if ($mbq && !$gatk) { $gatk = 1; }
+		if ($gatk) {
+			if ($gatk ne "1") {
+				my$gatkName = $gatk;
+				$gatkName =~ s/\.jar$//;
+				$gatkName =~ s/GenomeAnalysisTK$//;
+				$gatkName =~ s/\/$//;
+				$gatkName .= "/GenomeAnalysisTK\.jar";
+				if (-e $gatkName) {
+					if ($ram) { $gatk = "java -jar -Xmx$ram"."g $gatkName"; }
+					else { $gatk = "java -jar $gatkName"; }
 					print "GATK OK\n"; 
 					}
-				else { die "GATK .jar file not found\n"; } #$gatk = ""; }
-				}
-			}
-		else {
-			$pathCmd{"GenomeAnalysisTK"} = `which "GenomeAnalysisTK"`; 
-			if ($? eq "0") {
-				if ($ram) { $gatk = "GenomeAnalysisTK -Xmx$ram"."g"; }
-				else { $gatk = "GenomeAnalysisTK"; }
-				print "GATK OK\n"; 
-				}
-			else { die "GATK cmd not found\n"; } #$gatk = ""; }
-			}
-		}
-	if ($mbq && !$gatk) { die "need GATK in order to filter for mbq\n"; }
-
-	#bedtools
-	if ($bedT) {
-		#system "$bedT";
-		$pathCmd{$bedT} = `which "$bedT"`; 
-		if ($? eq "0") { print "bedtools OK\n"; }
-		else {
-			$bedT =~ s/bedtools$//;
-			$bedT =~ s/\/$//;
-			if ($bedT eq "") { $bedT = "."; }
-			$bedT.="/bedtools";
-			$pathCmd{$bedT} = `which "$bedT"`; 
-			if ($? eq "0")  { print "bedtools OK\n"; }
-			else { $bedT = ""; }
-			}
-		}
-	else {
-		$pathCmd{"bedtools"} = `which "bedtools"`; 
-		if ($? eq "0") { $bedT="bedtools"; print "bedtools OK\n"; }
-		else { $bedT = ""; }
-		}
-	if ($bedT) {
-		my@bedTversion = split(/\./, `$bedT --version`);
-		$bedTversion[0] =~ s/bedtools v//;
-		if ( ($bedTversion[0]<2) || ($bedTversion[0]==2 && $bedTversion[1]<24) ) { $bedTversion = 1; }
-		else	{ $bedTversion = 2; }
-		}
-
-	#genome index
-	if ($genom) {
-		if (-e $genom) { print "$genom OK\n"; }
-		else { die "$genom not found\n"; }
-		}
-
-	if ($gatk) {
-		foreach (@Files) {
-			unless (-e "$path{$_}$fName{$_}$extenS.bai") {
-				if ($samT){
-					my$cmd = "$samT index $path{$_}$fName{$_}$extenS";
-					print "$cmd\n";
-					system "$cmd";
+				else {
+					print "$gatkName .jar file not found; test for command\n";
+					$pathCmd{$gatk} = `which "$gatk"`; 
+					if ($? eq "0") {
+						if ($ram) { $gatk .= " -Xmx$ram"."g"; }
+						print "GATK OK\n"; 
+						}
+					else { die "GATK .jar file not found\n"; } #$gatk = ""; }
 					}
-				else { die "samtools not installed or not found\n"; }
-				}
-			}
-		unless ($genom) {  die "genome.fa required for GATK\n"; }
-		}
-	if ($samT) {
-		foreach my$file (@Files) {
-			unless (-e "$path{$file}$fName{$file}$extenS.bai") {
-				my$cmd = "$samT index $path{$file}$fName{$file}$extenS";
-				print "$cmd\n";
-				system "$cmd";
-				}
-			my@tmp = `$samT idxstats $path{$file}$fName{$file}$extenS | cut -f1`;
-			chomp @tmp;
-			foreach (@tmp) {
-				if ($_ =~ /^\w/) { push(@{ $fai{$file} }, $_); }
-				}
-			}
-		}
-
-	if ($mmq && !$gatk) {
-		unless ($samT) { die "samtools not installed or not found\n"; }
-		}
-	if ($CNV_tool && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
-	if ($dedup eq "do" && !$picard) { die "picard tools not installed or not found\n"; }
-	if (!$bedT && !$gatk) { die "bedtools or GATK required\n"; }
-
-	##find sample names in bam
-	##sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
-	if ($samT) {
-		my%allID;
-		foreach my$f (@Files) {
-			#my$sample = `$samT view -H $path{$f}$fName{$f}$extenS | awk '(\$0 ~ /^\@RG/) {print \$0}'| awk 'BEGIN{FS=OFS=\"\t\"} { for(i=1;i<=NF;i++) {if(\$i ~ /^SM/) {print \$i} } }' | awk 'BEGIN{FS=OFS=\":\"} {print \$2}'`;
-			my$sample = `$samT view -H $path{$f}$fName{$f}$extenS | awk '(\$0 ~ /^\@RG/) {print \$0}'`;
-			chomp $sample;
-			my@info = split(/\t/,$sample);
-			my($ID,$SM);
-			foreach my$i (@info) {
-				if($i =~ /^ID/) {
-					my@tab = split(/:/,$i);
-					$ID = $tab[1]; 
-					}
-				elsif($i =~ /^SM/) {
-					my@tab = split(/:/,$i);
-					$SM = $tab[1]; 
-					}
-				}
-			if (exists $allID{$SM}) {
-				$sName{$f} = $SM;
-				$sName2{$f} = $SM."_".$ID;
-				foreach (@{ $allID{$SM} })
-					{ $sName2{$_} = $SM."_".$ID; }
 				}
 			else {
-				$sName{$f} = $SM;
-				$sName2{$f} = $SM;
+				$pathCmd{"GenomeAnalysisTK"} = `which "GenomeAnalysisTK"`; 
+				if ($? eq "0") {
+					if ($ram) { $gatk = "GenomeAnalysisTK -Xmx$ram"."g"; }
+					else { $gatk = "GenomeAnalysisTK"; }
+					print "GATK OK\n"; 
+					}
+				else { die "GATK cmd not found\n"; } #$gatk = ""; }
 				}
-			push(@{ $allID{$SM} },$f);
 			}
-		}
-	else {
-		foreach (@Files) {
-			$sName{$_} = $fName{$_};
-			$sName2{$_} = $fName{$_};
+		if ($mbq && !$gatk) { die "need GATK in order to filter for mbq\n"; }
+
+		##bedtools
+		if ($bedT) {
+			#system "$bedT";
+			$pathCmd{$bedT} = `which "$bedT"`; 
+			if ($? eq "0") { print "bedtools OK\n"; }
+			else {
+				$bedT =~ s/bedtools$//;
+				$bedT =~ s/\/$//;
+				if ($bedT eq "") { $bedT = "."; }
+				$bedT.="/bedtools";
+				$pathCmd{$bedT} = `which "$bedT"`; 
+				if ($? eq "0")  { print "bedtools OK\n"; }
+				else { $bedT = ""; }
+				}
 			}
+		else {
+			$pathCmd{"bedtools"} = `which "bedtools"`; 
+			if ($? eq "0") { $bedT="bedtools"; print "bedtools OK\n"; }
+			else { $bedT = ""; }
+			}
+		if ($bedT) {
+			my@bedTversion = split(/\./, `$bedT --version`);
+			$bedTversion[0] =~ s/bedtools v//;
+			if ( ($bedTversion[0]<2) || ($bedTversion[0]==2 && $bedTversion[1]<24) ) { $bedTversion = 1; }
+			else	{ $bedTversion = 2; }
+			}
+
+		if ($mmq && !$gatk) {
+			unless ($samT) { die "samtools not installed or not found\n"; }
+			}
+		if ($CNV_tool && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
+		if ($dedup eq "do" && !$picard) { die "picard tools not installed or not found\n"; }
+		if (!$bedT && !$gatk) { die "bedtools or GATK required\n"; }
+
+		##find sample names in bam
+		##sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
+		if ($samT) {
+			my%allID;
+			foreach my$f (@Files) {
+				#my$sample = `$samT view -H $path{$f}$fName{$f}$extenS | awk '(\$0 ~ /^\@RG/) {print \$0}'| awk 'BEGIN{FS=OFS=\"\t\"} { for(i=1;i<=NF;i++) {if(\$i ~ /^SM/) {print \$i} } }' | awk 'BEGIN{FS=OFS=\":\"} {print \$2}'`;
+				my$sample = `$samT view -H $path{$f}$fName{$f}$extenS | awk '(\$0 ~ /^\@RG/) {print \$0}'`;
+				chomp $sample;
+				my@info = split(/\t/,$sample);
+				my($ID,$SM);
+				foreach my$i (@info) {
+					if($i =~ /^ID/) {
+						my@tab = split(/:/,$i);
+						$ID = $tab[1]; 
+						}
+					elsif($i =~ /^SM/) {
+						my@tab = split(/:/,$i);
+						$SM = $tab[1]; 
+						}
+					}
+				if (exists $allID{$SM}) {
+					$sName{$f} = $SM;
+					$sName2{$f} = $SM."_".$ID;
+					foreach (@{ $allID{$SM} })
+						{ $sName2{$_} = $SM."_".$ID; }
+					}
+				else {
+					$sName{$f} = $SM;
+					$sName2{$f} = $SM;
+					}
+				push(@{ $allID{$SM} },$f);
+				}
+			}
+		else {
+			foreach (@Files) {
+				$sName{$_} = $fName{$_};
+				$sName2{$_} = $fName{$_};
+				}
+			}
+		#sort @Files according to %sName2 lexical order
+		@Files = (sort {$sName2{$a} cmp $sName2{$b}} (keys %sName2));
+
+		#genome index
+		if ($genom) {
+			if (-e $genom) { print "$genom OK\n"; }
+			else { die "$genom not found\n"; }
+			if (-e "$genom.fai") {
+				@chromLength = `cut -f1-2 $genom.fai`;
+				chomp @chromLength;
+				if ($chromLength[0] =~ /^chr/) {
+					$withChr{"all"}="_wChr.bed";
+					foreach (@Files) { $withChr{$_}="_wChr.bed"; } 
+					}
+				else {
+					$withChr{"all"}="_0Chr.bed";
+					foreach (@Files) { $withChr{$_}="_0Chr.bed"; } 
+					}
+				foreach (@chromLength) {
+					my@tab = split(/\t/,$_);
+					push(@ChromOrder,$tab[0]);
+					$chromLength{$tab[0]} = $tab[1];
+					}
+				}
+			else { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
+			}
+		else { die "reference genome.fa required\n"; }
+		#bam index
+		if (@Files) {
+			if ($samT) {
+				foreach my$file (@Files) {
+					unless (-e "$path{$file}$fName{$file}$extenS.bai") {
+						my$cmd = "$samT index $path{$file}$fName{$file}$extenS";
+						print "$cmd\n";
+						system "$cmd";
+						}
+					my@tmp = `$samT idxstats $path{$file}$fName{$file}$extenS | cut -f1`;
+					chomp @tmp;
+					foreach (@tmp) {
+						if ($_ =~ /^\w/) { push(@{ $faIdx{$file} }, $_); }
+						}
+					}
+				}
+			else { die "samtools not installed or not found\n"; }
+			}
+
 		}
-	#sort @Files according to %sName2 lexical order
-	@Files = (sort {$sName2{$a} cmp $sName2{$b}} (keys %sName2));
 
 	#read gender file
 	if ($fichier_sexe) {
@@ -840,19 +901,22 @@ if (!$fichier_cov) {
 		}
 	}
 
+
+
 #create output dirs
 use POSIX qw/strftime/;
 my$outdir = "";
+my$chromLength = "";
 if (exists $opt{outdir}) { 
 	$outdir = $opt{outdir}; 
 	$outdir =~ s/\/$//;
 	if (-d $outdir) {
-		if ($CNV_tool && $fichier_cov) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+		if ($CNV_tool && $bed_cov_file) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 		else { $outdir .= "/covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 		}
 	}
 else {
-	if ($CNV_tool && $fichier_cov) { $outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+	if ($CNV_tool && $bed_cov_file) { $outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 	else { $outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 	}
 mkdir($outdir);
@@ -862,37 +926,20 @@ if ($byS || $printReports) {
 	}
 if ($allS || $Sum)
 	{ mkdir("$outdir/cov_All"); }
-
-#for genome version of bams files: with or without "chr" prefix?
-my%withChr;
-my@ChromOrder;
-if (@Files) {
-	if (-e "$genom.fai") {
-		@ChromOrder = `cat "$genom.fai" | cut -f1`;
-		chomp @ChromOrder;
-		if ($ChromOrder[0] =~ /^chr/) {
-			$withChr{"all"}="_wChr.bed";
-			foreach (@Files) { $withChr{$_}="_wChr.bed"; } 
-			}
-		else {
-			$withChr{"all"}="_0Chr.bed";
-			foreach (@Files) { $withChr{$_}="_0Chr.bed"; } 
-			}
-		}
-	else {
-		if ($samT) {
-			foreach (@Files) {
-				if ($fai{$_}[0] =~ /^chr/) { $withChr{$_}="_wChr.bed"; }
-				else { $withChr{$_}="_0Chr.bed"; }
-				}
-			@ChromOrder = @{ $fai{$Files[0]} };
-			}
-		else {
-			#foreach (@Files) { $withChr{$_} = "_0Chr.bed"; }
-			foreach (@Files) { $withChr{$_} = ""; }
-			}
+if ($raw_cov_file[0]) {
+	my$cmd = "tail -n +2 $raw_cov_file[0] > $outdir/all.cov";
+	print "$cmd\n";
+	system "$cmd";
+	}
+else {
+	if (@chromLength) {
+		$chromLength = "$outdir/chromLength.txt";
+		open (my$fhOut, ">", "$chromLength");
+		foreach(@chromLength) { print $fhOut "$_\n"; }
+		close $fhOut;
 		}
 	}
+
 
 
 ###################
@@ -939,7 +986,7 @@ if ($mutFile) {
 	if($covMut) { 
 		if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool) 
 			{ $keepTmp = 1; }
-		%tmpFile = depthMut($mutFile,\%path,$extenS,\@Files,\%fName,\%sName,\%sName2,\%Mut,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$mbq,$dedup,$bedT,$bedTversion,$samT,$picard,$gatk,$genom);
+		%tmpFile = depthMut($mutFile,\%path,$extenS,\@Files,\%fName,\%sName,\%sName2,\%Mut,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$mbq,$dedup,$threads,$chromLength,$bedT,$bedTversion,$samT,$picard,$gatk,$genom);
 		}
 	}
 
@@ -1153,7 +1200,7 @@ foreach my$gene (keys%Genes) {
 
 ###################
 #Job 2: bams analysis:
-my(%allInterval,$intervalName,%gatkIdx);
+my(%allInterval,$intervalName,%headers);
 
 if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
 
@@ -1197,13 +1244,20 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 		}
 
 	#perform depth analysis
-	if ($gatk) 
-		{ %gatkIdx = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,\%sName,$outdir,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$gatk,$picard,$genom); }
-	else {
-		$keepTmp = 0;
-		bedToolsCov($intervalName,\%path,$extenS,\@Files,\%fName,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$dedup,$bedT,$bedTversion,$samT,$picard);
+
+	unless ($raw_cov_file[0]) {		#"$outdir/$outName"
+		if ($gatk) {
+			my($r1,$r2) = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,\%sName,$outdir,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$threads,$gatk,$picard,$genom);
+			%gatkIdx = %$r1;
+			@{ $headers{"$outdir/all.cov"} } = @$r2;
+			}
+		else {
+			$keepTmp = 0;
+			bedToolsCov($intervalName,\%path,$extenS,\@Files,\%fName,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$dedup,$chromLength,$bedT,$bedTversion,$samT,$picard);
+			}
 		}
 	}
+
 
 
 ###################
@@ -1645,15 +1699,15 @@ my(%cnv_Patients,%cnv_Results);
 if ($CNV_tool) {
 
 
-	if ($fichier_cov) {
-		Bio::NGS::HCL::DeCovA::CNV_tool::CNV_reAnalyse($fichier_cov,$outdir,$nGraf,$fichier_sexe,\%CNV_opt);
+	if ($bed_cov_file) {
+		Bio::NGS::HCL::DeCovA::CNV_tool::CNV_reAnalyse($bed_cov_file,$outdir,$nGraf,$fichier_sexe,\%CNV_opt);
 		}
 	
 	else {
 	
 		mkdir "$outdir/CNV_analysis";
 
-		@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$mbq,$mmq,$refBedLines,\@ChromOrder,\%fai);
+		@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$mbq,$mmq,$refBedLines,\@ChromOrder,\%faIdx);
 		%cnv_Patients = %{$hashSub[0]};
 		%cnv_Results = %{$hashSub[1]};
 
@@ -1807,16 +1861,24 @@ if ($cov_Bed && (!$bedFile))
 if ($splitBed)
 	{ unlink "$splitBed"; }
 
-unless ($keepCov) {
+if ($keepCov) {
 	if ($gatk) {
-		unlink glob "$outdir/all.cov*"; 
-		if ($CNV_tool) { unlink glob "$outdir/all.norm.cov*"; }
-		}
-	else {
-		foreach (@Files) {
-			unlink glob "$outdir/$fName{$_}.cov*";
-			if ($CNV_tool) { unlink glob "$outdir/$fName{$_}.norm.cov*"; }
-			}
+		open(my$fhOut, ">", "$outdir/gatk.all.cov.txt") or die "cannot create $outdir/gatk.all.cov.txt file\n";
+		foreach (@{ $headers{"$outdir/all.cov"} }) { print $fhOut "$_"; }
+		open(my$fhIn, "<", "$outdir/all.cov") or die "cannot read $outdir/all.cov\n";
+		while (<$fhIn>) { print $fhOut "$_"; }
+		close $fhIn; close $fhOut;
+		}	
+	}
+
+if ($gatk) {
+	unlink glob "$outdir/all.cov*"; 
+	if ($CNV_tool) { unlink glob "$outdir/all.norm.cov*"; }
+	}
+else {
+	foreach (@Files) {
+		unlink glob "$outdir/$fName{$_}.cov*";
+		if ($CNV_tool) { unlink glob "$outdir/$fName{$_}.norm.cov*"; }
 		}
 	}
 
@@ -3037,7 +3099,7 @@ return(%RegMut);
 sub depthMut
 {
 #%tmpFile = depthMut($mutFile,\%path,$extenS,\@Files,\%fName,\%Mut,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$mbq,$dedup,$bedT,$samT,$picard,$gatk,$genom);
-my($mutFile,$h1,$extenS,$h2,$h3,$h4,$h5,$h6,$outdir,$h7,$keepTmp,$h8,$mmq,$mbq,$dedup,$bedT,$bedTversion,$samT,$picard,$gatk,$genom) = @_;
+my($mutFile,$h1,$extenS,$h2,$h3,$h4,$h5,$h6,$outdir,$h7,$keepTmp,$h8,$mmq,$mbq,$dedup,$threads,$chromLength,$bedT,$bedTversion,$samT,$picard,$gatk,$genom) = @_;
 my%path = %$h1;
 my@Files = @$h2;
 my%fName = %$h3;
@@ -3066,7 +3128,8 @@ foreach(@Files) {
 my%depthMut;
 my@Pos;
 if($gatk) { 
-	my%gatkIdx = gatkCov("mut",\%path,$extenS,\@Files,\%fName,\%sName,$outdir,"all.covMut",$withChr{"all"},$mmq,$mbq,$dedup,$gatk,$picard,$genom);
+	my($r1,$r2) = gatkCov("mut",\%path,$extenS,\@Files,\%fName,\%sName,$outdir,"all.covMut",$withChr{"all"},$mmq,$mbq,$dedup,$threads,$gatk,$picard,$genom);
+	my%gatkIdx = %$r1;
 	open(IN, "$outdir/all.covMut");
 	while (<IN>) { 
 		my$line = $_;
@@ -3084,7 +3147,7 @@ if($gatk) {
 	}
 else {
 	foreach (@Files) {
-		$tmpFile{$_} = bedToolCmd("mut",$fName{$_},$path{$_},$extenS,$outdir,".covMut",$isChr{$_},$keepTmp,$tmpFile{$_},$mmq,$dedup,$bedT,$bedTversion,$samT,$picard);
+		$tmpFile{$_} = bedToolCmd("mut",$fName{$_},$path{$_},$extenS,$outdir,".covMut",$isChr{$_},$keepTmp,$tmpFile{$_},$mmq,$dedup,$chromLength,$bedT,$bedTversion,$samT,$picard);
 		unless ($withChr{$_}) {
 			open(COV, "$outdir/$fName{$_}.covMut") || die "can't open file $outdir/$fName{$_}.covMut\n";
 			my$ok=0;
@@ -3103,7 +3166,7 @@ else {
 						else { $isChr{$f} = "_0Chr.bed"; }
 						} 
 					}
-				$tmpFile{$_} = bedToolCmd("mut",$fName{$_},$path{$_},$extenS,$outdir,".covMut",$isChr{$_},$keepTmp,$tmpFile{$_},$mmq,$dedup,$bedT,$samT,$picard);
+				$tmpFile{$_} = bedToolCmd("mut",$fName{$_},$path{$_},$extenS,$outdir,".covMut",$isChr{$_},$keepTmp,$tmpFile{$_},$mmq,$dedup,$chromLength,$bedT,$samT,$picard);
 				}
 			}
 		my$cmd = "sort -k 1,1 -k 2n,2n -k 4n,4n -o $outdir/$fName{$_}.covMut $outdir/$fName{$_}.covMut";
@@ -3648,7 +3711,7 @@ return(%withChr);
 #bedtools cov
 sub bedToolsCov
 {
-my($bedName,$h1,$extenS,$h2,$h3,$outdir,$h4,$keepTmp,$h5,$mmq,$dedup,$bedT,$bedTversion,$samT,$picard) = @_;
+my($bedName,$h1,$extenS,$h2,$h3,$outdir,$h4,$keepTmp,$h5,$mmq,$dedup,$chromLength,$bedT,$bedTversion,$samT,$picard) = @_;
 my%path = %$h1;
 my@Files = @$h2;
 my%fName = %$h3;
@@ -3661,7 +3724,7 @@ foreach(@Files) {
 	else { $isChr{$_} = "_0Chr.bed"; }
 	}
 foreach (@Files) {
-	$tmpFile{$_} = bedToolCmd($bedName,$fName{$_},$path{$_},$extenS,$outdir,".cov",$isChr{$_},$keepTmp,$tmpFile{$_},$mmq,$dedup,$bedT,$bedTversion,$samT,$picard);
+	$tmpFile{$_} = bedToolCmd($bedName,$fName{$_},$path{$_},$extenS,$outdir,".cov",$isChr{$_},$keepTmp,$tmpFile{$_},$mmq,$dedup,$chromLength,$bedT,$bedTversion,$samT,$picard);
 	unless ($withChr{$_}) {
 		open(COV, "$outdir/$fName{$_}.cov") || die "can't open file $outdir/$fName{$_}.cov\n";
 		my$ok=0;
@@ -3680,7 +3743,7 @@ foreach (@Files) {
 					else { $isChr{$_} = "_0Chr.bed"; }
 					} 
 				}
-			$tmpFile{$_} = bedToolCmd($bedName,$fName{$_},$path{$_},$extenS,$outdir,".cov",$isChr{$_},$keepTmp,$tmpFile{$_},$mmq,$dedup,$bedT,$bedTversion,$samT,$picard);
+			$tmpFile{$_} = bedToolCmd($bedName,$fName{$_},$path{$_},$extenS,$outdir,".cov",$isChr{$_},$keepTmp,$tmpFile{$_},$mmq,$dedup,$chromLength,$bedT,$bedTversion,$samT,$picard);
 			}
 		$withChr{$_} = $isChr{$_};
 		}
@@ -3694,12 +3757,12 @@ foreach (@Files) {
 ##
 sub bedToolCmd
 {
-my($bedName,$file,$path,$extenS,$outdir,$outname,$withChr,$keepTmp,$tmpFile,$mmq,$dedup,$bedT,$bedTversion,$samT,$picard) = @_;
+my($bedName,$file,$path,$extenS,$outdir,$outname,$withChr,$keepTmp,$tmpFile,$mmq,$dedup,$chromLength,$bedT,$bedTversion,$samT,$picard) = @_;
 print "perform bedtools coverageBed on $file\n";
 my$cmd="";
 if ($tmpFile) {
 	if ($bedTversion == 1) { $cmd = "$bedT coverage -abam $tmpFile -b $outdir/$bedName$withChr -d > $outdir/$file$outname"; }
-	else	{ $cmd = "$bedT coverage -a $outdir/$bedName$withChr -b $tmpFile -d > $outdir/$file$outname"; }
+	else	{ $cmd = "$bedT coverage -a $outdir/$bedName$withChr -b $tmpFile -d -sorted -g $chromLength > $outdir/$file$outname"; }
 	}
 else {
 	if ($mmq) { 
@@ -3731,16 +3794,16 @@ else {
 	if ($mmq || $dedup) { 
 		if ($keepTmp) {
 			if ($bedTversion == 1) { $cmd = "$bedT coverage -abam $tmpFile -b $outdir/$bedName$withChr -d > $outdir/$file$outname"; }
-			else { $cmd = "$bedT coverage -a $outdir/$bedName$withChr -b $tmpFile -d > $outdir/$file$outname"; }
+			else { $cmd = "$bedT coverage -a $outdir/$bedName$withChr -b $tmpFile -d -sorted -g $chromLength > $outdir/$file$outname"; }
 			}
 		else {
 			if ($bedTversion == 1) { $cmd .= " | $bedT coverage -abam stdin -b $outdir/$bedName$withChr -d > $outdir/$file$outname"; }
-			else { $cmd .= " | $bedT coverage -a $outdir/$bedName$withChr -b stdin -d > $outdir/$file$outname"; }
+			else { $cmd .= " | $bedT coverage -a $outdir/$bedName$withChr -b stdin -d -sorted -g $chromLength > $outdir/$file$outname"; }
 			}
 		}
 	else { 
 		if ($bedTversion == 1) { $cmd = "$bedT coverage -abam $path$file$extenS -b $outdir/$bedName$withChr -d > $outdir/$file$outname"; }
-		else { $cmd = "$bedT coverage -a $outdir/$bedName$withChr -b $path$file$extenS -d > $outdir/$file$outname"; }
+		else { $cmd = "$bedT coverage -a $outdir/$bedName$withChr -b $path$file$extenS -d -sorted -g $chromLength > $outdir/$file$outname"; }
 		}
 	}
 print "$cmd\n";
@@ -3757,7 +3820,7 @@ return($tmpFile);
 #%gatkIdx = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,$outdir,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$gatk,$picard,$genom);
 sub gatkCov
 {
-my($intervalFile,$h1,$extenS,$h2,$h3,$h4,$outdir,$outName,$withChr,$mmq,$mbq,$dedup,$gatk,$picard,$genom) = @_;
+my($intervalFile,$h1,$extenS,$h2,$h3,$h4,$outdir,$outName,$withChr,$mmq,$mbq,$dedup,$threads,$gatk,$picard,$genom) = @_;
 my%path = %$h1;
 my@Files = @$h2;
 my%fName = %$h3;
@@ -3785,6 +3848,7 @@ else {
 	foreach (@Files) { $cmd .= " -I $path{$_}$fName{$_}$extenS"; }
 	}
 unless ($dedup) { $cmd .= " -drf DuplicateRead"; }
+if ($threads) { $cmd .= " -nt $threads"; }
 $cmd .= " -mbq ";
 if ($mbq) { $cmd .= "$mbq"; }
 else { $cmd .= "0"; }
@@ -3811,10 +3875,11 @@ foreach my$file(@Files) {
 close COV;
 
 #$cmd = "sed -i '1d' $outdir/$bedName-$outName";
+my@header_cov = `head -n 1 $outdir/$outName`; 
 $cmd = "tail -n +2 $outdir/$outName > $outdir/tmpTail; mv $outdir/tmpTail $outdir/$outName";
 print "$cmd\n";
 system "$cmd";
-return(%gatkIdx);
+return(\%gatkIdx,\@header_cov);
 }
 
 
