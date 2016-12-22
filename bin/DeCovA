@@ -83,6 +83,7 @@ GetOptions (\%opt,
 	"sex_file=s",
 	"bed_cov=s",
 	"split_bed",
+	"cut_bed:s",
 	"seuil_region=f",
 	"seuil_patient=f",
 	"seuil_cov=f",
@@ -125,15 +126,15 @@ inputs:
 	-s / --suffix : suffix to add before opening bam files
 	-r / --refseq : RefSeq file (required)
 	-b / --bed : bed file, used to analyse depth coverage
-	-m / --mut : mut file, used to plot known mutations ; format: \"chr	pos(1-based)	info\"
-	-o / --outfile : text outfile name (default: cov_samplename.txt)
-	-O / --outdir : out directory (default: folder named with date)
+	-m / --mut : mut file, used to plot known mutations ; format: \"chr	pos(1-based)	info\" (vcf files are ok)
 	-i / --id : list of of refseq genes/transcripts id (comma separated, or set several times), or file with such a list (\".list\")
 	-g / --genome : path to genome.fa file, if available (required if using GATK)
 	--sex_file : format: patient\tsex
 	--raw_cov : use this coverage tool output .cov file (to skip bam analysis) (gatk output only supported)
 	--bed_cov : use this DeCovA's output .cov.txt file (to skip cov bed analysis in CNV detect)
 outputs:
+	-o / --outfile : text outfile name (default: cov_samplename.txt)
+	-O / --outdir : out directory (default: folder named with date)
 	-S / --graphSum : will perform graphSums (sum of covered samples by position)
 	-A / --allSample : will perform graphAllSample (depthline by gene and by sample, all samples graph on same .png file)
 	-X / --bySample : will perform graphBySample (depthline by gene and by sample, one sample by .png file)
@@ -147,7 +148,7 @@ outputs:
 	--summary : Y/N : will print summary txt file (default: yes if -S -A -X -i)
 	-k / --keepCov : do not erase coverage file at the end of the process
 parameters:
-  *general:
+  *refseq gene analysis:
 	-N / --nonCoding : analyse also Non coding transcripts (default: no)
 	-U / --noUTR : does not take into account UTR regions for graphs (default: yes)
 	-u / --noUTRinTxt : does not take into account UTR regions for summary txt file and plots (default: yes)
@@ -160,12 +161,8 @@ parameters:
 	-l / --expand2val : length added out of exon ends (default: 0)
 	-L / --expand2bed : expand length of analysed regions to bed coord, if -l < bed (default: no)
 	--Ltxt : does take into account expanded length (from -l and -L) for txt outputs (default: no), or add a different length
-	--Lbed : length added out of bed interval ends (default: 0)
 	-R / --noReverse : does not reverse regions if sens of transcript = (-) (default: yes)
 	--nGraph : max nber of graphs per sheet (default : all samples or all transcripts)
-	-z / --compress : archive output folder
-	-v / --version : current version 
-	-h / --help : help
   *plot param:
 	--binPlot : bin width for covPlot (default=10)
 	--maxPlot : max depth for covPlot (default=100)
@@ -178,7 +175,15 @@ parameters:
   *cov_bed param:
 	-F / --cov_fields : fields foreach intervals in covBed (comma separated), among: min, max, tot, mean, median, cov 
 		(default: min,mean,cov)
+	--Lbed : length added out of bed interval ends (default: 0)
 	--split_bed : split overlapping bed intervals for Cov and CNV analyses
+	--cut_bed : cut bed intervals in shorter fragments: cutL:x,minL:y,maxL:z,keepLast:s
+				cutL : length of segmentation (def: 150)
+				minL : min length required to keep the last interval, after segmentation (def: --cutL/5)
+				maxL : length above which bed intervals will be segmented, in N segments of \"cutL\" length (def: as --cutL)
+				keepLast : if last interval shorter than minL, how to keep it:
+						enter m (merge) if want that last two ones are simply merged
+						enter h (half) if want that last two ones are output with length = half of their sum
   *CNV_detect param:
 	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 0.1)
 	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 0.15)
@@ -200,8 +205,12 @@ parameters:
 	--samtools : enter  path to executable, if not installed as root
 	--picard : enter path to executable .jar, if not installed as root
 	--gatk : cov analysis will be performed by gatk (default:bedtools; enter path to executable, if not installed as root)
+  *general:
 	-x / --ram : memory for gatk (in Go)
 	--cpu : multi-thread for gatk (def: 1)
+	-z / --compress : archive output folder
+	-v / --version : current version 
+	-h / --help : help
 	\n";
 }
 
@@ -336,7 +345,7 @@ my$UTRinTxt = 1;
 if (exists $opt{noUTRinTxt})
 	{ $UTRinTxt = 0; }
 if ($nonCod && (!$wUTR || !$UTRinTxt))
-	{ die "nonCoding inclusion not compatible with UTR exclusion\n";}
+	{ die "nonCoding inclusion not compatible with UTR exclusion\n"; }
 
 my$maxGr = ""; #max depth for graphs
 if (exists $opt{maxDepth}) { 
@@ -455,6 +464,7 @@ if (exists $opt{raw_cov}) {
 		}
 	}
 if (@Files && @raw_cov_file) { die "must choose between providing bam files or cov files\n"; }
+if ($covMut && @raw_cov_file) { die "cannot compute depth on mutation file from cov files\n"; }
 
 
 my(@Thresholds,$pThreshold);
@@ -562,6 +572,32 @@ if (exists $opt{bed_cov}) {
 
 my$splitBed = "";
 if (exists $opt{split_bed}) { $splitBed = 1; }
+
+my$cutBed = "";
+my%cutB_opt = ();
+if (exists $opt{cut_bed}) { 
+	$cutBed = 1;
+	$cutB_opt{"cutL"}=150; $cutB_opt{"maxL"}=150; $cutB_opt{"minL"}=30; $cutB_opt{"keepLast"}="merge";
+	if ($opt{cut_bed}) {	## cutL:x,minL:y,maxL:z,keepLast:s
+		my@cutB_opt = split(/,/,$opt{cut_bed});
+		foreach my$o (@cutB_opt) {
+			my$ok=0;
+			foreach my$k (keys%cutB_opt) {
+				if ($o =~ /$k:(.+)/) {
+					if ($k eq "keepLast") {
+						if ($1 =~ /^m/i) { $cutB_opt{"$k"} = "merge"; }
+						elsif  ($1 =~ /^h/i) { $cutB_opt{"$k"} = "half"; }
+						else { die "cut_bed opt \"keepLast\" not recognized ($1?) (h or m)\n"; }
+						}
+					else { $cutB_opt{"$k"} = $1; }
+					$ok=1;
+					}
+				}
+			unless ($ok) { die "cut_bed opt not recognized ($o?)\n"; }
+			}
+		}
+	}
+if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry\n";}
 
 my%CNV_opt;
 $CNV_opt{"norm"} = "med";
@@ -993,6 +1029,14 @@ if ($bedFile) {
 		$splitBed .= "_split.bed";
 		split_Bed($bedFile,$splitBed,\@ChromOrder); 
 		$bedFile = $splitBed;
+		}
+	elsif ($cutBed) {
+		print "split overlapping intervals from $bedFile\n";
+		$cutBed = "$outdir/$bedName";
+		$cutBed =~ s/.bed$//;
+		$cutBed .= "_cut".$cutB_opt{"cutL"}.".bed";
+		cut_Bed($bedFile,$cutBed,\@ChromOrder,\%cutB_opt); 
+		$bedFile = $cutBed;
 		}
 	}
 
@@ -2035,7 +2079,7 @@ my@chromOrder = @$h1;
 # $intervals{$chr}{$start}{$end} = $line;
 my(%intervals,@tmpOrder,%allChrom);		
 open(BED, $bedFile) || die "can't open file $bedFile\n";
-print "split $bedFile\n";
+print "spliting $bedFile\n";
 my$ok=0;
 while (my$line=<BED>) {
 	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
@@ -2143,6 +2187,85 @@ foreach my$chr (@chromOrder) {
 		}
 	}
 close BED;
+
+}
+
+
+
+######################
+sub cut_Bed
+{
+my($bedFile,$newBed,$h1,$h2) = @_;
+my@chromOrder = @$h1;
+my%c_opt = %$h2;
+my$cutL = $c_opt{"cutL"};
+
+open(OUT, ">", "$newBed") || die "can't create file $newBed\n";
+open(BED, "<", "$bedFile") || die "can't open file $bedFile\n";
+while (my$line=<BED>) {
+	chomp $line;
+	my@tab = split(/\t/,$line);
+	my$line2;
+	if ( ($tab[2]-$tab[1]) >= $c_opt{"maxL"} ) {
+		my$start = $tab[1];
+		my$end = $tab[2];
+		my$div=int(($end-$start) / $cutL);
+		my$mod=($end-$start) % $cutL;
+		my$info="";
+		for (my$i=3;$i<scalar@tab;$i++)
+			{ $info.=$tab[$i]."\t"; }
+		chop $info;
+		my$i=0;
+		if ($c_opt{"keepLast"} && ($mod<$c_opt{"minL"})) {
+			while ($i<($div-1)) {
+				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+(($i+1)*$cutL))."\t";
+				if ($info) { $line2 .= $info; }
+				else { chop $line2; }
+				print OUT $line2."\n";
+				$i++;
+				}
+			if ($c_opt{"keepLast"} eq "merge") {
+				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".$end."\t";
+				if ($info) { $line2 .= $info; }
+				else { chop $line2; }
+				}
+			else {
+				my$lastI = $end-($start+($i*$cutL));
+				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+($i*$cutL)+int($lastI/2))."\t";
+				if ($info) { $line2 .= $info; }
+				else { chop $line2; }
+				print OUT $line2."\n";
+				$line2 = $tab[0]."\t".($start+($i*$cutL)+int($lastI/2))."\t".$end."\t";
+				if ($info) { $line2 .= $info; }
+				else { chop $line2; }
+				}
+			print OUT $line2."\n";
+			}
+		else {
+			while ($i<$div) {
+				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+(($i+1)*$cutL))."\t";
+				if ($info) { $line2 .= $info; }
+				else { chop $line2; }
+				print OUT $line2."\n";
+				$i++;
+				}
+			if ($mod>=$c_opt{"minL"}) {
+				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".$end."\t";
+				if ($info) { $line2 .= $info; }
+				else { chop $line2; }
+				print OUT $line2."\n";
+				}
+			}
+		}
+	else {
+		foreach my$i (@tab)
+			{ $line2 .= $i."\t"; }
+		chop $line2;
+		print OUT $line2."\n";
+		}
+	}
+close(BED);
+close(OUT);
 
 }
 
@@ -3129,7 +3252,7 @@ my($file) = @_;
 my(%Mut);			#$covbed{$chr}{$start} = $end;
 open(BED, $file) || die "can't open file $file\n";
 while (my$line=<BED>) {
-	unless($line =~ /^\s*$/) {
+	unless($line =~ /^\s*$/ || $line =~ /^#/) {
 		$line =~ s/\s+$//;
 		my@tab = split(/\t/,$line);
 		$tab[0] =~ s/chr//i;
