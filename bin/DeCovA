@@ -616,7 +616,7 @@ if ($bedReport) {
 	}
 
 if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) {
-	unless (@Files) { die "no .bam files provided\n"; }
+	if (!@Files && !@raw_cov_file) { die "no .bam files (or coverage file) provided\n"; }
 	}
 
 #unless ($mutFile || ($CNV_tool && $bed_cov_file)) {
@@ -667,14 +667,16 @@ if (!$bed_cov_file) {
 				}
 			}
 		close COV;
-		print $firstLine;
+		#print $firstLine;
 		chomp $firstLine;
 		my@tab = split(/\t/,$firstLine);
 		foreach my$i (0..$#tab) {
 			if ($tab[$i] =~ /^Depth_for_(.+)/) {
 				push(@Files,$1);
+				$fName{$1} = $1;
 				$sName2{$1} = $1;
 				$gatkIdx{$1} = $i;
+				$gatk = 1;
 				}
 			}
 		$keepCov = "";
@@ -760,6 +762,7 @@ if (!$bed_cov_file) {
 					}
 				else { die "GATK cmd not found\n"; } #$gatk = ""; }
 				}
+			foreach (@Files) { $gatkIdx{$_} = ""; }	#to initialize
 			}
 		if ($mbq && !$gatk) { die "need GATK in order to filter for mbq\n"; }
 
@@ -932,8 +935,8 @@ if ($raw_cov_file[0]) {
 	system "$cmd";
 	}
 else {
-	if (@chromLength) {
-		$chromLength = "$outdir/chromLength.txt";
+	if (@chromLength && !$gatk) {	
+		$chromLength = "$outdir/chromLength.txt";		#used by bedtools
 		open (my$fhOut, ">", "$chromLength");
 		foreach(@chromLength) { print $fhOut "$_\n"; }
 		close $fhOut;
@@ -1204,7 +1207,7 @@ my(%allInterval,$intervalName,%headers);
 
 if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
 
-	foreach (@Files) { $gatkIdx{$_} = ""; }	#to initialize
+
 
 	if (scalar(keys%{ $Regions{"raw"} }) > 0) {
 		#merge intervals from %Regions (for example, if several transcripts for the same gene)
@@ -3948,6 +3951,16 @@ else {
 		}
 	}
 close COV;
+
+##if some regions not present in cov file, put depth at 0
+foreach my$start (@Starts) {
+	my$pos = $start;
+	while ($pos <= $Intervals{$start}) {
+		unless (exists $allDepth{$pos})
+			{  $allDepth{$pos} = 0; }
+		$pos++;
+		}
+	}
 
 #cov-domains:
 my%notCov;		#for cov-domains: foreach threshold, for regions < threshold: $notCov{$chr}{$start} = $end
