@@ -6,6 +6,7 @@
 
 ##thomas Simonet, CHU de Lyon, 2014
 ##Pierre-Antoine Rollat-Farnier, CHU de Lyon, 2015
+##Vincent Bardel, 2016
 
 ##This program is a free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 #This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
@@ -60,7 +61,7 @@ GetOptions (\%opt,
 	"bedReport",
 	"Reseq=f",
 	"cov_fields|F=s@",
-	"reports",
+	"geneReport",
 	"summary=s",
 	"keepCov|k",
 	"raw_cov=s@",
@@ -141,7 +142,8 @@ outputs:
 	-B / --covBed : will output cov of bed intervals
 	-C / --CNV : will output CNV foreach bed intervals
 	--Reseq : float [0-1] : print region if cov < value (def: do not print)
-	--reports : will print all uncovered intervals (genomic coordinates) in 1 txt file per transcript (default: no)
+	--geneReport : will print all uncovered genomic intervals (within gene region) in 1 txt file per sample (default: no)
+	--bedReport : will print all uncovered intervals (within bed intervals) in 1 txt file per sample (default: no)
 	--summary : Y/N : will print summary txt file (default: yes if -S -A -X -i)
 	-k / --keepCov : do not erase coverage file at the end of the process
 parameters:
@@ -177,7 +179,6 @@ parameters:
 	-F / --cov_fields : fields foreach intervals in covBed (comma separated), among: min, max, tot, mean, median, cov 
 		(default: min,mean,cov)
 	--split_bed : split overlapping bed intervals for Cov and CNV analyses
-	--bedReport : will print all uncovered intervals (genomic coordinates) in 1 txt file per sample (default: no)
   *CNV_detect param:
 	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 0.1)
 	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 0.15)
@@ -369,9 +370,8 @@ if (exists $opt{Lbed}) {
 	}
 
 my$bedReport = 0;
-if (exists $opt{bedReport}) {
-	$bedReport = 1;
-	}
+if (exists $opt{bedReport})
+	{ $bedReport = 1; }
 
 my$spacer = 0;
 
@@ -430,7 +430,7 @@ if (exists $opt{genePlot})
 	{ $coordPlot = 1; }
 
 my$printReports = "";
-if (exists $opt{reports})
+if (exists $opt{geneReport})
 	{ $printReports = 1; }
 
 my$printSummary = "";
@@ -449,6 +449,9 @@ my@raw_cov_file = ();
 if (exists $opt{raw_cov}) {
 	foreach (@{ $opt{raw_cov} }) {
 		push(@raw_cov_file, split(/,/, $_));
+		}
+	foreach (@raw_cov_file) {
+		unless ( -s "$_" ) { die "$_ cov file not found or empty\n"; }
 		}
 	}
 
@@ -652,6 +655,7 @@ else { die "R tools not installed or not found\n"; }
 my(%sName,%sName2,%gatkIdx); 
 my(@ChromOrder,@chromLength,%chromLength,%withChr,%faIdx);
 my$bedTversion = "";
+
 if (!$bed_cov_file) {
 
 	if ($raw_cov_file[0]) {
@@ -863,7 +867,9 @@ if (!$bed_cov_file) {
 					$chromLength{$tab[0]} = $tab[1];
 					}
 				}
-			else { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
+			else { 
+				if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
+				}
 			}
 		else { die "reference genome.fa required\n"; }
 		#bam index
@@ -881,8 +887,20 @@ if (!$bed_cov_file) {
 						if ($_ =~ /^\w/) { push(@{ $faIdx{$file} }, $_); }
 						}
 					}
+
 				}
-			else { die "samtools not installed or not found\n"; }
+			else {
+				if (@ChromOrder) {
+					foreach my$file (@Files) {
+						foreach (@ChromOrder)
+							{ push(@{ $faIdx{$file} }, $_); }
+						}
+					}
+				else {
+					if ($CNV_tool && $CNV_opt{"RefDepth"} eq "tot")
+						{ die "cannot determine chr idx of bam files\n"; }
+					}
+				}
 			}
 
 		}
@@ -923,7 +941,7 @@ else {
 	else { $outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 	}
 mkdir($outdir);
-if ($byS || $printReports) { 
+if ($byS || $printReports || $bedReport) { 
 	foreach (@Files)
 		{ mkdir("$outdir/cov\_$sName2{$_}"); }
 	}
@@ -1246,9 +1264,45 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 		$intervalName = "original";
 		}
 
-	#perform depth analysis
+	if ($raw_cov_file[0]) {	
+		
+		##check that all intervals are present in cov.file
+		my%Intervals = readBed("$outdir/$intervalName.bed");	#$covbed{$chr}{$start} = $end;	transform in 1-based coord
+		foreach my$chr (keys%Intervals) {
+			my$withinChr = 0;
+			my@Starts = sort{$a<=>$b}(keys%{ $Intervals{$chr} });
+			my$s = 0;				#idx of @Starts
+			my$pos = $Starts[$s];			#current position
+			open(COV, "$raw_cov_file[0]") || die "can't open file $raw_cov_file[0]\n";
+			while (my$line=<COV>) {
+				chomp $line;
+				my@tab = split(/\t/,$line);
+				$tab[0] =~ s/chr//;
+				my@tab2 = split(/:/,$tab[0]);
+				if ($tab2[0] eq $chr) {
+					$withinChr = 1;
+					if ( $tab2[1] < $Starts[$s] ) { next; }
+					else {
+						if ( $tab2[1] <= $Intervals{$chr}{$Starts[$s]} ) {
+							if ($tab2[1] == $pos) { $pos++; }
+							else { die "intervals to be analysed not present in cov file ( $chr:$pos )\n"; }
+							}
+						else { 
+							$s++;
+							$pos = $Starts[$s];
+							}
 
-	unless ($raw_cov_file[0]) {		#"$outdir/$outName"
+						}
+					}
+				else {
+					if ($withinChr) { last; }
+					}
+				}
+			}
+		}
+
+	 else {
+		##perform depth analysis
 		if ($gatk) {
 			my($r1,$r2) = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,\%sName,$outdir,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$threads,$gatk,$picard,$genom);
 			%gatkIdx = %$r1;
@@ -1270,6 +1324,19 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($wUTR == $U
 
 	my%NMnotCov;	##$NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
 	my%NM_UC;	##NM_UC{$NM}{$threshold} = 1 if 1 region not cov
+
+	if($printReports) {
+		foreach (@Files) {
+			open(OUT, ">", "$outdir/cov\_$sName2{$_}/$outfile$sName2{$_}\_geneReport.txt") || die "can't create file $outdir/cov\_$sName2{$_}/$outfile$sName2{$_}\_geneReport.txt\n";
+			print OUT "## SAMPLE : $sName2{$_}\n\n";
+			if ($pThreshold) {
+				print OUT "## depth threshold : $pThreshold x\n\n";
+				}
+			close OUT;
+			}
+		}
+
+
 	##foreach gene:
 	foreach my$gene (sort(keys%Genes)) {
 
@@ -1873,6 +1940,8 @@ if ($keepCov) {
 		close $fhIn; close $fhOut;
 		}	
 	}
+
+if (-e "$outdir/chromLength.txt") { unlink "$outdir/chromLength.txt"; }
 
 if ($gatk) {
 	unlink glob "$outdir/all.cov*"; 
@@ -3953,14 +4022,14 @@ else {
 close COV;
 
 ##if some regions not present in cov file, put depth at 0
-foreach my$start (@Starts) {
-	my$pos = $start;
-	while ($pos <= $Intervals{$start}) {
-		unless (exists $allDepth{$pos})
-			{  $allDepth{$pos} = 0; }
-		$pos++;
-		}
-	}
+#foreach my$start (@Starts) {
+#	my$pos = $start;
+#	while ($pos <= $Intervals{$start}) {
+#		unless (exists $allDepth{$pos})
+#			{  $allDepth{$pos} = 0; }
+#		$pos++;
+#		}
+#	}
 
 #cov-domains:
 my%notCov;		#for cov-domains: foreach threshold, for regions < threshold: $notCov{$chr}{$start} = $end
@@ -4100,7 +4169,8 @@ foreach my$startR (keys%NM_Ex)
 	{ $nExon+=scalar(keys%{ $NM_Ex{$startR} }); }
 my@startReg = sort{$a<=>$b}keys%Regions;
 
-my$txt1 = "\nsample: $sName2\ngene: $gene\ntranscript: $NM\ncoding sequence: chr $chr : $NMstartCod - $NMendCod\n";
+#my$txt1 = "\nsample: $sName2\ngene: $gene\ntranscript: $NM\ncoding sequence: chr $chr : $NMstartCod - $NMendCod\n";
+my$txt1 = "\ngene: $gene\ntranscript: $NM\ncoding sequence: chr $chr : $NMstartCod - $NMendCod\n";
 my%txt;
 my($geneL,%geneUC,%NM_UC);
 foreach my$threshold (@Thresholds) {
@@ -4211,18 +4281,23 @@ foreach my$threshold (@Thresholds) {
 if($printReports) {
 	if ($pThreshold) {
 		if (exists $NMnotCov{$NM}{$file2}{$pThreshold}) {
-			open(OUT, ">$outdir/cov\_$sName2/$outfile$sName2\_$gene\_$NM.txt") || die "can't create file $outdir/$outfile$file2\_$NM.txt\n";
-			print OUT $txt1; 
-			foreach my$threshold (@Thresholds) {
-				print OUT "\ndepth threshold = $threshold\n\n";
-				print OUT "not covered over ".sprintf("%.1f",$NM_UC{$threshold})."% of exons\n\n";
-				if (exists $txt{$threshold}) { print OUT $txt{$threshold}; }
-				}
+			#open(OUT, ">$outdir/cov\_$sName2/$outfile$sName2\_$gene\_$NM.txt") || die "can't create file $outdir/$outfile$file2\_$NM.txt\n";
+			open(OUT, ">>", "$outdir/cov\_$sName2/$outfile$sName2\_geneReport.txt") || die "can't create file $outdir/cov\_$sName2/$outfile$sName2\_geneReport.txt\n";
+			print OUT $txt1;
+			#foreach my$threshold (@Thresholds) {
+			#	print OUT "\ndepth threshold = $threshold\n\n";
+			#	print OUT "not covered over ".sprintf("%.1f",$NM_UC{$threshold})."% of exons\n\n";
+			#	if (exists $txt{$threshold}) { print OUT $txt{$threshold}; }
+			#	}
+			print OUT "not covered over ".sprintf("%.1f",$NM_UC{$pThreshold})."% of exons\n\n";
+			if (exists $txt{$pThreshold}) { print OUT $txt{$pThreshold}; }
 			close OUT;
 			}
 		}
 	else {
-		open(OUT, ">$outdir/cov\_$sName2/$outfile$sName2\_$gene\_$NM.txt") || die "can't create file $outdir/$outfile$file2\_$NM.txt\n";
+		#open(OUT, ">$outdir/cov\_$sName2/$outfile$sName2\_$gene\_$NM.txt") || die "can't create file $outdir/$outfile$file2\_$NM.txt\n";
+		open(OUT, ">>", "$outdir/cov\_$sName2/$outfile$sName2\_geneReport.txt") || die "can't create file $outdir/cov\_$sName2/$outfile$sName2\_geneReport.txt\n";
+		print OUT $txt1;
 		foreach my$threshold (@Thresholds) {
 			print OUT "\ndepth threshold = $threshold\n\n";
 			print OUT "not covered over ".sprintf("%.1f",$NM_UC{$threshold})."% of exons:\n\n";
@@ -6639,7 +6714,7 @@ if ($toReseq) { close OUT2; }
 
 if ($bedReport && $threshold) {
 	foreach my$file (@Files) {
-		open(OUT, ">$outdir/$bedName.$sName2{$file}.notCov.txt") || die "can't create file $outdir/$bedName.$sName2{$file}.notCov.bed\n";
+		open(OUT, ">$outdir/cov\_$sName2{$file}/$bedName.$sName2{$file}.notCov.txt") || die "can't create file $outdir/cov\_$sName2{$file}/$bedName.$sName2{$file}.notCov.bed\n";
 		print OUT "depthAnd Coverage report on $bedName.bed for $sName2{$file} sample\n\n";
 		print OUT "total length of bed : $TotLength bp\n\n";
 		print OUT "total cov >=$threshold"."x : ".100*(sprintf("%.3f", ($TotByCov{$file}/$TotLength)))." %\n\n";
