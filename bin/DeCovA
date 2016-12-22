@@ -454,6 +454,7 @@ if (exists $opt{raw_cov}) {
 		unless ( -s "$_" ) { die "$_ cov file not found or empty\n"; }
 		}
 	}
+if (@Files && @raw_cov_file) { die "must choose between providing bam files or cov files\n"; }
 
 
 my(@Thresholds,$pThreshold);
@@ -1281,23 +1282,26 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 				my@tab2 = split(/:/,$tab[0]);
 				if ($tab2[0] eq $chr) {
 					$withinChr = 1;
-					if ( $tab2[1] < $Starts[$s] ) { next; }
-					else {
-						if ( $tab2[1] <= $Intervals{$chr}{$Starts[$s]} ) {
-							if ($tab2[1] == $pos) { $pos++; }
-							else { die "intervals to be analysed not present in cov file ( $chr:$pos )\n"; }
+					my$ok=1;
+					while ($ok) {
+						if ( $tab2[1] < $Starts[$s] ) { $ok=0; }
+						else {
+							if ( $tab2[1] <= $Intervals{$chr}{$Starts[$s]} ) {
+								if ($tab2[1] == $pos) { $pos++; $ok=0; }
+								else { die "intervals to be analysed not present in cov file ( $chr:$pos )\n"; }
+								}
+							else { 
+								$s++;
+								$pos = $Starts[$s];
+								}
 							}
-						else { 
-							$s++;
-							$pos = $Starts[$s];
-							}
-
 						}
 					}
 				else {
 					if ($withinChr) { last; }
 					}
 				}
+			unless ($withinChr) { die "intervals to be analysed not present in cov file ( $chr )\n"; }
 			}
 		}
 
