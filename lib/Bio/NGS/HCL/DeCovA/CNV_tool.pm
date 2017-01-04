@@ -853,10 +853,57 @@ if ($CNVgraph) {
 	}
 
 
+##summary
+open (OUT,">$outdir/CNV.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
+print OUT "CNV analysis\n";
+print OUT "\nparameters:
+	intervals normalization: $norm
+	intervals kept if NO more than ".(100*$seuil_region)."% of samples are CNVs
+	samples kept if NO more than ".(100*$seuil_patient)."% of intervals are CNVs
+	intervals detected as deletion if mean depth below $seuil_deletion of $norm
+	intervals detected as duplicatiuon if mean depth above $seuil_duplication of $norm
+";
+
+print OUT "\nintervals : ".scalar@Regions."\n";
+print OUT "\nintervals discarded:\n";
+my$N_minDP=0; my$N_noData=0; my$N_CNV_Recurrent=0; my$N_lowCov=0;
+foreach my$r (0..$#Regions) {
+	if(defined $Regions[$r]{"Appel"}) {
+		if ($Regions[$r]{"Appel"} eq "No_Data") { $N_noData++; }
+		elsif ($Regions[$r]{"Appel"} eq "CNV_Recurrent") { $N_CNV_Recurrent++; }
+		elsif ($Regions[$r]{"Appel"} eq "<$minDP\x") { $N_minDP++; }
+		elsif ($Regions[$r]{"Appel"} eq "Couverture_Faible")  { $N_lowCov++; }
+		}
+	}
+print OUT "\tnot enough data: $N_noData\n";
+print OUT "\tCNV_Recurrent: $N_CNV_Recurrent\n";
+if ($minDP) { print OUT "\taverage depth < $minDP : $N_minDP\n"; }
+if ($minCov) { print OUT "\tcoverage < $minCov : $N_minDP\n"; }
+
+print OUT "\nsamples discarded:\n";
+foreach my$file (@Files) {
+		if ($Patients{$file}{"ecarte"}) { print OUT "\t$sampleName{$file}\n"; }
+		}
+
+foreach my$file (@Files) {
+	unless($Patients{$file}{"ecarte"}) { 
+		my$dup=0; my$del=0;
+		foreach (keys%{ $Result2{$file} }) {
+			if ($Result2{$file}{$_} eq "DUP") { $dup++; }
+			elsif ($Result2{$file}{$_} eq "DEL") { $del++; }
+			}
+		print OUT "\n$sampleName{$file} : 
+		DUP: $dup
+		DEL: $del\n";
+		}
+	}
+close OUT;
+
 
 return(\%Patients,\%Result3);
 
 }
+
 
 
 ####################

@@ -148,10 +148,10 @@ outputs:
 	-P / --covPlot : will perform covPlots
 	-B / --covBed : will output cov of bed intervals
 	-C / --CNV : will output CNV foreach bed intervals
-	--Reseq : float [0-1] : print region if cov < value (def: do not print)
+	--Reseq : float [0-1] : print bed interval if cov < value (def: do not print)
 	--geneReport : will print all uncovered genomic intervals (within gene region) in 1 txt file per sample (default: no)
 	--bedReport : will print all uncovered intervals (within bed intervals) in 1 txt file per sample (default: no)
-	--summary : Y/N : to print summary txt file (default: yes if -S -A -X)
+	--summary : (Y/N) : to print summary txt file (default: yes if -S -A -X)
 	-k / --keepCov : do not erase coverage file at the end of the process
 	--keepBed : do not erase bed file inferred from gene list, at the end of the process
 parameters:
@@ -189,11 +189,12 @@ parameters:
 	--split_bed : split overlapping bed intervals for Cov and CNV analyses
 	--cut_bed : cut bed intervals in shorter fragments: cutL:x,minL:y,maxL:z,keepLast:s
 				cutL : length of segmentation (def: 150)
-				minL : min length required to keep the last interval, after segmentation (def: --cutL/5)
+				minL : min length required to keep the last interval, after segmentation (def: --cutL/2)
 				maxL : length above which bed intervals will be segmented, in N segments of \"cutL\" length (def: as --cutL)
-				keepLast : if last interval shorter than minL, how to keep it:
+				keepLast : if last interval shorter than minL :
 						enter m (merge) if want that last two ones are simply merged
 						enter h (half) if want that last two ones are output with length = half of their sum
+						enter n if want to through it out
   *CNV_detect param:
 	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 0.1)
 	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 0.15)
@@ -225,6 +226,7 @@ parameters:
 	\n";
 }
 
+##inputs:
 
 #-d: directory
 my@dir = ();
@@ -345,6 +347,7 @@ if (exists $opt{id}) {
 		{ print "\t".$id."\n"; }
 	}
 
+##refseq gene analysis param
 my$nonCod = "";
 if (exists $opt{nonCoding})
 	{ $nonCod = 1; }
@@ -434,7 +437,6 @@ if (exists $opt{UDtxt}) {
 		}
 	else { $UpInTxt = $upstream; $DownInTxt = $downstream; }
 	}
-
 
 my$Expand = "";
 if (exists $opt{expand2bed})
@@ -651,24 +653,33 @@ my$cutBed = "";
 my%cutB_opt = ();
 if (exists $opt{cut_bed}) { 
 	$cutBed = 1;
-	$cutB_opt{"cutL"}=150; $cutB_opt{"maxL"}=150; $cutB_opt{"minL"}=30; $cutB_opt{"keepLast"}="merge";
+	$cutB_opt{"cutL"}=150; $cutB_opt{"maxL"}=150; $cutB_opt{"minL"}=75; $cutB_opt{"keepLast"}="merge";
 	if ($opt{cut_bed}) {	## cutL:x,minL:y,maxL:z,keepLast:s
-		my@cutB_opt = split(/,/,$opt{cut_bed});
-		foreach my$o (@cutB_opt) {
+		my@cutB_arg = split(/,/,$opt{cut_bed});
+		my$minL=""; my$maxL="";
+		foreach my$a (@cutB_arg) {
 			my$ok=0;
-			foreach my$k (keys%cutB_opt) {
-				if ($o =~ /$k:(.+)/) {
-					if ($k eq "keepLast") {
-						if ($1 =~ /^m/i) { $cutB_opt{"$k"} = "merge"; }
-						elsif  ($1 =~ /^h/i) { $cutB_opt{"$k"} = "half"; }
-						else { die "cut_bed opt \"keepLast\" not recognized ($1?) (h or m)\n"; }
+			foreach my$o (keys%cutB_opt) {
+				if ($a =~ /$o:(.+)/) {
+					if ($o eq "minL") { $minL=1; }
+					if ($o eq "maxL") { $maxL=1; }
+					if ($o eq "keepLast") {
+						if ($1 =~ /^m/i) { $cutB_opt{"$o"} = "merge"; }
+						elsif  ($1 =~ /^h/i) { $cutB_opt{"$o"} = "half"; }
+						elsif  ($1 =~ /^n/i) { $cutB_opt{"$o"} = ""; }
+						else { die "cut_bed opt \"keepLast\" not recognized ($1?) (\"h\" , \"m\" or \"n\")\n"; }
 						}
-					else { $cutB_opt{"$k"} = $1; }
+					else { $cutB_opt{"$o"} = $1; }
 					$ok=1;
 					}
+
+				
+
 				}
-			unless ($ok) { die "cut_bed opt not recognized ($o?)\n"; }
+			unless ($ok) { die "cut_bed opt not recognized ($a?)\n"; }
 			}
+		unless ($minL) { $cutB_opt{"minL"} = int($cutB_opt{"cutL"}/2); }
+		unless ($maxL) { $cutB_opt{"maxL"} = $cutB_opt{"cutL"}; }
 		}
 	}
 if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry\n";}
@@ -727,7 +738,7 @@ if ($CNV_tool && !$bed_cov_file) {
 	$cov_Bed=1;
 	}
 
-if ($bedReport) {
+if ($bedReport || $toReseq) {
 	$cov_Bed=1;
 	}
 
@@ -1110,7 +1121,11 @@ if ($bedFile) {
 		$bedFile = $splitBed;
 		}
 	elsif ($cutBed) {
-		print "split overlapping intervals from $bedFile\n";
+		print "cut intervals from $bedFile 
+	(above $cutB_opt{maxL} bp ; in $cutB_opt{cutL} bp pieces , if longer than  $cutB_opt{minL} bp , else ";
+	if ($cutB_opt{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
+	elsif ($cutB_opt{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
+	else { print "through it)\n"; }
 		$cutBed = "$outdir/$bedName";
 		$cutBed =~ s/.bed$//;
 		$cutBed .= "_cut".$cutB_opt{"cutL"}.".bed";
@@ -1238,108 +1253,105 @@ else  { @hashSub = notAnalysedN(\%Genes,\%NMgene,\%{ $Regions{"raw"} },\%{ $NM_E
 %{ $RegBed{"raw"} } = %{$hashSub[3]};
 
 
-if ($Sum || $allS || $byS || $printSummary || $printReports) {
+#transposition and splicing, for exons of transcripts: 
+#1st position of 1st exon = 0, 
+#for end of exon = x, start of next exon = x
+@hashSub = transposeReg($spacer,\%{ $Regions{"raw"} });
+$spacer = $hashSub[0];
+%NMlength = %{$hashSub[1]};			#$NMlength{$NM} = $end of region (for start of region = 0)
+%{ $Regions{"coord0"} } = %{$hashSub[2]};	#$Regions{"coord0"}{$NM}{start of region} = $end of region (for start of region = 0)
+	
+#$NM_Ex{"coord0"}{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+#$NMstartCod{"coord0"}{$NM} = $start of coding sequence (for start of region = 0)
+#$NMendCod{"coord0"}{$NM} = $end of coding sequence (for start of region = 0)
+if ($All) {
+	foreach my$gene(keys%{ $Regions{"coord0"} }) {
+		foreach my$NM (@{ $geneNM{$gene} }) {
+			@hashSub = transposeNM($wUTR,$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%{ $Regions{"raw"}{$NMchr{$NM}}{$gene} },\%{ $Regions{"coord0"}{$gene} },\%{ $NM_Ex{"raw"}{$NM} }); 
+			$NMstartCod{"coord0"}{$NM} = $hashSub[0];
+			$NMendCod{"coord0"}{$NM} = $hashSub[1];
+			%{ $NM_Ex{"coord0"}{$NM} } = %{$hashSub[2]};
+			}
+		}
+	}
+else {
+	foreach my$NM (keys%{ $Regions{"coord0"} }) { 
+		@hashSub = transposeNM($wUTR,$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} },\%{ $Regions{"coord0"}{$NM} },\%{ $NM_Ex{"raw"}{$NM} });
+		$NMstartCod{"coord0"}{$NM} = $hashSub[0];
+		$NMendCod{"coord0"}{$NM} = $hashSub[1]; 
+		%{ $NM_Ex{"coord0"}{$NM} } = %{$hashSub[2]};
+		}
+	}
 
-	#transposition and splicing, for exons of transcripts: 
-	#1st position of 1st exon = 0, 
-	#for end of exon = x, start of next exon = x
-	@hashSub = transposeReg($spacer,\%{ $Regions{"raw"} });
-	$spacer = $hashSub[0];
-	%NMlength = %{$hashSub[1]};			#$NMlength{$NM} = $end of region (for start of region = 0)
-	%{ $Regions{"coord0"} } = %{$hashSub[2]};	#$Regions{"coord0"}{$NM}{start of region} = $end of region (for start of region = 0)
-		
-	#$NM_Ex{"coord0"}{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
-	#$NMstartCod{"coord0"}{$NM} = $start of coding sequence (for start of region = 0)
-	#$NMendCod{"coord0"}{$NM} = $end of coding sequence (for start of region = 0)
-	if ($All) {
-		foreach my$gene(keys%{ $Regions{"coord0"} }) {
-			foreach my$NM (@{ $geneNM{$gene} }) {
-				@hashSub = transposeNM($wUTR,$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%{ $Regions{"raw"}{$NMchr{$NM}}{$gene} },\%{ $Regions{"coord0"}{$gene} },\%{ $NM_Ex{"raw"}{$NM} }); 
-				$NMstartCod{"coord0"}{$NM} = $hashSub[0];
-				$NMendCod{"coord0"}{$NM} = $hashSub[1];
-				%{ $NM_Ex{"coord0"}{$NM} } = %{$hashSub[2]};
+#make arrays for starts of non coding exons, before and after coding exons
+#and arrays for starts of extragenic regions, before and after exons
+if ($All)
+	{ @hashSub = designExons1($wUTR,\%Genes,\%geneNM,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} }); }
+else
+	{ @hashSub = designExons2($wUTR,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} }); }
+#return(\%introns,\%UTR,\%Cod);
+%{ $intron{"coord0"} } = %{$hashSub[0]};	# $intron{"coord0"}{$NM}{$startIntron} = $endIntron (for start of region = 0)
+%{ $UTR{"coord0"} } = %{$hashSub[1]};		# $UTR{"coord0"}{$NM}{$startUTR} = $endUTR (for start of region = 0)
+%{ $Cod{"coord0"} } = %{$hashSub[2]};		# $Cod{"coord0"}{$NM}{$startCod} = $endCod (for start of region = 0)
+
+if ($mutFile)
+	{ %{ $RegMut{"raw"} } = linkMut(\%{ $Regions{"raw"} },\%Mut); }	#$RegMut{$NM}{$startReg}{$startMut} = $infoMut
+
+#$RegBed{"coord0"}{$NM}{$startBed00} = $endBed00 (start of Region=0 )
+#$RegMut{"coord0"}{$NM}{$mut00} = $infoMut (start of Region=0 )
+@hashSub = transposeBed(\%{ $Regions{"raw"} },\%{ $Regions{"coord0"} },\%{ $RegBed{"raw"} },\%{ $RegMut{"raw"} });
+%{ $RegBed{"coord0"} } = %{$hashSub[0]};
+%{ $RegMut{"coord0"} } = %{$hashSub[1]};
+
+foreach my$gene (keys%Genes) {
+	my@NMs =  @{ $geneNM{$gene} };
+	my$chr = $NMchr{$NMs[0]};
+	my$sens = $NMsens{$NMs[0]};
+	if ($Rev && $sens eq "-") {
+		if ($All) {
+			@hashSub = ReverseGene1($gene,$NMlength{$gene},\%{ $Regions{"coord0"}{$gene} },\%{ $RegBed{"coord0"}{$gene} },\%{ $RegMut{"coord0"}{$gene} });
+			%{ $Regions{"rev"}{$gene} } = %{$hashSub[0]};
+			%{ $RegBed{"rev"}{$gene} } = %{$hashSub[1]};
+			%{ $RegMut{"rev"}{$gene} } = %{$hashSub[2]};
+			foreach my$NM (@NMs) {
+				@hashSub = ReverseGene2($NM,$NMlength{$gene},\%{ $Regions{"coord0"}{$gene} },\%{ $NM_Ex{"coord0"}{$NM} },\%{ $intron{"coord0"}{$NM} },\%{ $UTR{"coord0"}{$NM} },\%{ $Cod{"coord0"}{$NM} });
+				%{ $NM_Ex{"rev"}{$NM} } = %{$hashSub[0]};
+				%{ $intron{"rev"}{$NM} } = %{$hashSub[1]};
+				%{ $UTR{"rev"}{$NM} } = %{$hashSub[2]};
+				%{ $Cod{"rev"}{$NM} } = %{$hashSub[3]};
+				}
+			}
+		else {
+			foreach my$NM (@NMs) {
+				@hashSub = ReverseNMs($NM,$NMlength{$NM},\%{ $Regions{"coord0"}{$NM} },\%{ $NM_Ex{"coord0"}{$NM} },\%{ $intron{"coord0"}{$NM} },\%{ $UTR{"coord0"}{$NM} },\%{ $Cod{"coord0"}{$NM} },\%{ $RegBed{"coord0"}{$NM} },\%{ $RegMut{"coord0"}{$NM} });
+				%{ $Regions{"rev"}{$NM} } = %{$hashSub[0]};
+				%{ $NM_Ex{"rev"}{$NM} } = %{$hashSub[1]};
+				%{ $intron{"rev"}{$NM} } = %{$hashSub[2]};
+				%{ $UTR{"rev"}{$NM} } = %{$hashSub[3]};
+				%{ $Cod{"rev"}{$NM} }= %{$hashSub[4]};
+				%{ $RegBed{"rev"}{$NM} } = %{$hashSub[5]};
+				%{ $RegMut{"rev"}{$NM} } = %{$hashSub[6]};
 				}
 			}
 		}
 	else {
-		foreach my$NM (keys%{ $Regions{"coord0"} }) { 
-			@hashSub = transposeNM($wUTR,$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} },\%{ $Regions{"coord0"}{$NM} },\%{ $NM_Ex{"raw"}{$NM} });
-			$NMstartCod{"coord0"}{$NM} = $hashSub[0];
-			$NMendCod{"coord0"}{$NM} = $hashSub[1]; 
-			%{ $NM_Ex{"coord0"}{$NM} } = %{$hashSub[2]};
-			}
-		}
-
-	#make arrays for starts of non coding exons, before and after coding exons
-	#and arrays for starts of extragenic regions, before and after exons
-	if ($All)
-		{ @hashSub = designExons1($wUTR,\%Genes,\%geneNM,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} }); }
-	else
-		{ @hashSub = designExons2($wUTR,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} }); }
-	#return(\%introns,\%UTR,\%Cod);
-	%{ $intron{"coord0"} } = %{$hashSub[0]};	# $intron{"coord0"}{$NM}{$startIntron} = $endIntron (for start of region = 0)
-	%{ $UTR{"coord0"} } = %{$hashSub[1]};		# $UTR{"coord0"}{$NM}{$startUTR} = $endUTR (for start of region = 0)
-	%{ $Cod{"coord0"} } = %{$hashSub[2]};		# $Cod{"coord0"}{$NM}{$startCod} = $endCod (for start of region = 0)
-
-	if ($mutFile)
-		{ %{ $RegMut{"raw"} } = linkMut(\%{ $Regions{"raw"} },\%Mut); }	#$RegMut{$NM}{$startReg}{$startMut} = $infoMut
-
-	#$RegBed{"coord0"}{$NM}{$startBed00} = $endBed00 (start of Region=0 )
-	#$RegMut{"coord0"}{$NM}{$mut00} = $infoMut (start of Region=0 )
-	@hashSub = transposeBed(\%{ $Regions{"raw"} },\%{ $Regions{"coord0"} },\%{ $RegBed{"raw"} },\%{ $RegMut{"raw"} });
-	%{ $RegBed{"coord0"} } = %{$hashSub[0]};
-	%{ $RegMut{"coord0"} } = %{$hashSub[1]};
-
-	foreach my$gene (keys%Genes) {
-		my@NMs =  @{ $geneNM{$gene} };
-		my$chr = $NMchr{$NMs[0]};
-		my$sens = $NMsens{$NMs[0]};
-		if ($Rev && $sens eq "-") {
-			if ($All) {
-				@hashSub = ReverseGene1($gene,$NMlength{$gene},\%{ $Regions{"coord0"}{$gene} },\%{ $RegBed{"coord0"}{$gene} },\%{ $RegMut{"coord0"}{$gene} });
-				%{ $Regions{"rev"}{$gene} } = %{$hashSub[0]};
-				%{ $RegBed{"rev"}{$gene} } = %{$hashSub[1]};
-				%{ $RegMut{"rev"}{$gene} } = %{$hashSub[2]};
-				foreach my$NM (@NMs) {
-					@hashSub = ReverseGene2($NM,$NMlength{$gene},\%{ $Regions{"coord0"}{$gene} },\%{ $NM_Ex{"coord0"}{$NM} },\%{ $intron{"coord0"}{$NM} },\%{ $UTR{"coord0"}{$NM} },\%{ $Cod{"coord0"}{$NM} });
-					%{ $NM_Ex{"rev"}{$NM} } = %{$hashSub[0]};
-					%{ $intron{"rev"}{$NM} } = %{$hashSub[1]};
-					%{ $UTR{"rev"}{$NM} } = %{$hashSub[2]};
-					%{ $Cod{"rev"}{$NM} } = %{$hashSub[3]};
-					}
-				}
-			else {
-				foreach my$NM (@NMs) {
-					@hashSub = ReverseNMs($NM,$NMlength{$NM},\%{ $Regions{"coord0"}{$NM} },\%{ $NM_Ex{"coord0"}{$NM} },\%{ $intron{"coord0"}{$NM} },\%{ $UTR{"coord0"}{$NM} },\%{ $Cod{"coord0"}{$NM} },\%{ $RegBed{"coord0"}{$NM} },\%{ $RegMut{"coord0"}{$NM} });
-					%{ $Regions{"rev"}{$NM} } = %{$hashSub[0]};
-					%{ $NM_Ex{"rev"}{$NM} } = %{$hashSub[1]};
-					%{ $intron{"rev"}{$NM} } = %{$hashSub[2]};
-					%{ $UTR{"rev"}{$NM} } = %{$hashSub[3]};
-					%{ $Cod{"rev"}{$NM} }= %{$hashSub[4]};
-					%{ $RegBed{"rev"}{$NM} } = %{$hashSub[5]};
-					%{ $RegMut{"rev"}{$NM} } = %{$hashSub[6]};
-					}
-				}
+		if ($All) {
+			%{ $Regions{"rev"}{$gene} } = %{ $Regions{"coord0"}{$gene} };
+			if (exists $RegBed{"coord0"}{$gene}) { %{ $RegBed{"rev"}{$gene} } = %{ $RegBed{"coord0"}{$gene} }; }
+			if (exists $RegMut{"coord0"}{$gene}) { %{ $RegMut{"rev"}{$gene} } = %{ $RegMut{"coord0"}{$gene} }; }
 			}
 		else {
-			if ($All) {
-				%{ $Regions{"rev"}{$gene} } = %{ $Regions{"coord0"}{$gene} };
-				if (exists $RegBed{"coord0"}{$gene}) { %{ $RegBed{"rev"}{$gene} } = %{ $RegBed{"coord0"}{$gene} }; }
-				if (exists $RegMut{"coord0"}{$gene}) { %{ $RegMut{"rev"}{$gene} } = %{ $RegMut{"coord0"}{$gene} }; }
-				}
-			else {
-				foreach my$NM (@NMs) {
-					%{ $Regions{"rev"}{$NM} } = %{ $Regions{"coord0"}{$NM} };
-					if (exists $RegBed{"coord0"}{$NM}) { %{ $RegBed{"rev"}{$NM} } = %{ $RegBed{"coord0"}{$NM} }; }
-					if (exists $RegMut{"coord0"}{$NM}) { %{ $RegMut{"rev"}{$NM} } = %{ $RegMut{"coord0"}{$NM} }; }
-					}
-				}
 			foreach my$NM (@NMs) {
-				if (exists $NM_Ex{"coord0"}{$NM}) { %{ $NM_Ex{"rev"}{$NM} } = %{ $NM_Ex{"coord0"}{$NM} }; }
-				if (exists $intron{"coord0"}{$NM}) { %{ $intron{"rev"}{$NM} } = %{ $intron{"coord0"}{$NM} }; }
-				if (exists $UTR{"coord0"}{$NM}) { %{ $UTR{"rev"}{$NM} } = %{ $UTR{"coord0"}{$NM} }; }
-				if (exists $Cod{"coord0"}{$NM}) { %{ $Cod{"rev"}{$NM} } = %{ $Cod{"coord0"}{$NM} }; }
+				%{ $Regions{"rev"}{$NM} } = %{ $Regions{"coord0"}{$NM} };
+				if (exists $RegBed{"coord0"}{$NM}) { %{ $RegBed{"rev"}{$NM} } = %{ $RegBed{"coord0"}{$NM} }; }
+				if (exists $RegMut{"coord0"}{$NM}) { %{ $RegMut{"rev"}{$NM} } = %{ $RegMut{"coord0"}{$NM} }; }
 				}
+			}
+		foreach my$NM (@NMs) {
+			if (exists $NM_Ex{"coord0"}{$NM}) { %{ $NM_Ex{"rev"}{$NM} } = %{ $NM_Ex{"coord0"}{$NM} }; }
+			if (exists $intron{"coord0"}{$NM}) { %{ $intron{"rev"}{$NM} } = %{ $intron{"coord0"}{$NM} }; }
+			if (exists $UTR{"coord0"}{$NM}) { %{ $UTR{"rev"}{$NM} } = %{ $UTR{"coord0"}{$NM} }; }
+			if (exists $Cod{"coord0"}{$NM}) { %{ $Cod{"rev"}{$NM} } = %{ $Cod{"coord0"}{$NM} }; }
 			}
 		}
 	}
@@ -1760,6 +1772,12 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 	if ($printSummary && ( ($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream) )) {
 		open (OUT, ">$outdir/notCovSummary.txt"); 
 		print OUT "depth threshold: $pThreshold\n";
+		print OUT "coverage analysis
+\ndepth threshold: $pThreshold
+target regions: exons\n";
+		if ($UTRinTxt) { print OUT "\twith UTR\n"; }
+		else { print OUT "\twithout UTR\n"; }
+		if ($lenTxt5 && $lenTxt3) { print OUT "\tpadding out of exons ends: 5': $lenTxt5 bp ; 3':$lenTxt3 bp\n"; }
 		foreach my$gene (sort(keys%Genes)) {
 			print OUT "\n$gene\n"; 
 			foreach my$NM (@{ $geneNM{$gene} }) {
@@ -1829,9 +1847,9 @@ if ( ($printReports || $printSummary) && (($UTRinTxt != $wUTR) || ($lenTxt5 != $
 	## $NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
 	if ($printSummary) {
 		open (OUT, ">$outdir/notCovSummary.txt");
-		print OUT "coverage analysis\n";
-		print OUT "depth threshold: $pThreshold\n";
-		print OUT "target regions: exons\n";
+		print OUT "coverage analysis
+\ndepth threshold: $pThreshold
+target regions: exons\n";
 		if ($UTRinTxt) { print OUT "\twith UTR\n"; }
 		else { print OUT "\twithout UTR\n"; }
 		if ($lenTxt5 && $lenTxt3) { print OUT "\tpadding out of exons ends: 5': $lenTxt5 bp ; 3':$lenTxt3 bp\n"; }
@@ -4708,21 +4726,21 @@ sub maxCov
 {
 my($h1,$h2,$h3) = @_;
 my@Files=@$h1;
-my%NMdepth=%$h2;	#@{ $NMdepth{$file}{$startReg} } = [ cov foreach ordered bp of exon ]
-my%Reg_00 = %$h3;	#$Reg_00{start of region} = $end of region (for start of region = 0)
-#open (OUT1, ">test1");
-my@maxA1;	#for All samples
-my(%maxS1,%maxS2,%maxCovS);#for each sample
+my%NMdepth=%$h2;		#@{ $NMdepth{$file}{$startReg} } = [ cov foreach ordered bp of exon ]
+my%Reg_00 = %$h3;		#$Reg_00{start of region} = $end of region (for start of region = 0)
+
+my$maxCovA = 0;		#for all samples
+my(%maxCovS);		#for each sample
 foreach my$file (@Files) {
+	my$maxD=0;
 	for (my$ex=0;$ex<scalar(keys%Reg_00);$ex++) {
-		foreach my$cov (@{ $NMdepth{$file}{$ex} })
-			{ push( @maxA1, $cov ); push( @{ $maxS1{$file} }, $cov );}
+		foreach my$cov (@{ $NMdepth{$file}{$ex} }) {
+			if ($cov > $maxD) { $maxD = $cov; }
+			if ($cov > $maxCovA) { $maxCovA = $cov; }
+			}
 		}
-	@{ $maxS2{$file} } = sort{$b<=>$a}@{ $maxS1{$file} };
-	$maxCovS{$file} = $maxS2{$file}[0];
+	$maxCovS{$file} = $maxD;
 	}
-my@maxA2 = sort{$b<=>$a}@maxA1;
-my$maxCovA = $maxA2[0];
 return($maxCovA,\%maxCovS);
 }
 
