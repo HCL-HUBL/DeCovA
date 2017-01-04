@@ -79,14 +79,36 @@ my$gonosom_Regions = 0;
 #$bedLines[$i]{$file}{"Cov"}
 #$bedLines[$i]{$file}{"Mean"}
 for my$r (0..$#Regions) {
-	my $region_a_conserver = 0;
+	my $region_a_conserver = 1;
 	if ($minCov) {
 		foreach my$file (@Files) {
 			if ( $Regions[$r]{$file}{"Cov"} >= $minCov)
-				{ $region_a_conserver = 1; last; }
+				{ $region_a_conserver = 0; last; }
 			}
 		}
-	else { $region_a_conserver = 1; }
+	if ($minDP) {
+		my$normDepth = 0;
+		if ($norm eq "med") {
+			my@allDepth = ();
+			foreach my$file (@Files) {
+				push(@allDepth, $Regions[$r]{$file}{"Mean"});
+				}
+			@allDepth = sort{$a<=>$b}@allDepth;
+			if(scalar@allDepth%2)	#odd?
+				{ $normDepth = $allDepth[int(scalar@allDepth/2)]; }
+
+			else				#even 
+				{ $normDepth = ( $allDepth[int(scalar@allDepth/2)-1] + $allDepth[int(scalar@allDepth/2)] )/2; }
+			}
+		else {
+			foreach my$file (@Files) {
+				$normDepth += $Regions[$r]{$file}{"Mean"};
+				}
+			$normDepth /= scalar@Files;
+			}
+		if ( $normDepth < $minDP)
+			{ $region_a_conserver = 0; }
+		}
 	# si region à conserver, calcul Profondeur_Autosomes/gonosomes
 	if ($region_a_conserver) {
 		foreach my$file (@Files) {
@@ -401,18 +423,13 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 							if($Patients{$file}{"Sexe"} eq "F") {
 								if ($Regions[$r]{"Norm_Prof_Ponderees_Femmes"}) {
 									if ($Regions[$r]{"Chrom"} !~ /^(chrY|Y)$/) {
-										if ($Regions[$r]{"Norm_Prof_Ponderees_Femmes"}>=$minDP) {
-											if ($norm eq "std") {
-												$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Femmes"})/$Regions[$r]{"Std_Prof_Ponderees_Femmes"};
-											} else {
-												$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Femmes"};
-											}
-											$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
-											print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
+										if ($norm eq "std") {
+											$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Femmes"})/$Regions[$r]{"Std_Prof_Ponderees_Femmes"};
 										} else {
-											$Regions[$r]{"Appel"} = "<$minDP\x";
-											print SORTIE "NA\t";
+											$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Femmes"};
 										}
+										$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
+										print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
 									} else {
 										# En faisant la distinction entre chromosomes X et Y, les femmes ne sont plus considérées pour l'appel de CNV des régions du dernier
 										print SORTIE "NA\t";
@@ -424,18 +441,13 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 							} elsif ($Patients{$file}{"Sexe"} eq "H") {
 								if ($Regions[$r]{"Norm_Prof_Ponderees_Hommes"}) {
-									if ($Regions[$r]{"Norm_Prof_Ponderees_Hommes"}>=$minDP) {
-										if ($norm eq "std") {
-											$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Hommes"})/$Regions[$r]{"Std_Prof_Ponderees_Hommes"};
-										} else {
-											$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Hommes"};
-										}
-										$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
-										print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
+									if ($norm eq "std") {
+										$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Hommes"})/$Regions[$r]{"Std_Prof_Ponderees_Hommes"};
 									} else {
-										$Regions[$r]{"Appel"} = "<$minDP\x";
-										print SORTIE "NA\t";
+										$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Hommes"};
 									}
+									$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
+									print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
 								} else {
 									$Regions[$r]{"Appel"} = "No_Data";
 									print SORTIE "NA\t";
@@ -446,18 +458,13 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 							# Pour les autosomes
 							if ($Regions[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
 								if ($Regions[$r]{"Norm_Prof_Ponderees_Autosomes"}) {
-									if ($Regions[$r]{"Norm_Prof_Ponderees_Autosomes"}>=$minDP) {
-										if ($norm eq "std") {
-											$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Autosomes"})/$Regions[$r]{"Std_Prof_Ponderees_Autosomes"};
-										} else {
-											$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Autosomes"};
-										}
-										$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
-										print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
+									if ($norm eq "std") {
+										$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Autosomes"})/$Regions[$r]{"Std_Prof_Ponderees_Autosomes"};
 									} else {
-										$Regions[$r]{"Appel"} = "<$minDP\x";
-										print SORTIE "NA\t";
+										$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Autosomes"};
 									}
+									$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
+									print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
 								} else {
 									$Regions[$r]{"Appel"} = "No_Data";
 									print SORTIE "NA\t";
@@ -466,21 +473,16 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 							# Pour les gonosomes
 								if($Patients{$file}{"Sexe"} eq "F") {
 									if ($Regions[$r]{"Norm_Prof_Ponderees_Femmes"}) {
-										if ($Regions[$r]{"Norm_Prof_Ponderees_Femmes"}>=$minDP) {
-											if ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) {
-												if ($norm eq "std") {
-													$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Femmes"})/$Regions[$r]{"Std_Prof_Ponderees_Femmes"};
-												} else {
-													$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Femmes"};
-												}
-												$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
-												print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
+										if ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) {
+											if ($norm eq "std") {
+												$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Femmes"})/$Regions[$r]{"Std_Prof_Ponderees_Femmes"};
 											} else {
-												# En faisant la distinction entre chromosomes X et Y, les femmes ne sont plus considérées pour l'appel de CNV des régions du dernier
-												print SORTIE "NA\t";
+												$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Femmes"};
 											}
+											$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
+											print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
 										} else {
-											$Regions[$r]{"Appel"} = "<$minDP\x";
+											# En faisant la distinction entre chromosomes X et Y, les femmes ne sont plus considérées pour l'appel de CNV des régions du dernier
 											print SORTIE "NA\t";
 										}
 									} else {
@@ -489,18 +491,13 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 									}
 								} elsif ($Patients{$file}{"Sexe"} eq "H") {
 									if ($Regions[$r]{"Norm_Prof_Ponderees_Hommes"}) {
-										if ($Regions[$r]{"Norm_Prof_Ponderees_Hommes"}>=$minDP) {
-											if ($norm eq "std") {
-												$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Hommes"})/$Regions[$r]{"Std_Prof_Ponderees_Hommes"};
-											} else {
-												$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Hommes"};
-											}
-											$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
-											print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
+										if ($norm eq "std") {
+											$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees_Hommes"})/$Regions[$r]{"Std_Prof_Ponderees_Hommes"};
 										} else {
-											$Regions[$r]{"Appel"} = "<$minDP\x";
-											print SORTIE "NA\t";
+											$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees_Hommes"};
 										}
+										$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
+										print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
 									} else {
 										$Regions[$r]{"Appel"} = "No_Data";
 										print SORTIE "NA\t";
@@ -579,53 +576,48 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 					if(! $Patients{$file}{"ecarte"}) {
 
 						if ($Regions[$r]{"Norm_Prof_Ponderees"}) {
-							if ($Regions[$r]{"Norm_Prof_Ponderees"}>=$minDP) {
-								if($Patients{$file}{"Sexe"} eq "F") {
-									if ($Regions[$r]{"Chrom"} !~ /^(chrY|Y)$/) {
-										if ($norm eq "std") {
-											$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees"})/$Regions[$r]{"Std_Prof_Ponderees"};
-										} else {
-										$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees"};
-										}
-										$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
-										print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
+							if($Patients{$file}{"Sexe"} eq "F") {
+								if ($Regions[$r]{"Chrom"} !~ /^(chrY|Y)$/) {
+									if ($norm eq "std") {
+										$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees"})/$Regions[$r]{"Std_Prof_Ponderees"};
 									} else {
-										#les femmes ne sont pas considérées pour l'appel de CNV des régions du Y
-										print SORTIE "NA\t";
-									}
-								} else {
-									#*2 for chrX
-									if ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) {
-										if ($norm eq "std") {
-											$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}*2-$Regions[$r]{"Norm_Prof_Ponderees"})/$Regions[$r]{"Std_Prof_Ponderees"};
-										} else {
-										$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}*2/$Regions[$r]{"Norm_Prof_Ponderees"};
-										}
-									} else {
-										$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees"};
-										if ($norm eq "std") {
-											$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees"})/$Regions[$r]{"Std_Prof_Ponderees"};
-										} else {
-										$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees"};
-										}
+									$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees"};
 									}
 									$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
 									print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
-								}
-								if ($prof_Moyenne_Inter < $seuil_deletion) {
-									$nb_deletions++;
-									$nb_evts++;
-									$CNV{$file}++;
-									$Results{$file}{$r} = "DEL";
-								} elsif ($prof_Moyenne_Inter > $seuil_duplication) {
-									$nb_duplications++;
-									$nb_evts++;
-									$CNV{$file}++;
-									$Results{$file}{$r} = "DUP";
+								} else {
+									#les femmes ne sont pas considérées pour l'appel de CNV des régions du Y
+									print SORTIE "NA\t";
 								}
 							} else {
-								$Regions[$r]{"Appel"} = "<$minDP\x";
-								print SORTIE "NA\t";
+								#*2 for chrX
+								if ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) {
+									if ($norm eq "std") {
+										$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}*2-$Regions[$r]{"Norm_Prof_Ponderees"})/$Regions[$r]{"Std_Prof_Ponderees"};
+									} else {
+									$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}*2/$Regions[$r]{"Norm_Prof_Ponderees"};
+									}
+								} else {
+									$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees"};
+									if ($norm eq "std") {
+										$Regions[$r]{$file}{"Moyenne_Inter"} = ($Regions[$r]{$file}{"Prof_Region_Ponderee"}-$Regions[$r]{"Norm_Prof_Ponderees"})/$Regions[$r]{"Std_Prof_Ponderees"};
+									} else {
+									$Regions[$r]{$file}{"Moyenne_Inter"} = $Regions[$r]{$file}{"Prof_Region_Ponderee"}/$Regions[$r]{"Norm_Prof_Ponderees"};
+									}
+								}
+								$prof_Moyenne_Inter = $Regions[$r]{$file}{"Moyenne_Inter"};
+								print SORTIE $Regions[$r]{$file}{"Moyenne_Inter"}."\t";
+							}
+							if ($prof_Moyenne_Inter < $seuil_deletion) {
+								$nb_deletions++;
+								$nb_evts++;
+								$CNV{$file}++;
+								$Results{$file}{$r} = "DEL";
+							} elsif ($prof_Moyenne_Inter > $seuil_duplication) {
+								$nb_duplications++;
+								$nb_evts++;
+								$CNV{$file}++;
+								$Results{$file}{$r} = "DUP";
 							}
 						} else {
 							$Regions[$r]{"Appel"} = "No_Data";
@@ -866,19 +858,17 @@ print OUT "\nparameters:
 
 print OUT "\nintervals : ".scalar@Regions."\n";
 print OUT "\nintervals discarded:\n";
-my$N_minDP=0; my$N_noData=0; my$N_CNV_Recurrent=0; my$N_lowCov=0;
+my$N_noData=0; my$N_CNV_Recurrent=0; my$N_lowCov=0;
 foreach my$r (0..$#Regions) {
 	if(defined $Regions[$r]{"Appel"}) {
 		if ($Regions[$r]{"Appel"} eq "No_Data") { $N_noData++; }
 		elsif ($Regions[$r]{"Appel"} eq "CNV_Recurrent") { $N_CNV_Recurrent++; }
-		elsif ($Regions[$r]{"Appel"} eq "<$minDP\x") { $N_minDP++; }
 		elsif ($Regions[$r]{"Appel"} eq "Couverture_Faible")  { $N_lowCov++; }
 		}
 	}
 print OUT "\tnot enough data: $N_noData\n";
 print OUT "\tCNV_Recurrent: $N_CNV_Recurrent\n";
-if ($minDP) { print OUT "\taverage depth < $minDP : $N_minDP\n"; }
-if ($minCov) { print OUT "\tcoverage < $minCov : $N_minDP\n"; }
+if ($minDP || $minCov) { print OUT "\tlow coverage :  $N_lowCov\n"; }
 
 print OUT "\nsamples discarded:\n";
 foreach my$file (@Files) {
@@ -907,6 +897,9 @@ return(\%Patients,\%Result3);
 
 
 ####################
+####################
+####################
+
 
 #CNV_tool::CNV_reAnalyse($fichier_cov,$outdir,$nGraf,$fichier_sexe,\%CNV_opt);
 sub CNV_reAnalyse
@@ -1014,17 +1007,40 @@ while (my $line = <DECOVA>) {
 		}
 
 		# On parcourt la fin de la region (= infos sur les patients uniquement) une premiere fois pour savoir si la region est a conserver
-		my $region_a_conserver = 0;
+		my $region_a_conserver = 1;
 		if ($seuil_cov) {
 			for (my$p=0;$p<scalar@idxP;$p++) {
 				# Lecture de chaque colonne "%>=.X" : si aucun patient n'a 100% de bases séquencées à .X pour la région, elle est supprimée de l'analyse
 				my$cov = $INFOS[$idxV{$p}{"cov"}];
 				$cov =~ s/%$//; $cov /= 100;
 				if ($cov > $seuil_cov) {
-					$region_a_conserver = 1; last;
+					$region_a_conserver = 0; last;
 				}
 			}
-		} else { $region_a_conserver = 1; }
+		}
+		if ($minDP) {
+			my$normDepth = 0;
+			if ($norm eq "med") {
+				my@allDepth = ();
+				for (my$p=0;$p<scalar@idxP;$p++) {
+					push(@allDepth, $INFOS[$idxV{$p}{"mean"}]);
+				}
+				@allDepth = sort{$a<=>$b}@allDepth;
+				if(scalar@allDepth%2)	#odd?
+					{ $normDepth = $allDepth[int(scalar@allDepth/2)]; }
+
+				else				#even 
+					{ $normDepth = ( $allDepth[int(scalar@allDepth/2)-1] + $allDepth[int(scalar@allDepth/2)] )/2; }
+			}
+			else {
+				for (my$p=0;$p<scalar@idxP;$p++) {
+					$normDepth += $INFOS[$idxV{$p}{"mean"}];
+				}
+				$normDepth /= scalar@idxP;
+			}
+			if ( $normDepth < $minDP)
+				{ $region_a_conserver = 0; }
+		}
 
 		# Si la region est mal couverte, on l'imprime dans un fichier POUBELLE
 		if ($region_a_conserver != 1) {
@@ -1288,8 +1304,56 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 							if($Patients{$patient}{"Sexe"} eq "F") {
 								if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"}) {
-									if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"}>=$minDP) {
-										if ($Regions[$region]{"Chromosome"} !~ m/^(chrY|Y)$/) {
+									if ($Regions[$region]{"Chromosome"} !~ m/^(chrY|Y)$/) {
+										if ($norm eq "std") {
+											$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"})/$Regions[$region]{"Std_Profondeurs_Ponderees_Femmes"};
+										} else {
+											$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"};
+										}
+										$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
+										print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
+									} else {
+										# En faisant la distinction entre chromosomes X et Y, les femmes ne sont plus considérées pour l'appel de CNV des régions du dernier
+										print SORTIE "NA\t";
+									}
+								} else {
+									$Regions[$region]{"Appel"} = "No_Data";
+									print SORTIE "NA\t";
+								}
+
+							} elsif ($Patients{$patient}{"Sexe"} eq "H") {
+								if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"}) {
+									if ($norm eq "std") {
+										$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"})/$Regions[$region]{"Std_Profondeurs_Ponderees_Hommes"};
+									} else {
+										$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"};
+									}
+									$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
+									print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
+								} else {
+									$Regions[$region]{"Appel"} = "No_Data";
+									print SORTIE "NA\t";
+								}
+							}
+						} else {
+							# Pour les autosomes
+							if ($Regions[$region]{"Chromosome"} !~ m/^chr[XY]$|^[XY]$/) {
+								if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Autosomes"}) {
+									if ($norm eq "std") {
+										$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"} - $Regions[$region]{"Norm_Profondeurs_Ponderees_Autosomes"}) / $Regions[$region]{"Std_Profondeurs_Ponderees_Autosomes"};
+									} else {
+										$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"} / $Regions[$region]{"Norm_Profondeurs_Ponderees_Autosomes"};
+									}
+									$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
+									print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
+								} else {
+									$Regions[$region]{"Appel"} = "No_Data";
+									print SORTIE "NA\t";
+								}
+							} else {
+								if($Patients{$patient}{"Sexe"} eq "F") {
+									if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"}) {	
+										if ($Regions[$region]{"Chromosome"} =~ m/^(chrX|X)$/) {
 											if ($norm eq "std") {
 												$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"})/$Regions[$region]{"Std_Profondeurs_Ponderees_Femmes"};
 											} else {
@@ -1302,17 +1366,11 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 											print SORTIE "NA\t";
 										}
 									} else {
-										$Regions[$region]{"Appel"} = "<$minDP\x";
+										$Regions[$region]{"Appel"} = "No_Data";
 										print SORTIE "NA\t";
 									}
-								} else {
-									$Regions[$region]{"Appel"} = "No_Data";
-									print SORTIE "NA\t";
-								}
-
-							} elsif ($Patients{$patient}{"Sexe"} eq "H") {
-								if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"}) {
-									if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"}>=$minDP) {
+								} elsif ($Patients{$patient}{"Sexe"} eq "H") {
+									if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"}) {
 										if ($norm eq "std") {
 											$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"})/$Regions[$region]{"Std_Profondeurs_Ponderees_Hommes"};
 										} else {
@@ -1320,73 +1378,6 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 										}
 										$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
 										print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
-									} else {
-										$Regions[$region]{"Appel"} = "<$minDP\x";
-										print SORTIE "NA\t";
-									}
-								} else {
-									$Regions[$region]{"Appel"} = "No_Data";
-									print SORTIE "NA\t";
-								}
-							}
-						} else {
-							# Pour les autosomes
-							if ($Regions[$region]{"Chromosome"} !~ m/^chr[XY]$|^[XY]$/) {
-								if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Autosomes"}) {
-									if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Autosomes"}>=$minDP) {
-										if ($norm eq "std") {
-											$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"} - $Regions[$region]{"Norm_Profondeurs_Ponderees_Autosomes"}) / $Regions[$region]{"Std_Profondeurs_Ponderees_Autosomes"};
-										} else {
-											$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"} / $Regions[$region]{"Norm_Profondeurs_Ponderees_Autosomes"};
-										}
-										$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
-										print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
-									} else {
-										$Regions[$region]{"Appel"} = "<$minDP\x";
-										print SORTIE "NA\t";
-									}
-								} else {
-									$Regions[$region]{"Appel"} = "No_Data";
-									print SORTIE "NA\t";
-								}
-							} else {
-								if($Patients{$patient}{"Sexe"} eq "F") {
-									if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"}) {
-										if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"}>=$minDP) {	
-											if ($Regions[$region]{"Chromosome"} =~ m/^(chrX|X)$/) {
-												if ($norm eq "std") {
-													$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"})/$Regions[$region]{"Std_Profondeurs_Ponderees_Femmes"};
-												} else {
-													$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees_Femmes"};
-												}
-												$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
-												print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
-											} else {
-												# En faisant la distinction entre chromosomes X et Y, les femmes ne sont plus considérées pour l'appel de CNV des régions du dernier
-												print SORTIE "NA\t";
-											}
-										} else {
-											$Regions[$region]{"Appel"} = "<$minDP\x";
-											print SORTIE "NA\t";
-										}
-									} else {
-										$Regions[$region]{"Appel"} = "No_Data";
-										print SORTIE "NA\t";
-									}
-								} elsif ($Patients{$patient}{"Sexe"} eq "H") {
-									if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"}) {
-										if ($Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"}>=$minDP) {
-											if ($norm eq "std") {
-												$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"})/$Regions[$region]{"Std_Profondeurs_Ponderees_Hommes"};
-											} else {
-												$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees_Hommes"};
-											}
-											$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
-											print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
-										} else {
-											$Regions[$region]{"Appel"} = "<$minDP\x";
-											print SORTIE "NA\t";
-										}
 									} else {
 										$Regions[$region]{"Appel"} = "No_Data";
 										print SORTIE "NA\t";
@@ -1465,53 +1456,48 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 					unless ($Patients{$patient}{"ecarte"}) {
 
 						if ($Regions[$region]{"Norm_Profondeurs_Ponderees"}) {
-							if ($Regions[$region]{"Norm_Profondeurs_Ponderees"}>=$minDP) {
-								if($Patients{$patient}{"Sexe"} eq "F") {
-									if ($Regions[$region]{"Chromosome"} !~ m/^(chrY|Y)$/) {
-										if ($norm eq "std") {
-											$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees"})/$Regions[$region]{"Std_Profondeurs_Ponderees"};
-										} else {
-										$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees"};
-										}
-										$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
-										print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
+							if($Patients{$patient}{"Sexe"} eq "F") {
+								if ($Regions[$region]{"Chromosome"} !~ m/^(chrY|Y)$/) {
+									if ($norm eq "std") {
+										$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees"})/$Regions[$region]{"Std_Profondeurs_Ponderees"};
 									} else {
-										#les femmes ne sont pas considérées pour l'appel de CNV des régions du Y
-										print SORTIE "NA\t";
-									}
-								} else {
-									#*2 for chrX
-									if ($Regions[$region]{"Chromosome"} =~ m/^(chrX|X)$/) {
-										if ($norm eq "std") {
-											$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}*2-$Regions[$region]{"Norm_Profondeurs_Ponderees"})/$Regions[$region]{"Std_Profondeurs_Ponderees"};
-										} else {
-										$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}*2/$Regions[$region]{"Norm_Profondeurs_Ponderees"};
-										}
-									} else {
-										$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees"};
-										if ($norm eq "std") {
-											$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees"})/$Regions[$region]{"Std_Profondeurs_Ponderees"};
-										} else {
-										$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees"};
-										}
+									$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees"};
 									}
 									$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
 									print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
-								}
-								if ($prof_Moyenne_Inter < $seuil_deletion) {
-									$nb_deletions++;
-									$nb_evts++;
-									$CNV{$patient}++;
-									$results{$patient}{$region} = "DEL";
-								} elsif ($prof_Moyenne_Inter > $seuil_duplication) {
-									$nb_duplications++;
-									$nb_evts++;
-									$CNV{$patient}++;
-									$results{$patient}{$region} = "DUP";
+								} else {
+									#les femmes ne sont pas considérées pour l'appel de CNV des régions du Y
+									print SORTIE "NA\t";
 								}
 							} else {
-								$Regions[$region]{"Appel"} = "<$minDP\x";
-								print SORTIE "NA\t";
+								#*2 for chrX
+								if ($Regions[$region]{"Chromosome"} =~ m/^(chrX|X)$/) {
+									if ($norm eq "std") {
+										$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}*2-$Regions[$region]{"Norm_Profondeurs_Ponderees"})/$Regions[$region]{"Std_Profondeurs_Ponderees"};
+									} else {
+									$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}*2/$Regions[$region]{"Norm_Profondeurs_Ponderees"};
+									}
+								} else {
+									$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees"};
+									if ($norm eq "std") {
+										$Regions[$region]{$patient}{"Moyenne_Inter"} = ($Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}-$Regions[$region]{"Norm_Profondeurs_Ponderees"})/$Regions[$region]{"Std_Profondeurs_Ponderees"};
+									} else {
+									$Regions[$region]{$patient}{"Moyenne_Inter"} = $Regions[$region]{$patient}{"Profondeur_Region_Ponderee"}/$Regions[$region]{"Norm_Profondeurs_Ponderees"};
+									}
+								}
+								$prof_Moyenne_Inter = $Regions[$region]{$patient}{"Moyenne_Inter"};
+								print SORTIE $Regions[$region]{$patient}{"Moyenne_Inter"}."\t";
+							}
+							if ($prof_Moyenne_Inter < $seuil_deletion) {
+								$nb_deletions++;
+								$nb_evts++;
+								$CNV{$patient}++;
+								$results{$patient}{$region} = "DEL";
+							} elsif ($prof_Moyenne_Inter > $seuil_duplication) {
+								$nb_duplications++;
+								$nb_evts++;
+								$CNV{$patient}++;
+								$results{$patient}{$region} = "DUP";
 							}
 						} else {
 							$Regions[$region]{"Appel"} = "No_Data";
@@ -1734,6 +1720,51 @@ if ($graphByChr) {
 		graphChr2($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2);
 		}
 	}
+
+##summary
+open (OUT,">$outdir/CNV.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
+print OUT "CNV analysis\n";
+print OUT "\nparameters:
+	intervals normalization: $norm
+	intervals kept if NO more than ".(100*$seuil_region)."% of samples are CNVs
+	samples kept if NO more than ".(100*$seuil_patient)."% of intervals are CNVs
+	intervals detected as deletion if mean depth below $seuil_deletion of $norm
+	intervals detected as duplicatiuon if mean depth above $seuil_duplication of $norm
+";
+
+print OUT "\nintervals : ".scalar@Regions."\n";
+print OUT "\nintervals discarded:\n";
+my$N_noData=0; my$N_CNV_Recurrent=0; my$N_lowCov=0;
+foreach my$r (0..$#Regions) {
+	if(defined $Regions[$r]{"Appel"}) {
+		if ($Regions[$r]{"Appel"} eq "No_Data") { $N_noData++; }
+		elsif ($Regions[$r]{"Appel"} eq "CNV_Recurrent") { $N_CNV_Recurrent++; }
+		elsif ($Regions[$r]{"Appel"} eq "Couverture_Faible")  { $N_lowCov++; }
+		}
+	}
+print OUT "\tnot enough data: $N_noData\n";
+print OUT "\tCNV_Recurrent: $N_CNV_Recurrent\n";
+if ($minDP || $seuil_cov) { print OUT "\tlow coverage :  $N_lowCov\n"; }
+
+print OUT "\nsamples discarded:\n";
+foreach my$patient (sort(keys%Patients)) {
+		if ($Patients{$patient}{"ecarte"}) { print OUT "\t$Patients{$patient}{ID}\n"; }
+		}
+
+foreach my$patient (sort(keys%Patients)) {
+	unless($Patients{$patient}{"ecarte"}) { 
+		my$dup=0; my$del=0;
+		foreach (keys%{ $Result2{$patient} }) {
+			if ($Result2{$patient}{$_} eq "DUP") { $dup++; }
+			elsif ($Result2{$patient}{$_} eq "DEL") { $del++; }
+			}
+		print OUT "\n$Patients{$patient}{ID}: 
+		DUP: $dup
+		DEL: $del\n";
+		}
+	}
+close OUT;
+
 
 }
 
@@ -2235,3 +2266,4 @@ unlink "$outdir/$Patients{$patient}{ID}\_temp.R";
 ####################
 
 1;
+
