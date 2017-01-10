@@ -13,7 +13,7 @@
 #This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
-our $VERSION="1.4.5c";
+our $VERSION="1.4.5d";
 
 use warnings;
 use strict;
@@ -103,6 +103,7 @@ GetOptions (\%opt,
 	"totalAllChr",
 	"noCNV_byGene",
 	"noCNV_byChr",
+	"CNV_fields=s@",
 	"compress|z",
 	"nGraph:i",
 	"version|v",
@@ -196,22 +197,23 @@ parameters:
 						enter h (half) if want that last two ones are output with length = half of their sum
 						enter n if want to through it out
   *CNV_detect param:
-	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 0.1)
-	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 0.15)
-	--seuil_cov : float [0-1] : region discarded if none of the samples have cov >value (def: 0)
 	--seuil_del : float ( [0-1] for normStat=mean/mediane (def: 0.8) ; <0 for normStat=std (def: -2) )
 	--seuil_dup : float ( >1 for normStat=mean/mediane (def: 1.2) ; >0 for normStat=std (def: 2) )
+	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 1)
+	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 1)
+	--seuil_cov : float [0-1] : region discarded if none of the samples have cov >value (def: 0)
+	--min_DP : min average depth for a region to be kept
 	--min_CNV : min nber consecutive CNV
 	--max_nonCNV : max nber non-CNV intervals tolerated within a CNV 
 	--normStat : MOY/STD/MED , ie average, standard deviation, median (def: MED)
-	--min_DP : min depth of the average depth for a region to be kept
 	--normByGender :	enter \"a\" : foreach region of all chrom, normalize separately for F and M ; 
 				enter \"g\" : foreach region on gonosomes only, normalize separately for F and M
 				def: no (normalize F and M together)
-	--totalBases : norm by sum of sequenced bp (def: sum of each region mean depths (in %))
+	--totalBases : sample depths normalized by sum of sequenced bp (def: by mean of all region average depths)
 	--totalAllChr : norm by sum on all chr, whatever the sex (def: double the totalDepth for chrX if male, and skip chrY in the sum)
 	--noCNV_byGene : to disable graph for gene affected by a CNV
 	--noCNV_byChr : to disable graph by chr
+	--CNV_fields : fields foreach intervals (comma separated), among: min, max, norm (default: none)
   *external tools path:
 	--bedtools : enter path to executable, if not installed as root or not in path
 	--samtools : enter  path to executable, if not installed as root
@@ -532,9 +534,7 @@ if (exists $opt{keepBed}) { $keepBed = 1; }
 
 my@raw_cov_file = ();
 if (exists $opt{raw_cov}) {
-	foreach (@{ $opt{raw_cov} }) {
-		push(@raw_cov_file, split(/,/, $_));
-		}
+	@raw_cov_file = split(/,/, join(',',@{$opt{cov_fields}}));
 	foreach (@raw_cov_file) {
 		unless ( -s "$_" ) { die "$_ cov file not found or empty\n"; }
 		}
@@ -687,9 +687,9 @@ if ($splitBed && $cutBed) { die "not able to split overlapping and cut long inte
 my%CNV_opt;
 $CNV_opt{"norm"} = "med";
 if (exists $opt{normStat}) {
-	if ($opt{normStat} =~ /moy/i) { $CNV_opt{"norm"} = "moy"; }
-	elsif ($opt{normStat} =~ /std/i) { $CNV_opt{"norm"} = "std"; }
-	elsif ($opt{normStat} =~ /med/i) { $CNV_opt{"norm"} = "med"; }
+	if ($opt{normStat} =~ /^moy/i) { $CNV_opt{"norm"} = "moy"; }
+	elsif ($opt{normStat} =~ /^std/i) { $CNV_opt{"norm"} = "std"; }
+	elsif ($opt{normStat} =~ /^med/i) { $CNV_opt{"norm"} = "med"; }
 	else { die "opt --normStat not recognized (MOY/STD/MED)\n"; }
 	}
 $CNV_opt{"normByGender"} = "";
@@ -703,9 +703,9 @@ $CNV_opt{"RefDepth"} = "mean";
 if (exists $opt{totalBases}) { $CNV_opt{"RefDepth"} = "tot"; }
 $CNV_opt{"RefByGender"} = 1;
 if (exists $opt{totalAllChr}) { $CNV_opt{"RefByGender"} = ""; }
-$CNV_opt{"seuil_region"} = 0.10;
+$CNV_opt{"seuil_region"} = 1;
 if (exists $opt{seuil_region}) { $CNV_opt{"seuil_region"} = $opt{seuil_region}; }
-$CNV_opt{"seuil_patient"} = 0.15;
+$CNV_opt{"seuil_patient"} = 1;
 if (exists $opt{seuil_patient}) { $CNV_opt{"seuil_patient"} = $opt{seuil_patient}; }
 $CNV_opt{"seuil_cov"} = "";
 if (exists $opt{seuil_cov}) { $CNV_opt{"seuil_cov"} = $opt{seuil_cov}; }
@@ -725,6 +725,16 @@ $CNV_opt{"geneGraph"} = 1;
 if (exists $opt{noCNV_byGene} || $bed_cov_file) { $CNV_opt{"geneGraph"} = ""; }
 $CNV_opt{"chromGraph"} = 1;
 if (exists $opt{noCNV_byChr}) { $CNV_opt{"chromGraph"} = ""; }
+@{ $CNV_opt{"fields"} } = ();
+if (exists $opt{CNV_fields}) {
+	@{ $CNV_opt{"fields"} } = split(/,/, join(',',@{$opt{CNV_fields}}));
+	my%CNVfieldList = ("min"=>1,"max"=>1,"norm"=>1);
+	for (my$i=0;$i<scalar@{ $CNV_opt{"fields"} };$i++) {
+		unless (exists $CNVfieldList{$CNV_opt{"fields"}[$i]}) { die $CNV_opt{"fields"}[$i]."CNV field not recognized (min,max,norm)\n"; }
+		if ($CNV_opt{"fields"}[$i] eq "norm") { $CNV_opt{"fields"}[$i] = $CNV_opt{"norm"} ; }
+		#$CNV_opt{"fields"}{$_} = 1;
+		}
+	}
 
 ##opt warnings according to actions 
 
@@ -1986,7 +1996,7 @@ if ($CNV_tool) {
 					my@tab = split(/\t/,$line);
 					my$line2="";
 					for my$i (0..2) { $line2 .= $tab[$i]."\t"; }
-					for my$i (3..$#tab) { $line2 .= ($tab[$i] / $cnv_Patients{$gatkIdx2File{$i}}{"Ref_Profondeur_Patient"})."\t"; }
+					for my$i (3..$#tab) { $line2 .= ($tab[$i] / $cnv_Patients{$gatkIdx2File{$i}}{"Ref_depth"})."\t"; }
 					chop $line2;
 					print NORM $line2."\n";
 					$l++;
@@ -2000,7 +2010,7 @@ if ($CNV_tool) {
 					while (my$line=<COV>){
 						chomp $line;
 						my@tab = split(/\t/,$line);
-						$tab[-1] /= $cnv_Patients{$file}{"Ref_Profondeur_Patient"};
+						$tab[-1] /= $cnv_Patients{$file}{"Ref_depth"};
 						my$line2="";
 						foreach (@tab) { $line2 .= $_."\t"; }
 						chop $line2;
