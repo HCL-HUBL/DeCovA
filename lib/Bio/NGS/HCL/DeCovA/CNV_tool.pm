@@ -298,10 +298,12 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 				}
 			}
 		}
+	print LOG "sample normalization factors :\n";
 	foreach my$file (@Files) {
-		print LOG "normalization factor for $sampleName{$file} : ".$Patients{$file}{"Ref_depth"}."\n";
+		print LOG "\t$sampleName{$file} : $Patients{$file}{Ref_depth}\n";
 	}
 	print LOG "\n";
+
 
 	# SECOND PARCOURS DES REGIONS #
 	# PERMET DE PONDERER LA PROFONDEUR PAR LES AUTRES REGIONS (INTRA) ET ENTRE LES PATIENTS (INTER)
@@ -824,7 +826,7 @@ foreach my$file (keys%Results) {
 								push(@cleanCNV, $Regions[$nextReg[$j]]{$file}{"depth_ratio"});
 								push(@dirtyCNV, $Regions[$nextReg[$j]]{$file}{"depth_ratio"});
 								if (exists $regionIndice{$nextReg[$j]}) {
-									print CNV2 $Chromosome."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".($Regions[$nextReg[$j]]{"End"}-$Regions[$nextReg[$j]]{"Start"}+1)." bp\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t".$Results{$file}{$nextReg[$j]};
+									print CNV2 $Chromosome."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".($Regions[$nextReg[$j]]{"End"}-$Regions[$nextReg[$j]]{"Start"}+1)." bp\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t".$Results{$file}{$nextReg[$j]}."\t".sprintf("%.3f",$Regions[$nextReg[$j]]{$file}{"depth_ratio"});
 									my$txt = printCNVfields($normByGender,$nextReg[$j],$file,\@cnvFields,\@Regions,\%Patients);
 									print CNV2 "$txt\n";
 									}
@@ -833,7 +835,7 @@ foreach my$file (keys%Results) {
 								$Result2{$file}{$nextReg[$j]} = "NA";
 								$Result4{$file}{$Chrom}{$Regions[$nextReg[$j]]{"Start"}}{$Regions[$nextReg[$j]]{"End"}} = "NA";
 								if (exists $regionIndice{$nextReg[$j]}) {
-									print CNV2 $Chromosome."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".($Regions[$nextReg[$j]]{"End"}-$Regions[$nextReg[$j]]{"Start"})." bp\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t";
+									print CNV2 $Chromosome."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".($Regions[$nextReg[$j]]{"End"}-$Regions[$nextReg[$j]]{"Start"}+1)." bp\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t";
 									if (exists $Regions[$nextReg[$j]]{"Appel"}) { print CNV2 "NA\t"; }
 									else { print CNV2 "no\t"; }
 									if (exists $Regions[$nextReg[$j]]{$file}{"depth_ratio"}) {
@@ -857,7 +859,7 @@ foreach my$file (keys%Results) {
 						$Result3{$file}{$nextReg[0]} = $Results{$file}{$nextReg[0]};
 						}
 					}
-				if ($i > 1) { $r += ($i-1); }
+				if ($i >= 1) { $r += $i; }
 				else { $r++; }
 				}
 			}
@@ -895,14 +897,7 @@ else { print OUT "\teach sample normalized by the sum of sequenced bp\n"; }
 if ($RefByGender) { print OUT "\t(during sample normalization, depths within chrX are doubled for males, and those within chrY are skipped)\n"; }
 else { print OUT "\t(during sample normalization, depths from all chr are taken, whatever the sex)\n"; }
 
-
-my$minCNV = $CNV_opt{"min_following_CNV"};
-
-my$maxNonCNV = $CNV_opt{"max_Non_CNV"};
-
-
-
-print OUT "\nintervals : ".scalar@Regions."\n";
+print OUT "\nintervals nber: ".scalar@Regions."\n";
 print OUT "\nintervals discarded:\n";
 my$N_noData=0; my$N_CNV_Recurrent=0; my$N_lowCov=0;
 foreach my$r (0..$#Regions) {
@@ -1160,11 +1155,11 @@ for (my $patient = 0 ; $patient < $patient_nbr ; $patient++) {
 	}
 
 
+
+##iterations
 my $nb_parcours = 0;
 my $continuer = 1;
 my %results;
-
-##iterations
 while ($continuer == 1 || $nb_parcours <= 1) {
 
 	my $iteration = $nb_parcours + 1;
@@ -1221,11 +1216,11 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 		}
 
 
-		for (my $patient = 0 ; $patient < $patient_nbr ; $patient++) {
-			if ($RefByGender && ($Patients{$patient}{"Sexe"} eq "H")) {
-				$Patients{$patient}{"Ref_depth"} = ($Patients{$patient}{"tot_sexChr_depth"} * 2) + $Patients{$patient}{"tot_Autosomes_depth"};
+		for (my $p = 0 ; $p < $patient_nbr ; $p++) {
+			if ($RefByGender && ($Patients{$p}{"Sexe"} eq "H")) {
+				$Patients{$p}{"Ref_depth"} = ($Patients{$p}{"tot_sexChr_depth"} * 2) + $Patients{$p}{"tot_Autosomes_depth"};
 			} else {
-				$Patients{$patient}{"Ref_depth"} = $Patients{$patient}{"tot_sexChr_depth"} + $Patients{$patient}{"tot_Autosomes_depth"};
+				$Patients{$p}{"Ref_depth"} = $Patients{$p}{"tot_sexChr_depth"} + $Patients{$p}{"tot_Autosomes_depth"};
 			}
 		}
 
@@ -1236,6 +1231,11 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 			{ $Patients{$p}{"Ref_depth"} /= $meanRef; }
 
 	}
+	print LOG "sample normalization factors :\n";
+	for (my $p = 0 ; $p < $patient_nbr ; $p++) {
+		print LOG "\t$Patients{$p}{ID} : $Patients{$p}{Ref_depth}\n";
+	}
+	print LOG "\n";
 
 
 	# SECOND PARCOURS DES REGIONS #
@@ -1748,8 +1748,8 @@ foreach my$patient (keys%results) {
 								push(@dirtyCNV, $Regions[$nextReg[$j]]{$patient}{"depth_ratio"});
 								if (exists $regionIndice{$nextReg[$j]}) {
 									print CNV2 $Chrom."\t".$Regions[$nextReg[$j]]{"start"}."\t".$Regions[$nextReg[$j]]{"end"}."\t".($Regions[$nextReg[$j]]{"end"}-$Regions[$nextReg[$j]]{"start"})." bp\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t".$results{$patient}{$nextReg[$j]}."\t".sprintf("%.3f",$Regions[$nextReg[$j]]{$patient}{"depth_ratio"});
-								my$txt = printCNVfields($normByGender,$nextReg[$j],$patient,\@cnvFields,\@Regions,\%Patients);
-								print CNV2 "$txt\n";
+									my$txt = printCNVfields($normByGender,$nextReg[$j],$patient,\@cnvFields,\@Regions,\%Patients);
+									print CNV2 "$txt\n";
 									}
 								}
 							else	{ 
@@ -1779,7 +1779,7 @@ foreach my$patient (keys%results) {
 						$Result3{$patient}{$nextReg[0]} = $results{$patient}{$nextReg[0]};
 						}
 					}
-				if ($i > 1) { $r += ($i-1); }
+				if ($i > 1) { $r += $i; }
 				else { $r++; }
 				}
 			}
