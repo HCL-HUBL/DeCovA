@@ -965,12 +965,19 @@ my$minDP = $CNV_opt{"min_DP"} ;
 my$maxNonCNV = $CNV_opt{"max_Non_CNV"};
 my$graphByChr = $CNV_opt{"chromGraph"};
 my@cnvFields = @{ $CNV_opt{"fields"} };
-my@cnvVal = @cnvFields;		# = @cnvFields plus $norm (if not already present)
 my$ok = 0;
-foreach (@cnvFields) {
-	if ($_ eq $norm) { $ok = 1; last; }
+foreach my$i (0..$#cnvFields) {
+	if ($cnvFields[$i] eq $norm) { 
+		$ok = 1;
+		if ($norm eq "std") { @cnvFields = (@cnvFields[0..($i-1)],"moy",@cnvFields[$i..$#cnvFields]); }
+		last;
+		}
 	}
-unless ($ok) { push(@cnvVal, $norm); }
+my@cnvVal = @cnvFields;		# = @cnvFields plus $norm (if not already present)
+unless ($ok) { 
+	if ($norm eq "std") { push(@cnvVal, ("moy","std")); }
+	else { push(@cnvVal, $norm); }
+	}
 
 my$maxDepthGraph = 10;
 
@@ -1896,17 +1903,14 @@ my$txt = "";
 foreach my$val (@cnvFields) {
 	if ($Regions[$r]{"normByR_depth"}{$val}) {
 		if (!$normByGender || ($normByGender && ($normByGender eq "gono" && $Regions[$r]{"Chromosome"} !~ m/^chr[XY]$|^[XY]$/))) {
-			if ($val eq "std") { $txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth"}{"moy"}."\t".$Regions[$r]{"normByR_depth"}{"std"}); }
-			else { $txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth"}{$val}); }
+			$txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth"}{$val});
 			}
 		else {
 			if ($Patients{$patient}{"Sexe"} eq "F") {
-				if ($val eq "std") { $txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth_fem"}{"moy"})."\t".sprintf("%.1f",$Regions[$r]{"normByR_depth_fem"}{"std"}); }
-				else { $txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth_fem"}{$val}); }
+				$txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth_fem"}{$val});
 				}
 			else {
-				if ($val eq "std") { $txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth_males"}{"moy"}."\t".$Regions[$r]{"normByR_depth_males"}{"std"}); }
-				else { $txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth_males"}{$val}); }
+				$txt .= "\t".sprintf("%.1f",$Regions[$r]{"normByR_depth_males"}{$val});
 				}
 			}
 		}
