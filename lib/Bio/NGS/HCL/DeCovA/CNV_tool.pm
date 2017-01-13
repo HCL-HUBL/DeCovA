@@ -32,12 +32,19 @@ my$minDP = $CNV_opt{"min_DP"} ;
 my$maxNonCNV = $CNV_opt{"max_Non_CNV"};
 my$CNVgraph = $CNV_opt{"chromGraph"};
 my@cnvFields = @{ $CNV_opt{"fields"} };
-my@cnvVal = @cnvFields;		# = @cnvFields plus $norm (if not already present)
 my$ok = 0;
-foreach (@cnvFields) {
-	if ($_ eq $norm) { $ok = 1; last; }
+foreach my$i (0..$#cnvFields) {
+	if ($cnvFields[$i] eq $norm) { 
+		$ok = 1;
+		if ($norm eq "std") { @cnvFields = (@cnvFields[0..($i-1)],"moy",@cnvFields[$i..$#cnvFields]); }
+		last;
+		}
 	}
-unless ($ok) { push(@cnvVal, $norm); }
+my@cnvVal = @cnvFields;		# = @cnvFields plus $norm (if not already present)
+unless ($ok) { 
+	if ($norm eq "std") { push(@cnvVal, ("moy","std")); }
+	else { push(@cnvVal, $norm); }
+	}
 
 my$maxDepthGraph = 10;
 
