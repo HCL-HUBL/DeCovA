@@ -68,7 +68,7 @@ GetOptions (\%opt,
 	"geneReport",
 	"summary:s",
 	"keepCov|k",
-	"keepBed",
+	"keepBed|K:s",
 	"raw_cov=s@",
 	"binPlot=i",
 	"maxPlot=i",
@@ -154,7 +154,7 @@ outputs:
 	--bedReport : will print all uncovered intervals (within bed intervals) in 1 txt file per sample (default: no)
 	--summary : (Y/N) : to print summary txt file (default: yes if -S -A -X)
 	-k / --keepCov : do not erase coverage file at the end of the process
-	--keepBed : do not erase bed file inferred from gene list, at the end of the process
+	-K / --keepBed : do not erase bed file inferred from gene list, at the end of the process (and eventually rename)
 parameters:
   *refseq gene analysis:
 	-N / --nonCoding : analyse also Non coding transcripts (default: no)
@@ -315,7 +315,7 @@ my$bedFile="";
 if (exists $opt{bed}) { $bedFile = $opt{bed}; }
 my$bedName="";
 if($bedFile) 
-	{ ($bedName,my$pathBed) = fileparse($bedFile,".bed"); }
+	{ $bedName = fileparse($bedFile,".bed"); }
 
 my$mutFile="";
 if (exists $opt{mut}) { $mutFile = $opt{mut}; }
@@ -530,7 +530,11 @@ my$keepCov = "";
 if (exists $opt{keepCov}) { $keepCov = 1; }
 
 my$keepBed = "";
-if (exists $opt{keepBed}) { $keepBed = 1; }
+my$keepBedName = "allID";
+if (exists $opt{keepBed}) {
+	$keepBed = 1;
+	if ($opt{keepBed}) { $keepBedName = $opt{keepBed}; }
+	}
 
 my@raw_cov_file = ();
 if (exists $opt{raw_cov}) {
@@ -1060,24 +1064,35 @@ if ( ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $co
 	}
 
 
-
+unless ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $covMut || $keepBed)
+	{ die "no job selected!\n"; }
 #create output dirs
 use POSIX qw/strftime/;
 my$outdir = "";
 my$chromLength = "";
-if (exists $opt{outdir}) { 
-	$outdir = $opt{outdir}; 
-	$outdir =~ s/\/$//;
-	if (-d $outdir) {
-		if ($CNV_tool && $bed_cov_file) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
-		else { $outdir .= "/covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $covMut) {
+	if (exists $opt{outdir}) { 
+		$outdir = $opt{outdir}; 
+		$outdir =~ s/\/$//;
+		if (-d $outdir) {
+			if ($CNV_tool && $bed_cov_file) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+			else { $outdir .= "/covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+			}
 		}
+	else {
+		if ($CNV_tool && $bed_cov_file) { $outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+		else { $outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+		}
+	mkdir($outdir);
 	}
 else {
-	if ($CNV_tool && $bed_cov_file) { $outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
-	else { $outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+	if (exists $opt{outdir}) { 
+		$outdir = $opt{outdir}; 
+		$outdir =~ s/\/$//;
+		unless (-d $outdir) { mkdir($outdir); }
+		}
+	else { $outdir = "."; }
 	}
-mkdir($outdir);
 if ($byS || $printReports || $bedReport) { 
 	foreach (@Files)
 		{ mkdir("$outdir/cov\_$sName2{$_}"); }
@@ -1203,7 +1218,7 @@ unless ($bedFile) {
 
 ##for summary txt file:
 if (($keepBed || $cov_Bed || $CNV_tool) && (!$bedFile)) {
-	$bedName="allID";
+	$bedName = $keepBedName;
 	$id2Bed = "$outdir/$bedName.bed";
 	}
 @hashSub = Id2Coord($idFile,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$noOverlap,$nonCod,$UTRinTxt,$id2Bed);
@@ -2602,7 +2617,7 @@ while (my$line=<IDS>) {
 		$NMendCod{$NM} = $tab[7];
 		my@Starts = split(/,/,$tab[9]);
 		my@Ends = split(/,/,$tab[10]);
-		my(%interval,$firstCodingEx,$lastCodingEx,$minLen,$plusLen); # %intervalin 1-based coord
+		my(%interval,$firstCodingEx,$lastCodingEx,$minLen,$plusLen); # %interval in 1-based coord
 		if ($tab[3] eq "+") { $minLen = $len5; $plusLen = $len3; }
 		else { $minLen = $len3; $plusLen = $len5; }
 		#expand exons +/-length:	
