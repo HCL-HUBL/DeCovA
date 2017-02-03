@@ -327,9 +327,9 @@ if ($opt{outfile})
 my(@IDs,%IDs);
 if (exists $opt{id}) {
 	if ($opt{id}[0] =~ /.list$/) {
-		open(LIST, $opt{id}[0]) || die "can't open file ".$opt{id}[0]."\n";
+		open(LIST, "<", $opt{id}[0]) || die "can't open file ".$opt{id}[0]."\n";
 		while (my$line=<LIST>) {
-			unless($line =~ /^\s*$/) {
+			unless($line =~ /^\s*$/ || $line =~ /^#/) {
 				chomp $line;
 				$line =~ s/\s//g;
 				push(@IDs, $line);
@@ -343,7 +343,7 @@ if (exists $opt{id}) {
 			{ $id =~ s/\.(\d+)$//; }
 		$IDs{$id} = 1;
 		}
-	@IDs=sort(keys%IDs);
+	@IDs = sort(keys%IDs);
 	print "Regions to analyse: \n";
 	foreach my$id(@IDs)
 		{ print "\t".$id."\n"; }
@@ -413,8 +413,10 @@ if (exists $opt{UDstream}) {
 			$upstream = $opt{UDstream};
 			$downstream = $opt{UDstream};
 			}
-		if ($upstream <= $len5 || $downstream <= $len3)
-			{ die "upstream/downstream expansion must be longer than padding\n"; }
+		if ($upstream <= $len5) { $upstream = 0; }
+		if ($downstream <= $len3) { $downstream = 0; }
+		#if ($upstream < $len5 || $downstream < $len3)
+		#	{ die "upstream/downstream expansion must be longer than padding $upstream <= $len5  $downstream <= $len3\n"; }
 		}
 	else { die "upstream/downstream expansion not compatible without UTR\n"; }
 	}
@@ -432,8 +434,10 @@ if (exists $opt{UDtxt}) {
 				$UpInTxt = $opt{UDtxt};
 				$DownInTxt = $opt{UDtxt};
 				}
-			if ($UpInTxt <= $lenTxt5 || $DownInTxt <= $lenTxt3)
-				{ die "upstream/downstream expansion must be longer than padding\n"; }
+			if ($UpInTxt <= $lenTxt5) { $UpInTxt = 0; }
+			if ($DownInTxt <= $lenTxt3) { $DownInTxt = 0; }
+			#if ($UpInTxt < $lenTxt5 || $DownInTxt < $lenTxt3)
+			#	{ die "upstream/downstream expansion must be longer than padding $UpInTxt <= $lenTxt5 || $DownInTxt <= $lenTxt3\n"; }
 			}
 		else { die "upstream/downstream expansion not compatible without UTR\n"; }
 		}
@@ -533,7 +537,10 @@ my$keepBed = "";
 my$keepBedName = "allID";
 if (exists $opt{keepBed}) {
 	$keepBed = 1;
-	if ($opt{keepBed}) { $keepBedName = $opt{keepBed}; }
+	if ($opt{keepBed}) { 
+		$keepBedName = $opt{keepBed};
+		$keepBedName =~ s/\.bed$//;
+		}
 	}
 
 my@raw_cov_file = ();
@@ -786,7 +793,7 @@ unless ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $
 
 
 ###################
-#check progr installation
+#check progr installation and db existence
 my(%pathCmd);
 #R
 $pathCmd{"R"} = `which "R"`;
@@ -797,18 +804,43 @@ my(%sName,%sName2,%gatkIdx);
 my(@ChromOrder,@chromLength,%chromLength,%withChr,%faIdx);
 my$bedTversion = "";
 
+#genome index
+if ($genom) {
+	if (-e $genom) { print "$genom OK\n"; }
+	else { die "$genom not found\n"; }
+	if (-e "$genom.fai") {
+		@chromLength = `cut -f1-2 $genom.fai`;
+		chomp @chromLength;
+		if ($chromLength[0] =~ /^chr/) {
+			$withChr{"all"}="_wChr.bed";
+			foreach (@Files) { $withChr{$_}="_wChr.bed"; } 
+			}
+		else {
+			$withChr{"all"}="_0Chr.bed";
+			foreach (@Files) { $withChr{$_}="_0Chr.bed"; } 
+			}
+		foreach (@chromLength) {
+			my@tab = split(/\t/,$_);
+			push(@ChromOrder,$tab[0]);
+			$chromLength{$tab[0]} = $tab[1];
+			}
+		}
+	}
+
 if ( ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) && (!$bed_cov_file) ) {
 
 	if ($raw_cov_file[0]) {
 		open(COV, "$raw_cov_file[0]") or die "cannot open $raw_cov_file[0]\n";;
 		my$firstLine = <COV>;
-		my%allChr = ();
-		while (my$line=<COV>) {
-			my@tab = split(/\t/,$line);
-			my@tab2 = split(/:/,$tab[0]);
-			unless (exists $allChr{$tab2[0]}) {
-				push(@ChromOrder,$tab2[0]);
-				$allChr{$tab2[0]} = 1;
+		unless (@ChromOrder) {
+			my%allChr = ();
+			while (my$line = <COV>) {
+				my@tab = split(/\t/,$line);
+				my@tab2 = split(/:/,$tab[0]);
+				unless (exists $allChr{$tab2[0]}) {
+					push(@ChromOrder,$tab2[0]);
+					$allChr{$tab2[0]} = 1;
+					}
 				}
 			}
 		close COV;
@@ -989,26 +1021,7 @@ if ( ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $co
 
 		#genome index
 		if ($genom) {
-			if (-e $genom) { print "$genom OK\n"; }
-			else { die "$genom not found\n"; }
-			if (-e "$genom.fai") {
-				@chromLength = `cut -f1-2 $genom.fai`;
-				chomp @chromLength;
-				if ($chromLength[0] =~ /^chr/) {
-					$withChr{"all"}="_wChr.bed";
-					foreach (@Files) { $withChr{$_}="_wChr.bed"; } 
-					}
-				else {
-					$withChr{"all"}="_0Chr.bed";
-					foreach (@Files) { $withChr{$_}="_0Chr.bed"; } 
-					}
-				foreach (@chromLength) {
-					my@tab = split(/\t/,$_);
-					push(@ChromOrder,$tab[0]);
-					$chromLength{$tab[0]} = $tab[1];
-					}
-				}
-			else { 
+			unless (-e "$genom.fai") { 
 				if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
 				}
 			}
@@ -1190,7 +1203,7 @@ else
 
 ##for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
-@hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed);
+@hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed,\@ChromOrder);
 #return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
 %geneNM = %{$hashSub[0]};		# @{ $geneNM{$gene} } = [$NM1,...]
 %NMgene = %{$hashSub[1]};		# $NMgene{$NM} = $gene;
@@ -1221,7 +1234,7 @@ if (($keepBed || $cov_Bed || $CNV_tool) && (!$bedFile)) {
 	$bedName = $keepBedName;
 	$id2Bed = "$outdir/$bedName.bed";
 	}
-@hashSub = Id2Coord($idFile,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$noOverlap,$nonCod,$UTRinTxt,$id2Bed);
+@hashSub = Id2Coord($idFile,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$noOverlap,$nonCod,$UTRinTxt,$id2Bed,\@ChromOrder);
 %txtRegions = %{$hashSub[6]};		# as %Regions, but for summary txt file
 %txt_NM_Ex = %{$hashSub[7]};		# as %NM_Ex, but for summary txt file
 %coordBed = %{$hashSub[9]};		# as %Bed, but for coordPlot and cov_Bed if no bedfile
@@ -2580,10 +2593,10 @@ return(@Transcripts);
 ##Id2Coord($idFile,$lenForTxt,$nonCod,$UTRinTxt)
 sub Id2Coord
 {
-my($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed) = @_;
-my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%Bed);
+my($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed,$h1) = @_;
+my@ChromOrder = @$h1;
+my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%hashBed,%printBed);
 
-if ($id2Bed) { open(BED, ">$id2Bed") || die "can't create $id2Bed\n"; }
 open(IDS, "$idFile") || die "can't open file $idFile\n";
 while (my$line=<IDS>) {
 	chomp $line;
@@ -2617,94 +2630,97 @@ while (my$line=<IDS>) {
 		$NMendCod{$NM} = $tab[7];
 		my@Starts = split(/,/,$tab[9]);
 		my@Ends = split(/,/,$tab[10]);
-		my(%interval,$firstCodingEx,$lastCodingEx,$minLen,$plusLen); # %interval in 1-based coord
+		my(%interval,$firstCodingEx,$lastCodingEx,$minLen,$plusLen,$exonNb); # %interval in 1-based coord
 		if ($tab[3] eq "+") { $minLen = $len5; $plusLen = $len3; }
 		else { $minLen = $len3; $plusLen = $len5; }
 		#expand exons +/-length:	
 		if ($wUTR) {
-			if ($tab[3] eq "+" && $upstream) {
-				if ($id2Bed)
-					{ print BED "$chr\t".($Starts[0]-$upstream)."\t".($Starts[0]-$minLen)."\t$gene".":$NM\_upstream\n"; }
-				$interval{($Starts[0]+1-$upstream)} = $Starts[0]-$minLen;
-				}
-			elsif ($tab[3] eq "-" && $downstream) {
-				if ($id2Bed)
-					{ print BED "$chr\t".($Starts[0]-$downstream)."\t".($Starts[0]-$minLen)."\t$gene".":$NM\_downstream\n"; }
-				$interval{($Starts[0]+1-$downstream)} = $Starts[0]-$minLen;
-				}
-			for (my$i=0;$i<scalar(@Starts);$i++) {
-				if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-$minLen)) {
-					my$ecart  = ($Starts[$i+1]-$Ends[$i]) / 2;
-					$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
-					$Starts[$i+1] = int($Starts[$i+1]-$ecart+$minLen);
+
+			##intervals
+			if ($upstream) { $interval{($Starts[0]+1-$upstream)} = $Ends[0]+$plusLen; }
+			else { $interval{($Starts[0]+1-$minLen)} = $Ends[0]+$plusLen; }
+			for (my$i=1;$i<(scalar(@Starts)-1);$i++)
+				{ $interval{($Starts[$i]+1-$minLen)} = $Ends[$i]+$plusLen; }
+			if ($downstream) { $interval{($Starts[-1]+1-$minLen)} = $Ends[-1]+$downstream; }
+			else { $interval{($Starts[-1]+1-$minLen)} = $Ends[-1]+$plusLen; }
+			##bed
+			if ($id2Bed) {
+				if ($tab[3] eq "+" && $upstream)
+					{ $printBed{$chr}{($Starts[0]-$upstream)}{($Starts[0]-$minLen)}{$gene}{$NM} = "upstream"; }
+				elsif ($tab[3] eq "-" && $downstream)
+					{ $printBed{$chr}{($Starts[0]-$downstream)}{($Starts[0]-$minLen)}{$gene}{$NM} = "downstream"; }
+				for (my$i=0;$i<scalar(@Starts);$i++) {
+					if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-$minLen)) {
+						my$ecart  = ($Starts[$i+1]-$Ends[$i]) / 2;
+						$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
+						$Starts[$i+1] = int($Starts[$i+1]-$ecart+$minLen);
+						}
+					if ($id2Bed) {
+						if ($tab[3] eq "+") { $exonNb = ($i+1); }
+						else { $exonNb = (scalar(@Starts)-$i); }
+						$printBed{$chr}{($Starts[$i]-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+						}
 					}
-				if ($id2Bed) {
-					print BED "$chr\t".($Starts[$i]-$minLen)."\t".($Ends[$i]+$plusLen)."\t$gene".":$NM";
-					if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
-					else { print BED ":exon".(scalar(@Starts)-$i)."\n"; }
-					}
-				$interval{($Starts[$i]+1-$minLen)} = $Ends[$i]+$plusLen;	
-				}
-			if ($tab[3] eq "+" && $downstream) {
-				if ($id2Bed)
-					{ print BED "$chr\t".($Ends[-1]+$plusLen)."\t".($Ends[-1]+$downstream)."\t$gene".":$NM\_downstream\n"; }
-				$interval{($Ends[-1]+1+$plusLen)} = $Ends[-1]+$downstream;
-				}
-			elsif ($tab[3] eq "-" && $upstream) {
-				if ($id2Bed)
-					{ print BED "$chr\t".($Ends[-1]+$plusLen)."\t".($Ends[-1]+$upstream)."\t$gene".":$NM\_upstream\n"; }
-				$interval{($Ends[-1]+1+$plusLen)} = $Ends[-1]+$downstream;
+				if ($tab[3] eq "+" && $downstream)
+					{ $printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$downstream)}{$gene}{$NM} = "downstream"; }
+				elsif ($tab[3] eq "-" && $upstream)
+					{ $printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$upstream)}{$gene}{$NM} = "upstream"; }
 				}
 			}
+
 		else {
+
+			##intervals
 			for (my$i=0;$i<scalar(@Starts);$i++) {
-				if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-$minLen)) {
-					my$ecart  = ($Starts[$i+1]-$Ends[$i]) / 2;
-					$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
-					$Starts[$i+1] = int($Starts[$i+1]-$ecart+$minLen);
-					}
 				if ($Ends[$i] < $NMstartCod{$NM}) { next; }
 				elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
 					$firstCodingEx = $i;
-					if ($Ends[$i] > $NMendCod{$NM}) { 
-						$interval{($NMstartCod{$NM}-$minLen)} = $NMendCod{$NM}+$plusLen;
-						if ($id2Bed) {
-							print BED "$chr\t".($tab[6]-$minLen)."\t".($tab[7]+$plusLen)."\t$gene".":$NM";
-							if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
-							else { print BED  ":exon".(scalar(@Starts)-$i)."\n"; }
-							}
-						}
-					else { 
-						$interval{($NMstartCod{$NM}-$minLen)} = $Ends[$i]+$plusLen;
-						if ($id2Bed) {
-							print BED "$chr\t".($tab[6]-$minLen)."\t".($Ends[$i]+$plusLen)."\t$gene".":$NM";
-							if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
-							else { print BED  ":exon".(scalar(@Starts)-$i)."\n"; }
-							}
-						}
+					if ($Ends[$i] > $NMendCod{$NM})
+						{ $interval{($NMstartCod{$NM}-$minLen)} = $NMendCod{$NM}+$plusLen; }
+					else
+						{ $interval{($NMstartCod{$NM}-$minLen)} = $Ends[$i]+$plusLen; }
 					}
 				elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
-					if ($Ends[$i] < $NMendCod{$NM}) { 
-						$interval{($Starts[$i]+1-$minLen)} = $Ends[$i]+$plusLen;
-						if ($id2Bed) {
-							print BED "$chr\t".($Starts[$i]-$minLen)."\t".($Ends[$i]+$plusLen)."\t$gene".":$NM";
-							if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
-							else { print BED ":exon".(scalar(@Starts)-$i)."\n"; }
-							}
-						}
+					if ($Ends[$i] < $NMendCod{$NM})
+						{ $interval{($Starts[$i]+1-$minLen)} = $Ends[$i]+$plusLen; }
 					else {
 						$lastCodingEx = $i;
 						$interval{($Starts[$i]+1-$minLen)} = $NMendCod{$NM}+$plusLen;
-						if ($id2Bed) {
-							print BED "$chr\t".($Starts[$i]-$minLen)."\t".($tab[7]+$plusLen)."\t$gene".":$NM";
-							if ($tab[3] eq "+") { print BED ":exon".($i+1)."\n"; }
-							else { print BED ":exon".(scalar(@Starts)-$i)."\n"; }
-							}
 						}
 					}
 				else { last; }
 				}
+			##bed
+			if ($id2Bed) {
+				for (my$i=0;$i<scalar(@Starts);$i++) {
+					if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-$minLen)) {
+						my$ecart  = ($Starts[$i+1]-$Ends[$i]) / 2;
+						$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
+						$Starts[$i+1] = int($Starts[$i+1]-$ecart+$minLen);
+						}
+					if ($tab[3] eq "+") { $exonNb = ($i+1); }
+					else { $exonNb = (scalar(@Starts)-$i); }
+					if ($Ends[$i] < $NMstartCod{$NM}) { next; }
+					elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
+						$firstCodingEx = $i;
+						if ($Ends[$i] > $NMendCod{$NM})
+							{ $printBed{$chr}{($tab[6]-$minLen)}{($tab[7]+$plusLen)}{$gene}{$NM} = "exon$exonNb"; }
+						else
+							{ $printBed{$chr}{($tab[6]-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb"; }
+						}
+					elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
+						if ($Ends[$i] < $NMendCod{$NM})
+							{ $printBed{$chr}{($Starts[$i]-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb"; }
+						else {
+							$lastCodingEx = $i;
+							$printBed{$chr}{($Starts[$i]-$minLen)}{($tab[7]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+							}
+						}
+					else { last; }
+					}
+				}
 			}
+
 		#eventually merges overlapping intervals of regions
 		#associates real exons to intervals
 		my@Starts2 = sort{$a<=>$b}(keys%interval);
@@ -2747,23 +2763,51 @@ while (my$line=<IDS>) {
 			}
 		%{ $Regions{$chr}{$NM} } = %interval2;
 		foreach (keys%interval2) {
-			if ( exists $Bed{$chr}{$_} ) {
-				if ( $interval2{$_} > $Bed{$chr}{$_}) 
-					{ $Bed{$chr}{$_} = $interval2{$_}; }	
+			if ( exists $hashBed{$chr}{$_} ) {
+				if ( $interval2{$_} > $hashBed{$chr}{$_}) 
+					{ $hashBed{$chr}{$_} = $interval2{$_}; }	
 				}
 			else
-				{ $Bed{$chr}{$_} = $interval2{$_}; }
+				{ $hashBed{$chr}{$_} = $interval2{$_}; }
 			}			
 		}
 	}
 close(IDS);
+if ($id2Bed) { open(BED, ">$id2Bed") || die "can't create $id2Bed\n"; }
+my@allChrom = ();
+if (@ChromOrder) {
+	foreach my$chr (@ChromOrder) {
+		$chr =~ s/^chr//i;
+		if (exists $printBed{$chr}) { push(@allChrom,$chr); }
+		}
+	}
+else {
+	foreach my$chr (sort(keys%printBed)) { push(@allChrom,$chr); }
+	}
+foreach my$chr (@allChrom) {
+	foreach my$start (sort{$a<=>$b}keys%{ $printBed{$chr} }) {
+		foreach my$end (sort{$a<=>$b}keys%{ $printBed{$chr}{$start} }) {
+			my$info="";
+			foreach my$gene (sort(keys%{ $printBed{$chr}{$start}{$end} })) {
+				$info .= "$gene:";
+				foreach my$NM (sort(keys%{ $printBed{$chr}{$start}{$end}{$gene} })) {
+					$info .= "$NM:".$printBed{$chr}{$start}{$end}{$gene}{$NM}.",";
+					}
+				chop $info;
+				$info .= ";";
+				}
+			chop $info;
+			print BED "$chr\t$start\t$end\t$info\n";
+			}	
+		}
+	}
 if ($id2Bed) { close BED; }
 my%Genes;
 foreach (keys%geneNM) { 
 	$Genes{$_} = 1;
 	@{ $geneNM{$_} } = sort@{ $geneNM{$_} };
 	}
-return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
+return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%hashBed);
 }
 
 
