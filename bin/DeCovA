@@ -545,7 +545,7 @@ if (exists $opt{keepBed}) {
 
 my@raw_cov_file = ();
 if (exists $opt{raw_cov}) {
-	@raw_cov_file = split(/,/, join(',',@{$opt{cov_fields}}));
+	@raw_cov_file = split(/,/, join(',',@{$opt{raw_cov}}));
 	foreach (@raw_cov_file) {
 		unless ( -s "$_" ) { die "$_ cov file not found or empty\n"; }
 		}

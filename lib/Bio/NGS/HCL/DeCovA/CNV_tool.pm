@@ -739,12 +739,7 @@ for my$r (0..$#Regions) {
 	my@tab = split(/\t/, $Regions[$r]{"allLine"});
 	if ($tab[3]) {
 		my@tab2 = split(/:|,/, $tab[3]);
-		my$label = "";
-		if (length($tab2[0]) > 20) {
-			my@tab3 =  split(//, $tab2[0]);
-			for my $i (0..20) { $label .= $tab3[$i]; }
-			}
-		else { $label = $tab2[0]; }
+		my$label = substr($tab2[0], 0, 25);
 		$Regions[$r]{"label"} = "$label";
 		$Regions[$r]{"Gene"} = $tab2[0];
 		}
@@ -1675,12 +1670,7 @@ for my$r (0..$#Regions) {
 		{ $Regions[$r]{"label"} = $Regions[$r]{"start"}."-".$Regions[$r]{"end"}; }
 	else { 
 		my@tab = split(/:|,/,$Regions[$r]{"Gene"});
-		my$label = "";
-		if (length($tab[0]) > 20) {
-			my@tab2 =  split(//, $tab[0]);
-			for my$i (0..20) { $label .= $tab2[$i]; }
-			}
-		else { $label = $tab[0]; }
+		my$label = substr($tab[0], 0, 25);
 		$Regions[$r]{"label"} = $label;
 		$Regions[$r]{"geneID"} = $tab[0];
 		}
@@ -2012,7 +2002,7 @@ foreach my$Chrom (@ChromOrder) {
 		for (my$r=0;$r<$Nbr_Reg;$r++) {
 			if ($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"}) {
 				if ($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$RegionOrder{$Chrom}[$r]]{"Gene"} ne $currentGene)  {
-					$tmpTxt .= "abline(v=".($r+0.5).", col=\"blue\", lty = \"dotted\", lwd=2)\n";
+					$tmpTxt .= "abline(v=".($r+0.5).", col=\"blue\", lty = \"dotted\", lwd=1)\n";
 					$currentGene = $Regions[$RegionOrder{$Chrom}[$r]]{"Gene"};
 					}
 				$Nbr_gene++;
@@ -2040,7 +2030,7 @@ foreach my$Chrom (@ChromOrder) {
 				$cmdR .="), labels=c(";
 				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$RegionOrder{$Chrom}[$r]]{"label"}."\","; }
 				chop $cmdR;
-				$cmdR .= "), col.axis=\"red\", las=2)\n";
+				$cmdR .= "), col.axis=\"red\", cex.axis=".(log(5)/log($Nbr_Reg)).", las=2)\n";
 				}
 			@printReg=();
 			for (my$r=0;$r<$Nbr_Reg;$r++) { 
@@ -2053,7 +2043,7 @@ foreach my$Chrom (@ChromOrder) {
 				$cmdR .="), labels=c(";
 				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$RegionOrder{$Chrom}[$r]]{"label"}."\","; }
 				chop $cmdR;
-				$cmdR .= "), col.axis=\"black\", las=2)\n";
+				$cmdR .= "), col.axis=\"black\", cex.axis=".(log(5)/log($Nbr_Reg)).", las=2)\n";
 				}
 			}
 		else {
@@ -2083,7 +2073,7 @@ foreach my$Chrom (@ChromOrder) {
 				$cmdR .="), labels=c(";
 				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$RegionOrder{$Chrom}[$r]]{"label"}."\","; }
 				chop $cmdR;
-				$cmdR .= "), col.axis=\"black\", las=2)\n";
+				$cmdR .= "), col.axis=\"black\", cex.axis=".(log(5)/log($Nbr_gene)).", las=2)\n";
 				}
 			}
 
@@ -2106,15 +2096,55 @@ foreach my$Chrom (@ChromOrder) {
 						for (my$r=$r1;$r<$r2;$r++)
 							{ $cmdR .= $Regions[$RegionOrder{$Chrom}[$r]]{$Files[$f]}{"depth_ratio"}{$normGraf}.","; }
 						chop $cmdR;
-						$cmdR .= "), type =\"l\", lwd=2, col=\"black\")\n";
+						$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
 						}
 					elsif (($r2-1) == $r1) {
-						$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$RegionOrder{$Chrom}[$r1]]{$Files[$f]}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=2, col=\"black\")\n";
+						$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$RegionOrder{$Chrom}[$r1]]{$Files[$f]}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"black\")\n";
 						}
 					$r1 = ($r2+1);
 					}
 				}
 			}
+
+		##threshold lines:
+		if ($norm eq "std" && $normGraf eq "moy") {
+			foreach my$gender ("normByR_depth","normByR_depth_fem","normByR_depth_males") {
+				my$r1=0;
+				while ($r1<$Nbr_Reg) {
+					my$r2=$r1;
+					while ($r2<$Nbr_Reg) {
+						if (exists $Regions[$RegionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
+						else { last; }
+						}
+					if (($r2-1) > $r1) {
+						foreach my$fold ($seuil_duplication,$seuil_deletion) {
+							$cmdR .= "lines( c(";
+							for (my$r=$r1;$r<$r2;$r++)
+								{ $cmdR .= ($r+1).","; }
+							chop $cmdR;
+							$cmdR .= "), c(";
+							for (my$r=$r1;$r<$r2;$r++) {
+								if ( $Regions[$RegionOrder{$Chrom}[$r]]{$gender}{"moy"} )
+									{ $cmdR .= (1+$fold*($Regions[$RegionOrder{$Chrom}[$r]]{$gender}{"std"} / $Regions[$RegionOrder{$Chrom}[$r]]{$gender}{"moy"})).","; }
+								else 	{ $cmdR .= "1,"; }
+								}
+							chop $cmdR;
+							$cmdR .= "), type =\"l\", lwd=1, col=\"darkgrey\")\n";
+							}
+						}
+					elsif (($r2-1) == $r1) {
+						$cmdR .= "lines( c(".($r1+1)."), c(".(1+($Regions[$RegionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$RegionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+						$cmdR .= "lines( c(".($r1+1)."), c(".(1-($Regions[$RegionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$RegionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+						}
+					$r1 = ($r2+1);
+					}
+				}
+			}
+		else {
+			$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
+			$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
+			}
+
 		##target sample line (green)
 		my$r1=0;
 		while ($r1<$Nbr_Reg) {
@@ -2132,10 +2162,10 @@ foreach my$Chrom (@ChromOrder) {
 				for (my$r=$r1;$r<$r2;$r++)
 					{ $cmdR .= $Regions[$RegionOrder{$Chrom}[$r]]{$file}{"depth_ratio"}{$normGraf}.","; }
 				chop $cmdR;
-				$cmdR .= "), type =\"l\", lwd=2, col=\"green\")\n";
+				$cmdR .= "), type =\"l\", lwd=1, col=\"green\")\n";
 				}
 			elsif (($r2-1) == $r1) {
-				$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$RegionOrder{$Chrom}[$r1]]{$file}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=2, col=\"green\")\n";
+				$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$RegionOrder{$Chrom}[$r1]]{$file}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"green\")\n";
 				}
 			$r1 = ($r2+1);
 			}
@@ -2152,65 +2182,21 @@ foreach my$Chrom (@ChromOrder) {
 				{ $points .= $Regions[$region]{$file}{"depth_ratio"}{$normGraf}.","; }
 			}
 		chop $points;
-		$points .= "), type =\"p\", pch = 16, lwd=3, col=\"red\")\n";
+		$points .= "), type =\"p\", pch = 16, lwd=2, col=\"red\")\n";
 		if ($Nbr_CNV) { $cmdR .= $points; }
 
-		##threshold lines:
-		if ($norm eq "std" && $normGraf eq "moy") {
-			foreach my$gender ("normByR_depth","normByR_depth_fem","normByR_depth_males") {
-				my$r1=0;
-				while ($r1<$Nbr_Reg) {
-					my$r2=$r1;
-					while ($r2<$Nbr_Reg) {
-						if (exists $Regions[$RegionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
-						else { last; }
-						}
-					if (($r2-1) > $r1) {
-						$cmdR .= "lines( c(";
-						for (my$r=$r1;$r<$r2;$r++)
-							{ $cmdR .= ($r+1).","; }
-						chop $cmdR;
-						$cmdR .= "), c(";
-						for (my$r=$r1;$r<$r2;$r++)
-							{ $cmdR .= (1+($Regions[$RegionOrder{$Chrom}[$r]]{$gender}{"std"} / $Regions[$RegionOrder{$Chrom}[$r]]{$gender}{"moy"})).","; }
-						chop $cmdR;
-						$cmdR .= "), type =\"l\", lwd=2, col=\"darkgrey\")\n";
-						$cmdR .= "lines( c(";
-						for (my$r=$r1;$r<$r2;$r++)
-							{ $cmdR .= ($r+1).","; }
-						chop $cmdR;
-						$cmdR .= "), c(";
-						for (my$r=$r1;$r<$r2;$r++)
-							{ $cmdR .= (1-($Regions[$RegionOrder{$Chrom}[$r]]{$gender}{"std"} / $Regions[$RegionOrder{$Chrom}[$r]]{$gender}{"moy"})).","; }
-						chop $cmdR;
-						$cmdR .= "), type =\"l\", lwd=2, col=\"darkgrey\")\n";
-						}
-					elsif (($r2-1) == $r1) {
-						$cmdR .= "lines( c(".($r1+1)."), c(".(1+($Regions[$RegionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$RegionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=2, col=\"darkgrey\")\n";
-						$cmdR .= "lines( c(".($r1+1)."), c(".(1-($Regions[$RegionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$RegionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=2, col=\"darkgrey\")\n";
-						}
-					$r1 = ($r2+1);
-					}
-				}
-			}
-		else {
-			$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
-			$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
-			}
-		if ($normGraf eq "std") { $cmdR .= "abline(h=0, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; }
-		else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; }
+		#if ($normGraf eq "std") { $cmdR .= "abline(h=0, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n"; }
+		#else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n"; }
+		$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
 
 
 		if ($c==$Nbr_Chr || $n==$nGraf) {
 			open (CMDR, ">$outdir/$sampleName{$file}\_temp.R") || die;
 			print CMDR "#!/usr/bin/env Rscript\n\n" ;
-			if ($nGraf==$Nbr_Chr) { print CMDR "png(\"".$outdir."/CNV_$sampleName{$file}.png\", 1500, ".($nGraf*400).")\n
-	par(mfrow=c($nGraf,1))\n"; }
+			if ($nGraf==$Nbr_Chr) { print CMDR "pdf(\"".$outdir."/CNV_$sampleName{$file}.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
 			else {
-				if ($N>1) { print CMDR "png(\"".$outdir."/CNV_$sampleName{$file}\_$N.png\", 1500, ".($nGraf*400).")\n
-	par(mfrow=c($nGraf,1))\n"; }
-				else { print CMDR "png(\"".$outdir."/CNV_$sampleName{$file}\_$N.png\", 1500, ".($n*400).")\n
-	par(mfrow=c($n,1))\n"; }
+				if ($N>1) { print CMDR "pdf(\"".$outdir."/CNV_$sampleName{$file}\_$N.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
+				else { print CMDR "pdf(\"".$outdir."/CNV_$sampleName{$file}\_$N.pdf\", width=11.69, height=".($n*3).")\npar(mfrow=c($n,1))\n"; }
 				}
 			print CMDR "$cmdR";
 			print CMDR "title(main=\"sample: $sampleName{$file}";
@@ -2255,7 +2241,7 @@ my$Nbr_Chr= scalar(keys%regionOrder);
 print "cmdR,  for $Patients{$patient}{ID}\n";
 open (CMDR, ">$outdir/$Patients{$patient}{ID}\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "png(\"".$outdir."/CNV_$Patients{$patient}{ID}.png\", 1500, ".($Nbr_Chr*400).")\n
+print CMDR "pdf(\"".$outdir."/CNV_$Patients{$patient}{ID}.pdf\", width=11.69, height=".($Nbr_Chr*3).")\n
 par(mfrow=c($Nbr_Chr,1))\n";
 
 my$cmdR = "";
@@ -2285,10 +2271,14 @@ for my$Chrom (@ChrOrder) {
 
 	my$ChrName = $Chrom; $ChrName =~ s/^chr//;
 
-	if ($normGraf eq "std") { $cmdR .= "par(fig=c(0,1,".(1-(($c+0.95)/$Nbr_Chr)).",".(1-(($c+0.05)/$Nbr_Chr))."), new=TRUE)
-plot (c(0,0), xlim=c(0,$maxX), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
-	else { $cmdR .= "par(fig=c(0,1,".(1-(($c+0.95)/$Nbr_Chr)).",".(1-(($c+0.05)/$Nbr_Chr))."), new=TRUE)
-plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
+	if ($normGraf eq "std") {
+		$cmdR .= "par(fig=c(0,1,".(1-(($c+0.95)/$Nbr_Chr)).",".(1-(($c+0.05)/$Nbr_Chr))."), new=TRUE)
+plot (c(0,0), xlim=c(0,$maxX), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
+		}
+	else {
+		$cmdR .= "par(fig=c(0,1,".(1-(($c+0.95)/$Nbr_Chr)).",".(1-(($c+0.05)/$Nbr_Chr))."), new=TRUE)
+plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
+		}
 
 	my$Nbr_Reg = scalar@{ $regionOrder{$Chrom} };
 
@@ -2296,7 +2286,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 	my$currentGene=""; my$tmpTxt=""; my$Nbr_gene=0;
 	for (my$r=0;$r<$Nbr_Reg;$r++) {
 		if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"geneID"} ne $currentGene) {
-			$tmpTxt .= "abline(v=".($r+0.5).", col=\"blue\", lty = \"dotted\", lwd=2)\n";
+			$tmpTxt .= "abline(v=".($r+0.5).", col=\"blue\", lty = \"dotted\", lwd=1)\n";
 			$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"geneID"};
 			$Nbr_gene++;
 			}
@@ -2322,7 +2312,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			$cmdR .="), labels=c(";
 			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
-			$cmdR .= "), col.axis=\"red\", las=2)\n";
+			$cmdR .= "), col.axis=\"red\", cex.axis=".(log(5)/log($Nbr_Reg)).", las=2)\n";
 			}
 		@printReg=();
 		for (my$r=0;$r<$Nbr_Reg;$r++) { 
@@ -2335,7 +2325,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			$cmdR .="), labels=c(";
 			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
-			$cmdR .= "), col.axis=\"black\", las=2)\n";
+			$cmdR .= "), col.axis=\"black\", cex.axis=".(log(5)/log($Nbr_Reg)).", las=2)\n";
 			}
 		}
 	else {
@@ -2363,7 +2353,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			$cmdR .="), labels=c(";
 			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
-			$cmdR .= "), col.axis=\"black\", las=2)\n";
+			$cmdR .= "), col.axis=\"black\", cex.axis=".(log(5)/log($Nbr_gene)).", las=2)\n";
 			}
 		}
 
@@ -2387,15 +2377,56 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 					for (my$r=$r1;$r<$r2;$r++)
 						{ $cmdR .= $Regions[$regionOrder{$Chrom}[$r]]{$p}{"depth_ratio"}{$normGraf}.","; }
 					chop $cmdR;
-					$cmdR .= "), type =\"l\", lwd=2, col=\"black\")\n";
+					$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
 					}
 				elsif (($r2-1) == $r1) {
-					$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$regionOrder{$Chrom}[$r1]]{$p}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=2, col=\"black\")\n";
+					$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$regionOrder{$Chrom}[$r1]]{$p}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"black\")\n";
 					}
 				$r1 = ($r2+1);
 				}
 			}
 		}
+
+	##threshold lines:
+	if ($norm eq "std" && $normGraf eq "moy") {
+		foreach my$gender ("normByR_depth","normByR_depth_fem","normByR_depth_males") {
+			my$r1=0;
+			while ($r1<$Nbr_Reg) {
+				my$r2=$r1;
+				while ($r2<$Nbr_Reg) {
+					if (exists $Regions[$regionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
+					else { last; }
+					}
+				if (($r2-1) > $r1) {
+					#foreach my$fold (1,$seuil_duplication,(-1),$seuil_deletion) {
+					foreach my$fold ($seuil_duplication,$seuil_deletion) {
+						$cmdR .= "lines( c(";
+						for (my$r=$r1;$r<$r2;$r++)
+							{ $cmdR .= ($r+1).","; }
+						chop $cmdR;
+						$cmdR .= "), c(";
+						for (my$r=$r1;$r<$r2;$r++) {
+							if ( $Regions[$regionOrder{$Chrom}[$r]]{$gender}{"moy"} )
+								{ $cmdR .= (1+$fold*($Regions[$regionOrder{$Chrom}[$r]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r]]{$gender}{"moy"})).","; }
+							else 	{ $cmdR .= "1,"; }
+							}
+						chop $cmdR;
+						$cmdR .= "), type =\"l\", lwd=1, col=\"darkgrey\")\n";
+						}
+					}
+				elsif (($r2-1) == $r1) {
+					$cmdR .= "lines( c(".($r1+1)."), c(".(1+($Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+					$cmdR .= "lines( c(".($r1+1)."), c(".(1-($Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+					}
+				$r1 = ($r2+1);
+				}
+			}
+		}
+	else {
+		$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
+		$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
+		}
+
 	#target sample line (green):
 	my$r1=0;
 	while ($r1<$Nbr_Reg) {
@@ -2413,10 +2444,10 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			for (my$r=$r1;$r<$r2;$r++)
 				{ $cmdR .= $Regions[$regionOrder{$Chrom}[$r]]{$patient}{"depth_ratio"}{$normGraf}.","; }
 			chop $cmdR;
-			$cmdR .= "), type =\"l\", lwd=2, col=\"green\")\n";
+			$cmdR .= "), type =\"l\", lwd=1, col=\"green\")\n";
 			}
 		elsif (($r2-1) == $r1) {
-			$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$regionOrder{$Chrom}[$r1]]{$patient}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=2, col=\"green\")\n";
+			$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$regionOrder{$Chrom}[$r1]]{$patient}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"green\")\n";
 			}
 		$r1 = ($r2+1);
 		}
@@ -2434,53 +2465,12 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			{ $points .= $Regions[$region]{$patient}{"depth_ratio"}{$normGraf}.","; }
 		}
 	chop $points;
-	$points .= "), type =\"p\", pch = 16, lwd=3, col=\"red\")\n";
+	$points .= "), type =\"p\", pch = 16, lwd=2, col=\"red\")\n";
 	if ($Nbr_CNV) { $cmdR .= $points; }
 
-	##threshold lines:
-	if ($norm eq "std" && $normGraf eq "moy") {
-		foreach my$gender ("normByR_depth","normByR_depth_fem","normByR_depth_males") {
-			my$r1=0;
-			while ($r1<$Nbr_Reg) {
-				my$r2=$r1;
-				while ($r2<$Nbr_Reg) {
-					if (exists $Regions[$regionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
-					else { last; }
-					}
-				if (($r2-1) > $r1) {
-					$cmdR .= "lines( c(";
-					for (my$r=$r1;$r<$r2;$r++)
-						{ $cmdR .= ($r+1).","; }
-					chop $cmdR;
-					$cmdR .= "), c(";
-					for (my$r=$r1;$r<$r2;$r++)
-						{ $cmdR .= (1+($Regions[$regionOrder{$Chrom}[$r]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r]]{$gender}{"moy"})).","; }
-					chop $cmdR;
-					$cmdR .= "), type =\"l\", lwd=2, col=\"darkgrey\")\n";
-					$cmdR .= "lines( c(";
-					for (my$r=$r1;$r<$r2;$r++)
-						{ $cmdR .= ($r+1).","; }
-					chop $cmdR;
-					$cmdR .= "), c(";
-					for (my$r=$r1;$r<$r2;$r++)
-						{ $cmdR .= (1-($Regions[$regionOrder{$Chrom}[$r]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r]]{$gender}{"moy"})).","; }
-					chop $cmdR;
-					$cmdR .= "), type =\"l\", lwd=2, col=\"darkgrey\")\n";
-					}
-				elsif (($r2-1) == $r1) {
-					$cmdR .= "lines( c(".($r1+1)."), c(".(1+($Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=2, col=\"darkgrey\")\n";
-					$cmdR .= "lines( c(".($r1+1)."), c(".(1-($Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=2, col=\"darkgrey\")\n";
-					}
-				$r1 = ($r2+1);
-				}
-			}
-		}
-	else {
-		$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
-		$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
-		}
-	if ($normGraf eq "std") { $cmdR .= "abline(h=0, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; }
-	else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n"; }
+	#if ($normGraf eq "std") { $cmdR .= "abline(h=0, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n"; }
+	#else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n"; }
+	$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
 
 
 	$c++;
