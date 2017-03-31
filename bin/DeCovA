@@ -847,7 +847,7 @@ if ( ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $co
 		#print $firstLine;
 		chomp $firstLine;
 		my@tab = split(/\t/,$firstLine);
-		foreach my$i (0..$#tab) {
+		for my$i (0..$#tab) {
 			if ($tab[$i] =~ /^Depth_for_(.+)/) {
 				push(@Files,$1);
 				$fName{$1} = $1;
@@ -856,6 +856,7 @@ if ( ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $co
 				$gatk = 1;
 				}
 			}
+		unless (@Files) { die "not able to find sample names in $raw_cov_file[0]\nmissing header line?\n"; }
 		$keepCov = "";
 		}
 
