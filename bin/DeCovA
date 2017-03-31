@@ -13,6 +13,7 @@
 #This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
+
 our $VERSION="1.4.5d";
 
 use warnings;
@@ -1442,13 +1443,13 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 		}
 
 	if ($raw_cov_file[0]) {	
-		
-		##check that all intervals are present in cov.file
+		print "check that all intervals to be analysed are present in cov.file\n";
 		my%Intervals = readBed("$outdir/$intervalName\_0Chr.bed");	#$covbed{$chr}{$start} = $end;	transform in 1-based coord
 		foreach my$chr (keys%Intervals) {
+			print "\t$chr\n";
 			my$withinChr = 0;
 			my@Starts = sort{$a<=>$b}(keys%{ $Intervals{$chr} });
-			my$s = 0;				#idx of @Starts
+			my$s = 0;					#idx of @Starts
 			my$pos = $Starts[$s];			#current position
 			open(COV, "$raw_cov_file[0]") || die "can't open file $raw_cov_file[0]\n";
 			while (my$line=<COV>) {
@@ -1464,11 +1465,14 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 						else {
 							if ( $tab2[1] <= $Intervals{$chr}{$Starts[$s]} ) {
 								if ($tab2[1] == $pos) { $pos++; $ok=0; }
-								else { die "intervals to be analysed not present in cov file ( $chr:$pos )\n"; }
+								else { die "some intervals to be analysed not found in cov file ( $chr:$pos )\n"; }
 								}
-							else { 
-								$s++;
-								$pos = $Starts[$s];
+							else {
+								if ($s<$#Starts) {
+									$s++;
+									$pos = $Starts[$s];
+									}
+								else { $ok=0; }
 								}
 							}
 						}
@@ -1477,7 +1481,7 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 					if ($withinChr) { last; }
 					}
 				}
-			unless ($withinChr) { die "intervals to be analysed not present in cov file ( $chr )\n"; }
+			unless ($withinChr) { die "some intervals to be analysed not found in cov file ( $chr )\n"; }
 			}
 		}
 

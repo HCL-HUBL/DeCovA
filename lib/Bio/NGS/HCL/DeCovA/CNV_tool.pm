@@ -1963,7 +1963,7 @@ my$n=1; #chr iteration, stepped back to 0 each time a graph is done
 my$N=1; #graph iteration
 my$maxGeneLab=200;
 my$maxGeneSep=500;
-my$maxLabLen=25;
+#my$maxLabLen=25;
 
 foreach my$Chrom (@ChromOrder) { 
 	
@@ -2027,9 +2027,11 @@ foreach my$Chrom (@ChromOrder) {
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
 				$cmdR .="), labels=c(";
-				foreach my$r (@printReg) { $cmdR .= "\"".substr($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"}, 0, $maxLabLen)."\","; }
+				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$RegionOrder{$Chrom}[$r]]{"label"}."\","; }
 				chop $cmdR;
-				$cmdR .= "), col.axis=\"darkgrey\", cex.axis=".(log(5)/log($Nbr_Reg)).", las=2)\n";
+				$cmdR .= "), col.axis=\"darkgrey\", las=2";
+				if ($Nbr_gene<=10) { $cmdR .= ", cex.axis=1 )\n"; }
+				else  { $cmdR .= ", cex.axis=".(log(10)/log($Nbr_Reg))." )\n"; }
 				}
 			##in black if valid
 			@printReg=();
@@ -2041,9 +2043,11 @@ foreach my$Chrom (@ChromOrder) {
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
 				$cmdR .="), labels=c(";
-				foreach my$r (@printReg) { $cmdR .= "\"".substr($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"}, 0, $maxLabLen)."\","; }
+				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$RegionOrder{$Chrom}[$r]]{"label"}."\","; }
 				chop $cmdR;
-				$cmdR .= "), col.axis=\"black\", cex.axis=".(log(5)/log($Nbr_Reg)).", las=2)\n";
+				$cmdR .= "), col.axis=\"black\", las=2";
+				if ($Nbr_gene<=10) { $cmdR .= ", cex.axis=1 )\n"; }
+				else  { $cmdR .= ", cex.axis=".(log(10)/log($Nbr_Reg))." )\n"; }
 				}
 			}
 		else {
@@ -2055,7 +2059,7 @@ foreach my$Chrom (@ChromOrder) {
 				$cmdR .= "axis(1, at=c(";
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
-				$cmdR .= "), col.axis=\"darkgrey\")\n";
+				$cmdR .= "), labels = FALSE, col.ticks=\"darkgrey\")\n";
 				}
 			##in black if valid
 			@printReg=();
@@ -2083,9 +2087,11 @@ foreach my$Chrom (@ChromOrder) {
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
 				$cmdR .="), labels=c(";
-				foreach my$r (@printReg) { $cmdR .= "\"". substr($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"}, 0, $maxLabLen)."\","; }
+				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$RegionOrder{$Chrom}[$r]]{"Gene"}."\","; }
 				chop $cmdR;
-				$cmdR .= "), col.axis=\"black\", cex.axis=".(log(5)/log($Nbr_gene)).", las=2)\n";
+				$cmdR .= "), col.axis=\"black\", las=2";
+				if ($Nbr_gene<=10) { $cmdR .= ", cex.axis=1 )\n"; }
+				else  { $cmdR .= ", cex.axis=".(log(10)/log($Nbr_Reg))." )\n"; }
 				}
 			##in red if CNV; only ticks
 			@printReg=();
@@ -2096,7 +2102,7 @@ foreach my$Chrom (@ChromOrder) {
 				$cmdR .= "axis(1, at=c(";
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
-				$cmdR .= "), col.axis=\"red\")\n";
+				$cmdR .= "), labels = FALSE, col.ticks=\"red\")\n";
 				}
 			
 			
@@ -2273,7 +2279,7 @@ my$cmdR = "";
 my$c=0; #chr iteration
 my$maxGeneLab=200;
 my$maxGeneSep=500;
-my$maxLabLen=25;
+#my$maxLabLen=25;
 
 for my$Chrom (@ChrOrder) {
 
@@ -2337,9 +2343,11 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
 			$cmdR .="), labels=c(";
-			foreach my$r (@printReg) { $cmdR .= "\"".substr($Regions[$regionOrder{$Chrom}[$r]]{"geneID"}, 0, $maxLabLen)."\","; }
+			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
-			$cmdR .= "), col.axis=\"darkgrey\", cex.axis=".(log(5)/log($Nbr_Reg)).", las=2)\n";
+			$cmdR .= "), col.axis=\"darkgrey\", las=2";
+			if ($Nbr_gene<=10) { $cmdR .= ", cex.axis=1 )\n"; }
+			else  { $cmdR .= ", cex.axis=".(log(10)/log($Nbr_Reg))." )\n"; }
 			}
 		##in black if valid
 		@printReg=();
@@ -2351,9 +2359,11 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
 			$cmdR .="), labels=c(";
-			foreach my$r (@printReg) { $cmdR .= "\"".substr($Regions[$regionOrder{$Chrom}[$r]]{"geneID"}, 0, $maxLabLen)."\","; }
+			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
-			$cmdR .= "), col.axis=\"black\", cex.axis=".(log(5)/log($Nbr_Reg)).", las=2)\n";
+			$cmdR .= "), col=\"black\", las=2";
+			if ($Nbr_gene<=10) { $cmdR .= ", cex.axis=1 )\n"; }
+			else  { $cmdR .= ", cex.axis=".(log(10)/log($Nbr_Reg))." )\n"; }
 			}
 		}
 	else {
@@ -2365,7 +2375,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
-			$cmdR .= "), col.axis=\"darkgrey\")\n";
+			$cmdR .= "), labels = FALSE, col.ticks=\"darkgrey\")\n";
 			}
 		##in black if valid
 		@printReg=();
@@ -2391,9 +2401,11 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
 			$cmdR .="), labels=c(";
-			foreach my$r (@printReg) { $cmdR .= "\"".substr($Regions[$regionOrder{$Chrom}[$r]]{"geneID"}, 0, $maxLabLen)."\","; }
+			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
-			$cmdR .= "), col.axis=\"black\", cex.axis=".(log(5)/log($Nbr_gene)).", las=2)\n";
+			$cmdR .= "), col.axis=\"black\", las=2";
+			if ($Nbr_gene<=10) { $cmdR .= ", cex.axis=1 )\n"; }
+			else  { $cmdR .= ", cex.axis=".(log(10)/log($Nbr_Reg))." )\n"; }
 			}
 		##in red if CNV; only ticks
 		@printReg=();
@@ -2404,7 +2416,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
-			$cmdR .= "), col.axis=\"red\")\n";
+			$cmdR .= "), labels = FALSE, col.ticks=\"red\")\n";
 			}
 		}
 
