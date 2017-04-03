@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
 
-our $VERSION="1.4.5d";
+our $VERSION="1.4.5e";
 
 use warnings;
 use strict;
@@ -96,7 +96,8 @@ GetOptions (\%opt,
 	"seuil_del=f",
 	"seuil_dup=f",
 	"min_CNV=i",
-	"max_nonCNV=i",
+	"max_nonCNVcons=i",
+	"max_nonCNVrate=f",
 	"normStat=s",
 	"min_DP=i",
 	"normByGender=s",
@@ -203,9 +204,10 @@ parameters:
 	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 1)
 	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 1)
 	--seuil_cov : float [0-1] : region discarded if none of the samples have cov >value (def: 0)
-	--min_DP : min average depth for a region to be kept
-	--min_CNV : min nber consecutive CNV
-	--max_nonCNV : max nber non-CNV intervals tolerated within a CNV 
+	--min_DP : min average depth for a region to be kept (def: 0)
+	--min_CNV : min nber consecutive CNV (def: 1)
+	--max_nonCNVcons : max nber of non-CNV consecutive intervals tolerated within a CNV (def: 0)
+	--max_nonCNVrate : max rate of non-CNV intervals tolerated within a CNV (def: 0)
 	--normStat : MOY/STD/MED , ie average, standard deviation, median (def: MED)
 	--normByGender :	enter \"a\" : foreach region of all chrom, normalize separately for F and M ; 
 				enter \"g\" : foreach region on gonosomes only, normalize separately for F and M
@@ -730,7 +732,9 @@ if (exists $opt{seuil_dup}) { $CNV_opt{"seuil_duplication"} = $opt{seuil_dup}; }
 $CNV_opt{"min_following_CNV"} = "";
 if (exists $opt{min_CNV}) { $CNV_opt{"min_following_CNV"} = $opt{min_CNV}; }
 $CNV_opt{"max_Non_CNV"} = "";
-if (exists $opt{max_nonCNV}) { $CNV_opt{"max_Non_CNV"} = $opt{max_nonCNV}; }
+if (exists $opt{max_nonCNVcons}) { $CNV_opt{"max_Non_CNV"} = $opt{max_nonCNVcons}; }
+$CNV_opt{"max_Non_CNV_rate"} = "";
+if (exists $opt{max_nonCNVrate}) { $CNV_opt{"max_Non_CNV_rate"} = $opt{max_nonCNVrate}; }
 $CNV_opt{"min_DP"} = 0;
 if (exists $opt{min_DP}) { $CNV_opt{"min_DP"} = $opt{min_DP}; }
 $CNV_opt{"geneGraph"} = 1;
