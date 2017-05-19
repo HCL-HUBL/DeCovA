@@ -939,7 +939,7 @@ foreach my$file (@Files) {
 		}
 unless ($N_discard) { print OUT "\tnone\n"; }
 
-print OUT "\nResults
+print OUT "\nResults :\n
 patient\tCNV\tnber\n";
 foreach my$file (@Files) {
 	unless($Patients{$file}{"ecarte"}) {
@@ -1882,7 +1882,7 @@ foreach my$patient (sort(keys%Patients)) {
 		}
 unless ($N_discard) { print OUT "\tnone\n"; }
 
-print OUT "\nResults
+print OUT "\nResults :\n
 patient\tCNV\tnber\n";
 foreach my$patient (sort(keys%Patients)) {
 	unless($Patients{$patient}{"ecarte"}) {
@@ -2301,7 +2301,7 @@ foreach my$Chrom (@ChromOrder) {
 			if ($Patients{$file}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
 			else { print CMDR "\""; }
 			print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
-			print CMDR "dev.off();\n";
+			print CMDR "dev.off()\nquit(save=\"no\")\n";
 			close CMDR;
 			system "Rscript $outdir/$sampleName{$file}\_temp.R";
 			unlink "$outdir/$sampleName{$file}\_temp.R";
@@ -2612,7 +2612,7 @@ print CMDR "title(main=\"sample: $Patients{$patient}{ID}";
 if ($Patients{$patient}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
 else { print CMDR "\""; }
 print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
-print CMDR "dev.off();\n";
+print CMDR "dev.off()\nquit(save=\"no\")\n";
 close CMDR;
 system "Rscript $outdir/$Patients{$patient}{ID}\_temp.R";
 unlink "$outdir/$Patients{$patient}{ID}\_temp.R";
