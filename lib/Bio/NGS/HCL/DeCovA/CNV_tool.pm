@@ -2211,7 +2211,7 @@ foreach my$Chrom (@ChromOrder) {
 				while ($r1<$Nbr_Reg) {
 					my$r2=$r1;
 					while ($r2<$Nbr_Reg) {
-						if (exists $Regions[$regionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
+						if ($Regions[$regionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
 						else { last; }
 						}
 					if (($r2-1) > $r1) {
@@ -2495,7 +2495,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			while ($r1<$Nbr_Reg) {
 				my$r2=$r1;
 				while ($r2<$Nbr_Reg) {
-					if (exists$Regions[$regionOrder{$Chrom}[$r2]]{$p}{"depth_ratio"}{$normGraf}) { $r2++;}
+					if (exists $Regions[$regionOrder{$Chrom}[$r2]]{$p}{"depth_ratio"}{$normGraf}) { $r2++;}
 					else { last; }
 					}
 				if (($r2-1) > $r1) {
@@ -2524,7 +2524,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			while ($r1<$Nbr_Reg) {
 				my$r2=$r1;
 				while ($r2<$Nbr_Reg) {
-					if (exists $Regions[$regionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
+					if ($Regions[$regionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++; }
 					else { last; }
 					}
 				if (($r2-1) > $r1) {
