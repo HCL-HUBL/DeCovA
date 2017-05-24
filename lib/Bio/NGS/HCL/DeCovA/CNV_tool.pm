@@ -8,30 +8,30 @@ use warnings;
 #@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$mbq,$mmq,$refBedLines,\@ChromOrder,\%fai);
 sub CNV_detect
 {
-my($h1,$h2,$outdir,$nGraf,$fichier_sexe,$h3,$mbq,$mmq,$h4,$h5,$h6)=@_;
-my@Files = @$h1;
-my%sampleName = %$h2;
-my%CNV_opt = %$h3;
-my@Regions = @$h4;
-my@ChromOrder = @$h5;
-my%fai = %$h6;
-my$norm = $CNV_opt{"norm"};
-my$normByGender = $CNV_opt{"normByGender"};
-my$Ref = $CNV_opt{"RefDepth"};
-my$RefByGender = $CNV_opt{"RefByGender"};
-my$seuil_region = $CNV_opt{"seuil_region"};
-if ($seuil_region < (1/scalar@Files)) { $seuil_region = (1/scalar@Files); }
-my$seuil_patient = $CNV_opt{"seuil_patient"};
-if ($seuil_patient < (1/scalar@Regions)) { $seuil_patient = (1/scalar@Regions); }
-my$minCov = $CNV_opt{"seuil_cov"};
-my$seuil_deletion = $CNV_opt{"seuil_deletion"};
-my$seuil_duplication = $CNV_opt{"seuil_duplication"};
-my$minCNV = $CNV_opt{"min_following_CNV"};
-my$minDP = $CNV_opt{"min_DP"} ;
-my$maxNonCNV = $CNV_opt{"max_Non_CNV"};
-my$maxNonCNVrate = $CNV_opt{"max_Non_CNV_rate"};
-my$CNVgraph = $CNV_opt{"chromGraph"};
-my@cnvFields = @{ $CNV_opt{"fields"} };
+my($FilesRef,$sampleNameRef,$outdir,$nGraf,$fichier_sexe,$CNV_optRef,$mbq,$mmq,$RegionsRef,$ChromOrderRef,$faiRef)=@_;
+#my@Files = @$h1;
+#my%sampleName = %$h2;
+#my@Regions = @$h4;
+#my@ChromOrder = @$h5;
+#my%fai = %$h6;
+#my%CNV_opt = %{$CNV_optRef};
+my$norm = ${$CNV_optRef}{"norm"};
+my$normByGender = ${$CNV_optRef}{"normByGender"};
+my$Ref = ${$CNV_optRef}{"RefDepth"};
+my$RefByGender = ${$CNV_optRef}{"RefByGender"};
+my$seuil_region = ${$CNV_optRef}{"seuil_region"};
+if ($seuil_region < (1/scalar@{$FilesRef})) { $seuil_region = (1/scalar@{$FilesRef}); }
+my$seuil_patient = ${$CNV_optRef}{"seuil_patient"};
+if ($seuil_patient < (1/scalar@{$RegionsRef})) { $seuil_patient = (1/scalar@{$RegionsRef}); }
+my$minCov = ${$CNV_optRef}{"seuil_cov"};
+my$seuil_deletion = ${$CNV_optRef}{"seuil_deletion"};
+my$seuil_duplication = ${$CNV_optRef}{"seuil_duplication"};
+my$minCNV = ${$CNV_optRef}{"min_following_CNV"};
+my$minDP = ${$CNV_optRef}{"min_DP"} ;
+my$maxNonCNV = ${$CNV_optRef}{"max_Non_CNV"};
+my$maxNonCNVrate = ${$CNV_optRef}{"max_Non_CNV_rate"};
+my$CNVgraph = ${$CNV_optRef}{"chromGraph"};
+my@cnvFields = @{ ${$CNV_optRef}{"fields"} };
 my$ok = 0;
 foreach my$i (0..$#cnvFields) {
 	if ($cnvFields[$i] eq $norm) { 
@@ -48,7 +48,7 @@ unless ($ok) {
 
 my$maxDepthGraph = 10;
 
-my$nCol = scalar(split(/\t/,$Regions[0]{"allLine"}));
+my$nCol = scalar(split(/\t/,${$RegionsRef}[0]{"allLine"}));
 
 my%Patients;
 
@@ -58,8 +58,8 @@ if ($fichier_sexe) {
 	foreach my $ligne (<PATIENTS>) {
 		$ligne =~ m/(\S+)\s+(\S+)/;
 		my$ok="";
-		foreach my$file (@Files) {
-			if ($1 eq $sampleName{$file}) {
+		foreach my$file (@{$FilesRef}) {
+			if ($1 eq ${$sampleNameRef}{$file}) {
 				$Patients{$file}{"Sexe"} = $2;
 				$ok=1; last;
 				}
@@ -77,7 +77,7 @@ if ($fichier_sexe) {
 
 
 #CALCUL de LA PROFONDEUR TOTALE POUR CHAQUE PATIENT, EN TENANT UNIQUEMENT COMPTE DES REGIONS CORRECTEMENT SEQUENCEES
-foreach my$file (@Files) {
+foreach my$file (@{$FilesRef}) {
 	$Patients{$file}{"tot_Autosomes_depth"} = 0;
 	$Patients{$file}{"tot_chrX_depth"} = 0;
 	$Patients{$file}{"tot_chrY_depth"} = 0;
@@ -92,18 +92,18 @@ my$gonosom_Regions = 0;
 #$bedLines[$i]{"Chr"} = $tab[0]; $bedLines[$i]{"Start"} = ($tab[1]+1); $bedLines[$i]{"End"} = $tab[2];
 #$bedLines[$i]{$file}{"Cov"}
 #$bedLines[$i]{$file}{"Mean"}
-for my$r (0..$#Regions) {
+for (my $r = 0 ; $r < scalar@{$RegionsRef} ; $r++) {
 	my $region_a_conserver = 1;
 	if ($minCov) {
-		foreach my$file (@Files) {
-			if ( $Regions[$r]{$file}{"Cov"} >= $minCov)
+		foreach my$file (@{$FilesRef}) {
+			if ( ${$RegionsRef}[$r]{$file}{"Cov"} >= $minCov)
 				{ $region_a_conserver = 0; last; }
 			}
 		}
 	if ($minDP) {
 		my@allDepth = ();
-		foreach my$file (@Files) {
-			push(@allDepth, $Regions[$r]{$file}{"Mean"});
+		foreach my$file (@{$FilesRef}) {
+			push(@allDepth, ${$RegionsRef}[$r]{$file}{"Mean"});
 			}
 		my$normDepth = norm($norm,\@allDepth);
 		if ( $normDepth < $minDP)
@@ -111,30 +111,30 @@ for my$r (0..$#Regions) {
 		}
 	# si region à conserver, calcul Profondeur_Autosomes/gonosomes
 	if ($region_a_conserver) {
-		foreach my$file (@Files) {
-			if ($Regions[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
+		foreach my$file (@{$FilesRef}) {
+			if (${$RegionsRef}[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
 				$autosom_Regions++;
-				if ($Ref eq "mean") { $Patients{$file}{"tot_Autosomes_depth"} += $Regions[$r]{$file}{"Mean"}; }
+				if ($Ref eq "mean") { $Patients{$file}{"tot_Autosomes_depth"} += ${$RegionsRef}[$r]{$file}{"Mean"}; }
 				}
 			else {
-				if ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) {
+				if (${$RegionsRef}[$r]{"Chrom"} =~ /^(chrX|X)$/) {
 					$gonosom_Regions++;
-					if ($Ref eq "mean") { $Patients{$file}{"tot_chrX_depth"} += $Regions[$r]{$file}{"Mean"}; }
+					if ($Ref eq "mean") { $Patients{$file}{"tot_chrX_depth"} += ${$RegionsRef}[$r]{$file}{"Mean"}; }
 					}
 				else {
-					if ($Ref eq "mean") { $Patients{$file}{"tot_chrY_depth"} += $Regions[$r]{$file}{"Mean"}; }
+					if ($Ref eq "mean") { $Patients{$file}{"tot_chrY_depth"} += ${$RegionsRef}[$r]{$file}{"Mean"}; }
 					}
 				}
 			}
 		}
 	# Si region mal couverte, on l'imprime dans un fichier POUBELLE
 	else
-		{ $Regions[$r]{"Appel"} = "Couverture_Faible"; }
+		{ ${$RegionsRef}[$r]{"Appel"} = "Couverture_Faible"; }
 	}
 
 my$depthTxt="";
 my$sexTxt="";
-foreach my$file (@Files) {
+foreach my$file (@{$FilesRef}) {
 
 	##if tot bases
 	if ($Ref eq "tot") {
@@ -142,7 +142,7 @@ foreach my$file (@Files) {
 		my$cmd = "samtools view -F 0x4";
 		if ($mmq) { $cmd .= " -q $mmq"; }
 		$cmd .= " $file";
-		foreach my$chr (@{ $fai{$file} }) {
+		foreach my$chr (@{ ${$faiRef}{$file} }) {
 			unless ($chr =~ /^(chr[XY]|[XY])$/)
 				{ $cmd .= " $chr"; }
 			}
@@ -156,7 +156,7 @@ foreach my$file (@Files) {
 		$cmd = "samtools view -F 0x4";
 		if ($mmq) { $cmd .= " -q $mmq"; }
 		$cmd .= " $file";
-		foreach my$chr (@{ $fai{$file} }) {
+		foreach my$chr (@{ ${$faiRef}{$file} }) {
 			if ($chr =~ /^(chrX|X)$/)
 				{ $cmd .= " $chr"; }
 			}
@@ -170,7 +170,7 @@ foreach my$file (@Files) {
 		$cmd = "samtools view -F 0x4";
 		if ($mmq) { $cmd .= " -q $mmq"; }
 		$cmd .= " $file";
-		foreach my$chr (@{ $fai{$file} }) {
+		foreach my$chr (@{ ${$faiRef}{$file} }) {
 			if ($chr =~ /^(chrY|Y)$/)
 				{ $cmd .= " $chr"; }
 			}
@@ -181,11 +181,11 @@ foreach my$file (@Files) {
 		$Patients{$file}{"tot_chrY_depth"} = `$cmd`;
 		chomp $Patients{$file}{"tot_chrY_depth"};
 		
-		$depthTxt .= $sampleName{$file}.":\n\ttotal sequenced bases for $sampleName{$file} : \n\tautoZ:".$Patients{$file}{"tot_Autosomes_depth"}."\n\tchrX:".$Patients{$file}{"tot_chrX_depth"}."\n\tchrY:".$Patients{$file}{"tot_chrY_depth"}."\n";
+		$depthTxt .= ${$sampleNameRef}{$file}.":\n\ttotal sequenced bases for ${$sampleNameRef}{$file} : \n\tautoZ:".$Patients{$file}{"tot_Autosomes_depth"}."\n\tchrX:".$Patients{$file}{"tot_chrX_depth"}."\n\tchrY:".$Patients{$file}{"tot_chrY_depth"}."\n";
 		}
 
 	##gender if no sex file
-	$sexTxt .= $sampleName{$file}.":\n";
+	$sexTxt .= ${$sampleNameRef}{$file}.":\n";
 	unless (exists $Patients{$file}{"Sexe"}) {
 		if ($Patients{$file}{"tot_chrX_depth"} && $gonosom_Regions && $Patients{$file}{"tot_Autosomes_depth"} && $autosom_Regions) {
 			$sexTxt .= "\tautoZ: ".($Patients{$file}{"tot_Autosomes_depth"}/$autosom_Regions)."\n\tchrX: ".($Patients{$file}{"tot_chrX_depth"}/$gonosom_Regions)."\n";
@@ -218,15 +218,15 @@ if ($depthTxt) { print "\nbases counts:\n$depthTxt\n"; }
 print "\ngender:\n$sexTxt\n";
 
 my$meanRef;
-foreach my$file (@Files) {
+foreach my$file (@{$FilesRef}) {
 	if ($Patients{$file}{"Ref_depth"})
 		{ $meanRef += $Patients{$file}{"Ref_depth"}; }
 	else { $Patients{$file}{"ecarte"} = 1; }
 	}
-$meanRef /= scalar@Files;
-foreach my$file (@Files) {
+$meanRef /= scalar@{$FilesRef};
+foreach my$file (@{$FilesRef}) {
 	$Patients{$file}{"Ref_depth"} /= $meanRef; 
-	print "normalization factor for $sampleName{$file} : ".$Patients{$file}{"Ref_depth"}."\n";
+	print "normalization factor for ${$sampleNameRef}{$file} : ".$Patients{$file}{"Ref_depth"}."\n";
 	}
 
 
@@ -259,8 +259,8 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 		for (0..($nCol-4)) { print SORTIE "\t"; }
 		}
 	print SORTIE "Numero_Region"."\t";
-	foreach my$file (@Files)
-		{ print SORTIE $sampleName{$file}."\t"; }
+	foreach my$file (@{$FilesRef})
+		{ print SORTIE ${$sampleNameRef}{$file}."\t"; }
 	print SORTIE "Statut_Region\n";
 
 
@@ -271,88 +271,88 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 		if ($Ref eq "mean") {
 		# REINITIALISATION DE LA PROFONDEUR TOTALE PAR PATIENT
-			foreach my$file (@Files) {
+			foreach my$file (@{$FilesRef}) {
 				$Patients{$file}{"tot_Autosomes_depth"} = 0;
 				$Patients{$file}{"Ref_Gonosomes_Patient"} = 0;
 				}
-			for (my $r = 0 ; $r < $#Regions ; $r++) {
-				if(!defined $Regions[$r]{"Appel"}) {
-					foreach my$file (@Files) {
-						if ($Regions[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
-							$Patients{$file}{"tot_Autosomes_depth"} += $Regions[$r]{$file}{"Mean"};
+			for (my $r = 0 ; $r < scalar@{$RegionsRef} ; $r++) {
+				if(!defined ${$RegionsRef}[$r]{"Appel"}) {
+					foreach my$file (@{$FilesRef}) {
+						if (${$RegionsRef}[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
+							$Patients{$file}{"tot_Autosomes_depth"} += ${$RegionsRef}[$r]{$file}{"Mean"};
 							}
-						elsif ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) {
-							$Patients{$file}{"Ref_Gonosomes_Patient"} += $Regions[$r]{$file}{"Mean"};
+						elsif (${$RegionsRef}[$r]{"Chrom"} =~ /^(chrX|X)$/) {
+							$Patients{$file}{"Ref_Gonosomes_Patient"} += ${$RegionsRef}[$r]{$file}{"Mean"};
 							}
 						else {
 							if ((!$RefByGender) && ($Patients{$file}{"Sexe"} eq "H")) {
-								$Patients{$file}{"Ref_Gonosomes_Patient"} += $Regions[$r]{$file}{"Mean"};
+								$Patients{$file}{"Ref_Gonosomes_Patient"} += ${$RegionsRef}[$r]{$file}{"Mean"};
 								}
 							}
 						}
 					}
 				}
 			
-			foreach my$file (@Files) {
+			foreach my$file (@{$FilesRef}) {
 				if ($RefByGender && ($Patients{$file}{"Sexe"} eq "H")) {
 					$Patients{$file}{"Ref_depth"} = ($Patients{$file}{"Ref_Gonosomes_Patient"} * 2) + $Patients{$file}{"tot_Autosomes_depth"}; } 
 				else {
 					$Patients{$file}{"Ref_depth"} = $Patients{$file}{"Ref_Gonosomes_Patient"} + $Patients{$file}{"tot_Autosomes_depth"}; }
 				}
-			foreach my$file (@Files)
+			foreach my$file (@{$FilesRef})
 				{ $meanRef += $Patients{$file}{"Ref_depth"}; }
-			$meanRef /= scalar@Files;
-			foreach my$file (@Files) {
+			$meanRef /= scalar@{$FilesRef};
+			foreach my$file (@{$FilesRef}) {
 				$Patients{$file}{"Ref_depth"} /= $meanRef;
 				}
 			}
 		}
 	print LOG "sample normalization factors :\n";
-	foreach my$file (@Files) {
-		print LOG "\t$sampleName{$file} : $Patients{$file}{Ref_depth}\n";
+	foreach my$file (@{$FilesRef}) {
+		print LOG "\t${$sampleNameRef}{$file} : $Patients{$file}{Ref_depth}\n";
 	}
 	print LOG "\n";
 
 
 	# SECOND PARCOURS DES REGIONS #
 	# PERMET DE PONDERER LA PROFONDEUR PAR LES AUTRES REGIONS (INTRA) ET ENTRE LES PATIENTS (INTER)
-	for my$r (0..$#Regions) {
+	for (my $r = 0 ; $r < scalar@{$RegionsRef} ; $r++) {
 
-		print SORTIE $Regions[$r]{"allLine"}."\t";
+		print SORTIE ${$RegionsRef}[$r]{"allLine"}."\t";
 		print SORTIE $r."\t";
 
 		# SI LA REGION N'EST PAS "MOCHE"
-		if (!(defined($Regions[$r]{"Appel"}))) {
+		if (!defined ${$RegionsRef}[$r]{"Appel"}) {
 
 			$nb_regions_conservees++;
-			$Regions[$r]{"nb_CNV"}{"DEL"} = 0;
-			$Regions[$r]{"nb_CNV"}{"DUP"} = 0;
+			${$RegionsRef}[$r]{"nb_CNV"}{"DEL"} = 0;
+			${$RegionsRef}[$r]{"nb_CNV"}{"DUP"} = 0;
 			my $nb_evts = 0;
 			my$prof_Moyenne_Inter = "";
 
 			if ($normByGender) {
 
-				@{ $Regions[$r]{"all_normByS_depths_fem"} } = ();
-				@{ $Regions[$r]{"all_normByS_depths_males"} } = ();
+				@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} } = ();
+				@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} } = ();
 				# Pour chaque patient, un premier parcours permet la pondération intra-patient (en divisant la profondeur de la region par la profondeur totale du patient)
-				foreach my$file (@Files) {
+				foreach my$file (@{$FilesRef}) {
 
 					if ($Patients{$file}{"Sexe"} eq "F" && !($Patients{$file}{"ecarte"})) {
 
 						# Le controle permet de diviser uniquement par le nombre de patients restant apres l filtre, et non par l'ensemble des patients
 						# Si la region concerne un gonosome et le patient est une femme, la référence est celle qui correspond aux autosomes + au chromosome X
-						$Regions[$r]{$file}{"normByS_depth"} = $Regions[$r]{$file}{"Mean"} / $Patients{$file}{"Ref_depth"};
+						${$RegionsRef}[$r]{$file}{"normByS_depth"} = ${$RegionsRef}[$r]{$file}{"Mean"} / $Patients{$file}{"Ref_depth"};
 						# On sauvegarde la profondeur ponderee intra patient, pour determiner ensuite la moyenne de ces profondeurs ponderees
-						push( @{ $Regions[$r]{"all_normByS_depths_fem"} }, $Regions[$r]{$file}{"normByS_depth"} );
+						push( @{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} }, ${$RegionsRef}[$r]{$file}{"normByS_depth"} );
 
 
 					} elsif ($Patients{$file}{"Sexe"} eq "H" && !($Patients{$file}{"ecarte"})) {
 
 						# Le controle permet de divisier uniquement par le nombre de patients restant apres l filtre, et non par l'ensemble des patients
 						# Si la region concerne un gonosome et le patient est un homme, la référence est celle qui correspond uniquement au chromosome X
-						$Regions[$r]{$file}{"normByS_depth"} = $Regions[$r]{$file}{"Mean"} / $Patients{$file}{"Ref_depth"};
+						${$RegionsRef}[$r]{$file}{"normByS_depth"} = ${$RegionsRef}[$r]{$file}{"Mean"} / $Patients{$file}{"Ref_depth"};
 						# On sauvegarde la profondeur ponderee intra patient, pour determiner ensuite la moyenne de ces profondeurs ponderees
-						push( @{ $Regions[$r]{"all_normByS_depths_males"} }, $Regions[$r]{$file}{"normByS_depth"} );
+						push( @{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} }, ${$RegionsRef}[$r]{$file}{"normByS_depth"} );
 
 					}
 
@@ -360,69 +360,69 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 				# Nous calculons pour chaque region et chaque sexe la moyenne de profondeur (ponderee pour chaque patient par rapport aux autres regions)
 				if ($normByGender eq "all") {
-					if(@{ $Regions[$r]{"all_normByS_depths_fem"} }) {
+					if(@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} }) {
 						foreach (@cnvVal) 
-							{ $Regions[$r]{"normByR_depth_fem"}{$_} = norm($_,\@{ $Regions[$r]{"all_normByS_depths_fem"} }); }
+							{ ${$RegionsRef}[$r]{"normByR_depth_fem"}{$_} = norm($_,\@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} }); }
 						if ($norm eq "std") {
 							my$sqtotal = 0;
-							foreach (@{ $Regions[$r]{"all_normByS_depths_fem"} })
-								{ $sqtotal += ($Regions[$r]{"normByR_depth_fem"}{"moy"}-$_)**2; }
-							$Regions[$r]{"normByR_depth_fem"}{"std"} = ($sqtotal / (scalar@{ $Regions[$r]{"all_normByS_depths_fem"} }-1))**0.5;
+							foreach (@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} })
+								{ $sqtotal += (${$RegionsRef}[$r]{"normByR_depth_fem"}{"moy"}-$_)**2; }
+							${$RegionsRef}[$r]{"normByR_depth_fem"}{"std"} = ($sqtotal / (scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} }-1))**0.5;
 						}
 					}
-					if(@{ $Regions[$r]{"all_normByS_depths_males"} }) {
+					if(@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} }) {
 						foreach (@cnvVal)
-							{ $Regions[$r]{"normByR_depth_males"}{$_} = norm({$_},\@{ $Regions[$r]{"all_normByS_depths_males"} }); }
+							{ ${$RegionsRef}[$r]{"normByR_depth_males"}{$_} = norm({$_},\@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} }); }
 						if ($norm eq "std") {
 							my$sqtotal = 0;
-							foreach (@{ $Regions[$r]{"all_normByS_depths_males"} })
-								{ $sqtotal += ($Regions[$r]{"normByR_depth_males"}{"moy"}-$_)**2; }
-							$Regions[$r]{"normByR_depth_males"}{"std"} = ($sqtotal / (scalar@{ $Regions[$r]{"all_normByS_depths_males"} }-1))**0.5;
+							foreach (@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} })
+								{ $sqtotal += (${$RegionsRef}[$r]{"normByR_depth_males"}{"moy"}-$_)**2; }
+							${$RegionsRef}[$r]{"normByR_depth_males"}{"std"} = ($sqtotal / (scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} }-1))**0.5;
 						}
 					}
 
 
 				} else {
-					if ($Regions[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
+					if (${$RegionsRef}[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
 						my@Autosomes=();
-						if(@{ $Regions[$r]{"all_normByS_depths_fem"} }) {
-							push(@Autosomes, @{ $Regions[$r]{"all_normByS_depths_fem"} });
+						if(@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} }) {
+							push(@Autosomes, @{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} });
 						}
-						if(@{ $Regions[$r]{"all_normByS_depths_males"} }) {
-							push(@Autosomes, @{ $Regions[$r]{"all_normByS_depths_males"} });
+						if(@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} }) {
+							push(@Autosomes, @{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} });
 						}
 						if (@Autosomes) {
 							foreach (@cnvVal) {
-								$Regions[$r]{"normByR_depth"}{$_} = norm($_,\@Autosomes);
+								${$RegionsRef}[$r]{"normByR_depth"}{$_} = norm($_,\@Autosomes);
 								}
 							if ($norm eq "std") {
 								my$sqtotal = 0;
 								foreach (@Autosomes)
-									{ $sqtotal += ($Regions[$r]{"normByR_depth"}{"moy"}-$_)**2; }
-								$Regions[$r]{"normByR_depth"}{"std"} = ($sqtotal / (scalar@Autosomes-1))**0.5;
+									{ $sqtotal += (${$RegionsRef}[$r]{"normByR_depth"}{"moy"}-$_)**2; }
+								${$RegionsRef}[$r]{"normByR_depth"}{"std"} = ($sqtotal / (scalar@Autosomes-1))**0.5;
 							}
 						}
 					} else {
-						if(@{ $Regions[$r]{"all_normByS_depths_fem"} }) {
+						if(@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} }) {
 							foreach (@cnvVal) {
-								$Regions[$r]{"normByR_depth_fem"}{$_} = norm($_,\@{ $Regions[$r]{"all_normByS_depths_fem"} });
+								${$RegionsRef}[$r]{"normByR_depth_fem"}{$_} = norm($_,\@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} });
 							}
 							if ($norm eq "std") {
 								my$sqtotal = 0;
-								foreach (@{ $Regions[$r]{"all_normByS_depths_fem"} })
-									{ $sqtotal += ($Regions[$r]{"normByR_depth_fem"}{"moy"}-$_)**2; }
-								$Regions[$r]{"normByR_depth_fem"}{"std"} = ($sqtotal / (scalar@{ $Regions[$r]{"all_normByS_depths_fem"} }-1))**0.5;
+								foreach (@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} })
+									{ $sqtotal += (${$RegionsRef}[$r]{"normByR_depth_fem"}{"moy"}-$_)**2; }
+								${$RegionsRef}[$r]{"normByR_depth_fem"}{"std"} = ($sqtotal / (scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} }-1))**0.5;
 							}
 						}
-						if(@{ $Regions[$r]{"all_normByS_depths_males"} }) {
+						if(@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} }) {
 							foreach (@cnvVal) {
-								$Regions[$r]{"normByR_depth_males"}{$_} = norm($_,\@{ $Regions[$r]{"all_normByS_depths_males"} });
+								${$RegionsRef}[$r]{"normByR_depth_males"}{$_} = norm($_,\@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} });
 							}
 							if ($norm eq "std") {
 								my$sqtotal = 0;
-								foreach (@{ $Regions[$r]{"all_normByS_depths_males"} })
-									{ $sqtotal += ($Regions[$r]{"normByR_depth_males"}{"moy"}-$_)**2; }
-								$Regions[$r]{"normByR_depth_males"}{"std"} = ($sqtotal / (scalar@{ $Regions[$r]{"all_normByS_depths_males"} }-1))**0.5;
+								foreach (@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} })
+									{ $sqtotal += (${$RegionsRef}[$r]{"normByR_depth_males"}{"moy"}-$_)**2; }
+								${$RegionsRef}[$r]{"normByR_depth_males"}{"std"} = ($sqtotal / (scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} }-1))**0.5;
 							}
 						}
 					}
@@ -430,7 +430,7 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 			
 				# Un second parcours permet l'appel de CNV (en comparant la profondeur pour un patient par la profondeur moyenne de la region)
-				foreach my$file (@Files) {
+				foreach my$file (@{$FilesRef}) {
 
 					if ($norm eq "std") { $prof_Moyenne_Inter = 0; }
 					else  { $prof_Moyenne_Inter = 1; }
@@ -440,90 +440,90 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 						if ($normByGender eq "all") {
 
 							if($Patients{$file}{"Sexe"} eq "F") {
-								if ($Regions[$r]{"normByR_depth_fem"}{$norm}) {
-									if ($Regions[$r]{"Chrom"} !~ /^(chrY|Y)$/) {
+								if (${$RegionsRef}[$r]{"normByR_depth_fem"}{$norm}) {
+									if (${$RegionsRef}[$r]{"Chrom"} !~ /^(chrY|Y)$/) {
 										if ($norm eq "std") {
-											$Regions[$r]{$file}{"depth_ratio"}{"moy"} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth_fem"}{"moy"};
-											$Regions[$r]{$file}{"depth_ratio"}{"std"} = ($Regions[$r]{$file}{"normByS_depth"}-$Regions[$r]{"normByR_depth_fem"}{"moy"})/$Regions[$r]{"normByR_depth_fem"}{"std"};
+											${$RegionsRef}[$r]{$file}{"depth_ratio"}{"moy"} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth_fem"}{"moy"};
+											${$RegionsRef}[$r]{$file}{"depth_ratio"}{"std"} = (${$RegionsRef}[$r]{$file}{"normByS_depth"}-${$RegionsRef}[$r]{"normByR_depth_fem"}{"moy"})/${$RegionsRef}[$r]{"normByR_depth_fem"}{"std"};
 										} else {
-											$Regions[$r]{$file}{"depth_ratio"}{$norm} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth_fem"}{$norm};
+											${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth_fem"}{$norm};
 										}
-										$prof_Moyenne_Inter = $Regions[$r]{$file}{"depth_ratio"}{$norm};
+										$prof_Moyenne_Inter = ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm};
 										print SORTIE "$prof_Moyenne_Inter\t";
 									} else {
 										# En faisant la distinction entre chromosomes X et Y, les femmes ne sont plus considérées pour l'appel de CNV des régions du dernier
 										print SORTIE "NA\t";
 									}
 								} else {
-									$Regions[$r]{"Appel"} = "No_Data";
+									${$RegionsRef}[$r]{"Appel"} = "No_Data";
 									print SORTIE "NA\t";
 								}
 
 							} elsif ($Patients{$file}{"Sexe"} eq "H") {
-								if ($Regions[$r]{"normByR_depth_males"}{$norm}) {
+								if (${$RegionsRef}[$r]{"normByR_depth_males"}{$norm}) {
 									if ($norm eq "std") {
-										$Regions[$r]{$file}{"depth_ratio"}{"moy"} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth_males"}{"moy"};
-										$Regions[$r]{$file}{"depth_ratio"}{"std"} = ($Regions[$r]{$file}{"normByS_depth"}-$Regions[$r]{"normByR_depth_males"}{"moy"})/$Regions[$r]{"normByR_depth_males"}{"std"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"moy"} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth_males"}{"moy"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"std"} = (${$RegionsRef}[$r]{$file}{"normByS_depth"}-${$RegionsRef}[$r]{"normByR_depth_males"}{"moy"})/${$RegionsRef}[$r]{"normByR_depth_males"}{"std"};
 									} else {
-										$Regions[$r]{$file}{"depth_ratio"}{$norm} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth_males"}{$norm};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth_males"}{$norm};
 									}
-									$prof_Moyenne_Inter = $Regions[$r]{$file}{"depth_ratio"}{$norm};
+									$prof_Moyenne_Inter = ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm};
 									print SORTIE "$prof_Moyenne_Inter\t";
 								} else {
-									$Regions[$r]{"Appel"} = "No_Data";
+									${$RegionsRef}[$r]{"Appel"} = "No_Data";
 									print SORTIE "NA\t";
 								}
 							}
 
 						} else {
 							# Pour les autosomes
-							if ($Regions[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
-								if ($Regions[$r]{"normByR_depth"}{$norm}) {
+							if (${$RegionsRef}[$r]{"Chrom"} !~ /^(chr[XY]|[XY])$/) {
+								if (${$RegionsRef}[$r]{"normByR_depth"}{$norm}) {
 									if ($norm eq "std") {
-										$Regions[$r]{$file}{"depth_ratio"}{"moy"} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth"}{"moy"};
-										$Regions[$r]{$file}{"depth_ratio"}{"std"} = ($Regions[$r]{$file}{"normByS_depth"}-$Regions[$r]{"normByR_depth"}{"moy"})/$Regions[$r]{"normByR_depth"}{"std"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"moy"} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth"}{"moy"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"std"} = (${$RegionsRef}[$r]{$file}{"normByS_depth"}-${$RegionsRef}[$r]{"normByR_depth"}{"moy"})/${$RegionsRef}[$r]{"normByR_depth"}{"std"};
 									} else {
-										$Regions[$r]{$file}{"depth_ratio"}{$norm} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth"}{$norm};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth"}{$norm};
 									}
-									$prof_Moyenne_Inter = $Regions[$r]{$file}{"depth_ratio"}{$norm};
+									$prof_Moyenne_Inter = ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm};
 									print SORTIE "$prof_Moyenne_Inter\t";
 								} else {
-									$Regions[$r]{"Appel"} = "No_Data";
+									${$RegionsRef}[$r]{"Appel"} = "No_Data";
 									print SORTIE "NA\t";
 								}
 							} else {
 							# Pour les gonosomes
 								if($Patients{$file}{"Sexe"} eq "F") {
-									if ($Regions[$r]{"normByR_depth_fem"}{$norm}) {
-										if ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) {
+									if (${$RegionsRef}[$r]{"normByR_depth_fem"}{$norm}) {
+										if (${$RegionsRef}[$r]{"Chrom"} =~ /^(chrX|X)$/) {
 											if ($norm eq "std") {
-												$Regions[$r]{$file}{"depth_ratio"}{"moy"} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth_fem"}{"moy"};
-												$Regions[$r]{$file}{"depth_ratio"}{"std"} = ($Regions[$r]{$file}{"normByS_depth"}-$Regions[$r]{"normByR_depth_fem"}{"moy"})/$Regions[$r]{"normByR_depth_fem"}{"std"};
+												${$RegionsRef}[$r]{$file}{"depth_ratio"}{"moy"} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth_fem"}{"moy"};
+												${$RegionsRef}[$r]{$file}{"depth_ratio"}{"std"} = (${$RegionsRef}[$r]{$file}{"normByS_depth"}-${$RegionsRef}[$r]{"normByR_depth_fem"}{"moy"})/${$RegionsRef}[$r]{"normByR_depth_fem"}{"std"};
 											} else {
-												$Regions[$r]{$file}{"depth_ratio"}{$norm} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth_fem"}{$norm};
+												${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth_fem"}{$norm};
 											}
-											$prof_Moyenne_Inter = $Regions[$r]{$file}{"depth_ratio"}{$norm};
+											$prof_Moyenne_Inter = ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm};
 											print SORTIE "$prof_Moyenne_Inter\t";
 										} else {
 											# En faisant la distinction entre chromosomes X et Y, les femmes ne sont plus considérées pour l'appel de CNV des régions du dernier
 											print SORTIE "NA\t";
 										}
 									} else {
-										$Regions[$r]{"Appel"} = "No_Data";
+										${$RegionsRef}[$r]{"Appel"} = "No_Data";
 										print SORTIE "NA\t";
 									}
 								} elsif ($Patients{$file}{"Sexe"} eq "H") {
-									if ($Regions[$r]{"normByR_depth_males"}{$norm}) {
+									if (${$RegionsRef}[$r]{"normByR_depth_males"}{$norm}) {
 										if ($norm eq "std") {
-											$Regions[$r]{$file}{"depth_ratio"}{"moy"} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth_males"}{"moy"};
-											$Regions[$r]{$file}{"depth_ratio"}{"std"} = ($Regions[$r]{$file}{"normByS_depth"}-$Regions[$r]{"normByR_depth_males"}{"moy"})/$Regions[$r]{"normByR_depth_males"}{"std"};
+											${$RegionsRef}[$r]{$file}{"depth_ratio"}{"moy"} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth_males"}{"moy"};
+											${$RegionsRef}[$r]{$file}{"depth_ratio"}{"std"} = (${$RegionsRef}[$r]{$file}{"normByS_depth"}-${$RegionsRef}[$r]{"normByR_depth_males"}{"moy"})/${$RegionsRef}[$r]{"normByR_depth_males"}{"std"};
 										} else {
-											$Regions[$r]{$file}{"depth_ratio"}{$norm} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth_males"}{$norm};
+											${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth_males"}{$norm};
 										}
-										$prof_Moyenne_Inter = $Regions[$r]{$file}{"depth_ratio"}{$norm};
+										$prof_Moyenne_Inter = ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm};
 										print SORTIE "$prof_Moyenne_Inter\t";
 									} else {
-										$Regions[$r]{"Appel"} = "No_Data";
+										${$RegionsRef}[$r]{"Appel"} = "No_Data";
 										print SORTIE "NA\t";
 									}
 								}
@@ -532,12 +532,12 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 			
 						#print $Regions[$r]{$patient}{"depth_ratio"}."\t";
 						if ($prof_Moyenne_Inter < $seuil_deletion) {
-							$Regions[$r]{"nb_CNV"}{"DEL"}++;
+							${$RegionsRef}[$r]{"nb_CNV"}{"DEL"}++;
 							$nb_evts++;
 							$CNV{$file}++;
 							$Results{$file}{$r} = "DEL";
 						} elsif ($prof_Moyenne_Inter > $seuil_duplication) {
-							$Regions[$r]{"nb_CNV"}{"DUP"}++;
+							${$RegionsRef}[$r]{"nb_CNV"}{"DUP"}++;
 							$nb_evts++;
 							$CNV{$file}++;
 							$Results{$file}{$r} = "DUP";
@@ -549,13 +549,13 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 				}
 
 				my$recurrent="";
-				if(@{$Regions[$r]{"all_normByS_depths_fem"}} && @{$Regions[$r]{"all_normByS_depths_males"}} && (($nb_evts/(scalar@{$Regions[$r]{"all_normByS_depths_fem"}} + scalar@{$Regions[$r]{"all_normByS_depths_males"}})) > $seuil_region) && ($nb_parcours > 0)) { $recurrent = 1; }
-				elsif(@{$Regions[$r]{"all_normByS_depths_fem"}} && !@{$Regions[$r]{"all_normByS_depths_males"}} && (($nb_evts/scalar@{$Regions[$r]{"all_normByS_depths_fem"}}) > $seuil_region) && ($nb_parcours > 0)) { $recurrent = 1; }
-				elsif(!@{$Regions[$r]{"all_normByS_depths_fem"}} && @{$Regions[$r]{"all_normByS_depths_males"}} && (($nb_evts/scalar@{$Regions[$r]{"all_normByS_depths_males"}}) > $seuil_region) && ($nb_parcours > 0)) { $recurrent = 1; }
+				if(@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} } && @{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} } && (($nb_evts/(scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} } + scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} })) > $seuil_region) && ($nb_parcours > 0)) { $recurrent = 1; }
+				elsif(@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} } && !@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} } && (($nb_evts/scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} }) > $seuil_region) && ($nb_parcours > 0)) { $recurrent = 1; }
+				elsif(!@{ ${$RegionsRef}[$r]{"all_normByS_depths_fem"} } && @{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} } && (($nb_evts/scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths_males"} }) > $seuil_region) && ($nb_parcours > 0)) { $recurrent = 1; }
 				if ($recurrent) {
 					print SORTIE "CNV_Recurrent";
-					print LOG "Region ecartee \: ". $Regions[$r]{"allLine"}."\n";
-					$Regions[$r]{"Appel"} = "CNV_Recurrent";
+					print LOG "Region ecartee \: ". ${$RegionsRef}[$r]{"allLine"}."\n";
+					${$RegionsRef}[$r]{"Appel"} = "CNV_Recurrent";
 					$regions_ecartees++;
 					$continuer = 1;
 
@@ -567,50 +567,50 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 			} else {
 
-				@{ $Regions[$r]{"all_normByS_depths"} }=();
+				@{ ${$RegionsRef}[$r]{"all_normByS_depths"} }=();
 				# Pour chaque patient, un premier parcours permet la pondération intra-patient (en divisant la profondeur de la region par la profondeur totale recalculée du patient)
-				foreach my$file (@Files) {
+				foreach my$file (@{$FilesRef}) {
 					if(! $Patients{$file}{"ecarte"}) {
-						$Regions[$r]{$file}{"normByS_depth"} = $Regions[$r]{$file}{"Mean"} / $Patients{$file}{"Ref_depth"};
-						if ( ($Patients{$file}{"Sexe"} eq "H") && ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) )
-							{ push(@{ $Regions[$r]{"all_normByS_depths"} }, ($Regions[$r]{$file}{"normByS_depth"}*2)); }
-						elsif ( ($Patients{$file}{"Sexe"} eq "F") && ($Regions[$r]{"Chrom"} =~ /^(chrY|Y)$/) )
+						${$RegionsRef}[$r]{$file}{"normByS_depth"} = ${$RegionsRef}[$r]{$file}{"Mean"} / $Patients{$file}{"Ref_depth"};
+						if ( ($Patients{$file}{"Sexe"} eq "H") && (${$RegionsRef}[$r]{"Chrom"} =~ /^(chrX|X)$/) )
+							{ push(@{ ${$RegionsRef}[$r]{"all_normByS_depths"} }, (${$RegionsRef}[$r]{$file}{"normByS_depth"}*2)); }
+						elsif ( ($Patients{$file}{"Sexe"} eq "F") && (${$RegionsRef}[$r]{"Chrom"} =~ /^(chrY|Y)$/) )
 							{ next ; }
-						else { push(@{ $Regions[$r]{"all_normByS_depths"} }, $Regions[$r]{$file}{"normByS_depth"}); }
+						else { push(@{ ${$RegionsRef}[$r]{"all_normByS_depths"} }, ${$RegionsRef}[$r]{$file}{"normByS_depth"}); }
 					}
 				}
 				# Nous calculons pour chaque region la mediane/moyenne de profondeur (ponderee pour chaque patient par rapport aux autres regions)
-				if(@{ $Regions[$r]{"all_normByS_depths"} }) {
+				if(@{ ${$RegionsRef}[$r]{"all_normByS_depths"} }) {
 					foreach (@cnvVal) { 
-						$Regions[$r]{"normByR_depth"}{$_} = norm($_,\@{ $Regions[$r]{"all_normByS_depths"} });
+						${$RegionsRef}[$r]{"normByR_depth"}{$_} = norm($_,\@{ ${$RegionsRef}[$r]{"all_normByS_depths"} });
 						}
 					if ($norm eq "std") {
 						my$sqtotal = 0;
-						foreach (@{ $Regions[$r]{"all_normByS_depths"} })
-							{ $sqtotal += ($Regions[$r]{"normByR_depth"}{"moy"}-$_)**2; }
-						$Regions[$r]{"normByR_depth"}{"std"} = ($sqtotal / (scalar@{ $Regions[$r]{"all_normByS_depths"} }-1))**0.5;
+						foreach (@{ ${$RegionsRef}[$r]{"all_normByS_depths"} })
+							{ $sqtotal += (${$RegionsRef}[$r]{"normByR_depth"}{"moy"}-$_)**2; }
+						${$RegionsRef}[$r]{"normByR_depth"}{"std"} = ($sqtotal / (scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths"} }-1))**0.5;
 					}
 				}
 
 
 				# Un second parcours permet l'appel de CNV (en comparant la profondeur pour un patient par la profondeur moyenne de la region)
-				foreach my$file (@Files) {
+				foreach my$file (@{$FilesRef}) {
 
 					if ($norm eq "std") { $prof_Moyenne_Inter = 0; }
 					else  { $prof_Moyenne_Inter = 1; }
 
 					if(! $Patients{$file}{"ecarte"}) {
 
-						if ($Regions[$r]{"normByR_depth"}{$norm}) {
+						if (${$RegionsRef}[$r]{"normByR_depth"}{$norm}) {
 							if($Patients{$file}{"Sexe"} eq "F") {
-								if ($Regions[$r]{"Chrom"} !~ /^(chrY|Y)$/) {
+								if (${$RegionsRef}[$r]{"Chrom"} !~ /^(chrY|Y)$/) {
 									if ($norm eq "std") {
-										$Regions[$r]{$file}{"depth_ratio"}{"moy"} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth"}{"moy"};
-										$Regions[$r]{$file}{"depth_ratio"}{"std"} = ($Regions[$r]{$file}{"normByS_depth"}-$Regions[$r]{"normByR_depth"}{"moy"})/$Regions[$r]{"normByR_depth"}{"std"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"moy"} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth"}{"moy"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"std"} = (${$RegionsRef}[$r]{$file}{"normByS_depth"}-${$RegionsRef}[$r]{"normByR_depth"}{"moy"})/${$RegionsRef}[$r]{"normByR_depth"}{"std"};
 									} else {
-										$Regions[$r]{$file}{"depth_ratio"}{$norm} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth"}{$norm};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth"}{$norm};
 									}
-									$prof_Moyenne_Inter = $Regions[$r]{$file}{"depth_ratio"}{$norm};
+									$prof_Moyenne_Inter = ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm};
 									print SORTIE "$prof_Moyenne_Inter\t";
 								} else {
 									#les femmes ne sont pas considérées pour l'appel de CNV des régions du Y
@@ -618,37 +618,37 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 								}
 							} else {
 								#*2 for chrX
-								if ($Regions[$r]{"Chrom"} =~ /^(chrX|X)$/) {
+								if (${$RegionsRef}[$r]{"Chrom"} =~ /^(chrX|X)$/) {
 									if ($norm eq "std") {
-										$Regions[$r]{$file}{"depth_ratio"}{"moy"} = $Regions[$r]{$file}{"normByS_depth"}*2/$Regions[$r]{"normByR_depth"}{"moy"};
-										$Regions[$r]{$file}{"depth_ratio"}{"std"} = ($Regions[$r]{$file}{"normByS_depth"}*2-$Regions[$r]{"normByR_depth"}{"moy"})/$Regions[$r]{"normByR_depth"}{"std"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"moy"} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}*2/${$RegionsRef}[$r]{"normByR_depth"}{"moy"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"std"} = (${$RegionsRef}[$r]{$file}{"normByS_depth"}*2-${$RegionsRef}[$r]{"normByR_depth"}{"moy"})/${$RegionsRef}[$r]{"normByR_depth"}{"std"};
 									} else {
-										$Regions[$r]{$file}{"depth_ratio"}{$norm} = $Regions[$r]{$file}{"normByS_depth"}*2/$Regions[$r]{"normByR_depth"}{$norm};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}*2/${$RegionsRef}[$r]{"normByR_depth"}{$norm};
 									}
 								} else {
 									if ($norm eq "std") {
-										$Regions[$r]{$file}{"depth_ratio"}{"moy"} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth"}{"moy"};
-										$Regions[$r]{$file}{"depth_ratio"}{"std"} = ($Regions[$r]{$file}{"normByS_depth"}-$Regions[$r]{"normByR_depth"}{"moy"})/$Regions[$r]{"normByR_depth"}{"std"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"moy"} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth"}{"moy"};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{"std"} = (${$RegionsRef}[$r]{$file}{"normByS_depth"}-${$RegionsRef}[$r]{"normByR_depth"}{"moy"})/${$RegionsRef}[$r]{"normByR_depth"}{"std"};
 									} else {
-										$Regions[$r]{$file}{"depth_ratio"}{$norm} = $Regions[$r]{$file}{"normByS_depth"}/$Regions[$r]{"normByR_depth"}{$norm};
+										${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm} = ${$RegionsRef}[$r]{$file}{"normByS_depth"}/${$RegionsRef}[$r]{"normByR_depth"}{$norm};
 									}
 								}
-								$prof_Moyenne_Inter = $Regions[$r]{$file}{"depth_ratio"}{$norm};
+								$prof_Moyenne_Inter = ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$norm};
 								print SORTIE "$prof_Moyenne_Inter\t";
 							}
 							if ($prof_Moyenne_Inter < $seuil_deletion) {
-								$Regions[$r]{"nb_CNV"}{"DEL"}++;
+								${$RegionsRef}[$r]{"nb_CNV"}{"DEL"}++;
 								$nb_evts++;
 								$CNV{$file}++;
 								$Results{$file}{$r} = "DEL";
 							} elsif ($prof_Moyenne_Inter > $seuil_duplication) {
-								$Regions[$r]{"nb_CNV"}{"DUP"}++;
+								${$RegionsRef}[$r]{"nb_CNV"}{"DUP"}++;
 								$nb_evts++;
 								$CNV{$file}++;
 								$Results{$file}{$r} = "DUP";
 							}
 						} else {
-							$Regions[$r]{"Appel"} = "No_Data";
+							${$RegionsRef}[$r]{"Appel"} = "No_Data";
 							#$prof_Moyenne_Inter = 1;
 							print SORTIE "NA\t";
 						}
@@ -658,10 +658,10 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 				}
 
-				if(@{ $Regions[$r]{"all_normByS_depths"} } && (($nb_evts/scalar@{ $Regions[$r]{"all_normByS_depths"} }) > $seuil_region) && ($nb_parcours > 0)) {
+				if(@{ ${$RegionsRef}[$r]{"all_normByS_depths"} } && (($nb_evts/scalar@{ ${$RegionsRef}[$r]{"all_normByS_depths"} }) > $seuil_region) && ($nb_parcours > 0)) {
 					print SORTIE "CNV_Recurrent";
-					print LOG "Region ecartee \: ". $Regions[$r]{"allLine"}."\n";
-					$Regions[$r]{"Appel"} = "CNV_Recurrent";
+					print LOG "Region ecartee \: ". ${$RegionsRef}[$r]{"allLine"}."\n";
+					${$RegionsRef}[$r]{"Appel"} = "CNV_Recurrent";
 					$regions_ecartees++;
 					$continuer = 1;
 
@@ -673,10 +673,10 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 		# SI LA REGION EST "MOCHE"
 		} else {
-			foreach my$file (@Files) {
+			foreach my$file (@{$FilesRef}) {
 				print SORTIE "NA\t";
 			}
-			print SORTIE $Regions[$r]{"Appel"}."\n";
+			print SORTIE ${$RegionsRef}[$r]{"Appel"}."\n";
 		}
 
 	}
@@ -685,7 +685,7 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 	my $patients_ecartes = 0;
 
-	foreach my$file (@Files) {
+	foreach my$file (@{$FilesRef}) {
 
 		if (! $Patients{$file}{"ecarte"}) {
 			my $prcent_evt;
@@ -694,7 +694,7 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 				$prcent_evt = $CNV{$file}/$nb_regions_conservees;
 
 				if ($prcent_evt >= $seuil_patient) {
-					print LOG "Patient ecarte \: ".$sampleName{$file}."\n";
+					print LOG "Patient ecarte \: ".${$sampleNameRef}{$file}."\n";
 					$Patients{$file}{"ecarte"} = 1;
 					$continuer = 1;
 					$patients_ecartes++;			
@@ -704,7 +704,7 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 
 
 			} else {
-				print $sampleName{$file}." \: aucun CNV identifie\n";
+				print ${$sampleNameRef}{$file}." \: aucun CNV identifie\n";
 				$Patients{$file}{"ecarte"} = 0;
 			}
 
@@ -723,8 +723,8 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 }
 
 
-for my$file (@Files) {
-	mkdir "$outdir/$sampleName{$file}";
+for my$file (@{$FilesRef}) {
+	mkdir "$outdir/${$sampleNameRef}{$file}";
 	}
 
 
@@ -733,23 +733,23 @@ for my$file (@Files) {
 ## $Results{$file}{$r} = "DEL";
 ## @{ $RegionOrder{$Chrom} } = [ regions sorted by pos ]
 my(%uniqReg,%RegInArray,%regionOrder,%regionIndice);
-for my$r (0..$#Regions) {
-	unless (exists $uniqReg{ $Regions[$r]{"Chrom"}."-".$Regions[$r]{"Start"}."-".$Regions[$r]{"End"} }) {
-		push (@{ $RegInArray{ $Regions[$r]{"Chrom"} } }, $r);
-		$uniqReg{ $Regions[$r]{"Chrom"}."-".$Regions[$r]{"Start"}."-".$Regions[$r]{"End"} } = 1;
+for (my $r = 0 ; $r < scalar@{$RegionsRef} ; $r++) {
+	unless (exists $uniqReg{ ${$RegionsRef}[$r]{"Chrom"}."-".${$RegionsRef}[$r]{"Start"}."-".${$RegionsRef}[$r]{"End"} }) {
+		push (@{ $RegInArray{ ${$RegionsRef}[$r]{"Chrom"} } }, $r);
+		$uniqReg{ ${$RegionsRef}[$r]{"Chrom"}."-".${$RegionsRef}[$r]{"Start"}."-".${$RegionsRef}[$r]{"End"} } = 1;
 		}
-	my@tab = split(/\t/, $Regions[$r]{"allLine"});
+	my@tab = split(/\t/, ${$RegionsRef}[$r]{"allLine"});
 	if ($tab[3]) {
 		my@tab2 = split(/:|,/, $tab[3]);
-		$Regions[$r]{"label"} = substr($tab2[0], 0, 25);
-		$Regions[$r]{"Gene"} = $tab2[0];
+		${$RegionsRef}[$r]{"label"} = substr($tab2[0], 0, 25);
+		${$RegionsRef}[$r]{"Gene"} = $tab2[0];
 		}
-	else { $Regions[$r]{"label"} = "$tab[1]-$tab[2]"; }
+	else { ${$RegionsRef}[$r]{"label"} = "$tab[1]-$tab[2]"; }
 	}
 foreach my$Chrom (keys%RegInArray) {
 	##sort by region ends (in case several regions with same start) then by starts
-	@{ $regionOrder{$Chrom} } = sort{$Regions[$a]{"End"}<=>$Regions[$b]{"End"}}@{ $RegInArray{$Chrom} }; 
-	@{ $regionOrder{$Chrom} } = sort{$Regions[$a]{"Start"}<=>$Regions[$b]{"Start"}}@{ $RegInArray{$Chrom} }; 
+	@{ $regionOrder{$Chrom} } = sort{${$RegionsRef}[$a]{"End"}<=>${$RegionsRef}[$b]{"End"}}@{ $RegInArray{$Chrom} }; 
+	@{ $regionOrder{$Chrom} } = sort{${$RegionsRef}[$a]{"Start"}<=>${$RegionsRef}[$b]{"Start"}}@{ $RegInArray{$Chrom} }; 
 	for (my$i=0;$i<scalar@{ $regionOrder{$Chrom} };$i++) { $regionIndice{ $regionOrder{$Chrom}[$i] } = $i; }
 	}
 
@@ -758,24 +758,24 @@ my%orderedCNV;
 foreach my$file (keys%Results) {
 	my(%uniqCNV,%CNVinArray);
 	foreach my$r (sort{$a<=>$b}keys%{ $Results{$file} }) {
-		if (!exists $uniqCNV{$Regions[$r]{"Chrom"}."-".$Regions[$r]{"Start"}."-".$Regions[$r]{"End"}}) { 
-			push (@{ $CNVinArray{ $Regions[$r]{"Chrom"} } }, $r);
-			$uniqCNV{ $Regions[$r]{"Chrom"}."-".$Regions[$r]{"Start"}."-".$Regions[$r]{"End"} } = 1;
+		if (!exists $uniqCNV{${$RegionsRef}[$r]{"Chrom"}."-".${$RegionsRef}[$r]{"Start"}."-".${$RegionsRef}[$r]{"End"}}) { 
+			push (@{ $CNVinArray{ ${$RegionsRef}[$r]{"Chrom"} } }, $r);
+			$uniqCNV{ ${$RegionsRef}[$r]{"Chrom"}."-".${$RegionsRef}[$r]{"Start"}."-".${$RegionsRef}[$r]{"End"} } = 1;
 			}
 		}
 	foreach my$Chrom (keys%CNVinArray) {
 		##sort by region ends (in case several regions with same start) then by starts
-		@{ $orderedCNV{$file}{$Chrom} } = sort{$Regions[$a]{"End"}<=>$Regions[$b]{"End"}}@{ $CNVinArray{$Chrom} }; 
-		@{ $orderedCNV{$file}{$Chrom} } = sort{$Regions[$a]{"Start"}<=>$Regions[$b]{"Start"}}@{ $CNVinArray{$Chrom} }; 
+		@{ $orderedCNV{$file}{$Chrom} } = sort{${$RegionsRef}[$a]{"End"}<=>${$RegionsRef}[$b]{"End"}}@{ $CNVinArray{$Chrom} }; 
+		@{ $orderedCNV{$file}{$Chrom} } = sort{${$RegionsRef}[$a]{"Start"}<=>${$RegionsRef}[$b]{"Start"}}@{ $CNVinArray{$Chrom} }; 
 		}
 	}
 
 unless ($minCNV) { $minCNV = 1; }
 my(%Result2,%Result3,%Result4);
 foreach my$file (keys%Results) {
-	open (CNV1,">$outdir/$sampleName{$file}/CNV_$sampleName{$file}.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
+	open (CNV1,">$outdir/${$sampleNameRef}{$file}/CNV_${$sampleNameRef}{$file}.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
 	print CNV1 "#Region\tCNV\tclean_intervals_Nbr\tclean_ratio_to_$norm\tdirty_intervals_Nbr\tdirty_ratio_to_$norm\toverlapping_Samples\n";
-	open (CNV2,">$outdir/$sampleName{$file}/CNV_$sampleName{$file}.allIntervals.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
+	open (CNV2,">$outdir/${$sampleNameRef}{$file}/CNV_${$sampleNameRef}{$file}.allIntervals.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
 	print CNV2 "#Chrom\tStart\tEnd\tLength\tInfo\tinterval_Order\tCNV_type\tratio_to_$norm\toccurences";
 	if (@cnvFields) {
 		foreach (@cnvFields) { 
@@ -787,18 +787,18 @@ foreach my$file (keys%Results) {
 			}
 		}
 	print CNV2 "\n";
-	foreach my$Chromosome (@ChromOrder) {
+	foreach my$Chromosome (@{$ChromOrderRef}) {
 		my$Chrom = $Chromosome ; $Chrom =~ s/chr//i;
 		if (exists $orderedCNV{$file}{$Chrom}) {
 			my$r=0;		##index in @{ $orderedCNV{$file}{$Chrom} }
 			while ($r < scalar@{ $orderedCNV{$file}{$Chrom} } ) {
 				##merge consecutive CNVs
-				my@refSub = mergeConsecutiveCNV("",$maxNonCNV,$orderedCNV{$file}{$Chrom}[$r],$regionIndice{$orderedCNV{$file}{$Chrom}[$r]},\@{ $regionOrder{$Chrom} },\%{ $Results{$file} },\@Regions);
+				my@refSub = mergeConsecutiveCNV("",$maxNonCNV,$orderedCNV{$file}{$Chrom}[$r],$regionIndice{$orderedCNV{$file}{$Chrom}[$r]},\@{ $regionOrder{$Chrom} },\%{ $Results{$file} },$RegionsRef);
 				my$i=$refSub[0]; my$cnvOK=$refSub[1]; my$nonCNVtot=$refSub[2];
 				my@nextReg = @{ $refSub[3] };
 				if ($maxNonCNVrate) {
 					while (($nonCNVtot/($cnvOK+1)) > $maxNonCNVrate) {
-						@refSub = mergeConsecutiveCNV(($cnvOK-1),$maxNonCNV,$orderedCNV{$file}{$Chrom}[$r],$regionIndice{$orderedCNV{$file}{$Chrom}[$r]},\@{ $regionOrder{$Chrom} },\%{ $Results{$file} },\@Regions);
+						@refSub = mergeConsecutiveCNV(($cnvOK-1),$maxNonCNV,$orderedCNV{$file}{$Chrom}[$r],$regionIndice{$orderedCNV{$file}{$Chrom}[$r]},\@{ $regionOrder{$Chrom} },\%{ $Results{$file} },$RegionsRef);
 						$i=$refSub[0]; my$cnvOK=$refSub[1]; my$nonCNVtot=$refSub[2];
 						@nextReg = @{ $refSub[3] };
 						}
@@ -818,12 +818,12 @@ foreach my$file (keys%Results) {
 					if ($cnvOK == 0) {
 						$Result2{$file}{$nextReg[0]} = $Results{$file}{$nextReg[0]};
 						$Result3{$file}{$nextReg[0]} = $Results{$file}{$nextReg[0]};
-						$Result4{$file}{$Chrom}{$Regions[$nextReg[0]]{"Start"}}{$Regions[$nextReg[0]]{"End"}} = $Results{$file}{$nextReg[0]};
+						$Result4{$file}{$Chrom}{${$RegionsRef}[$nextReg[0]]{"Start"}}{${$RegionsRef}[$nextReg[0]]{"End"}} = $Results{$file}{$nextReg[0]};
 						if (exists $regionIndice{$nextReg[0]}) {
-							print CNV1 $Chromosome.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[0]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t1\t".sprintf("%.3f",$Regions[$nextReg[0]]{$file}{"depth_ratio"}{$norm})."\t.\t.\t$overlapCNT\n";
-							print CNV2 $Chromosome."\t".$Regions[$nextReg[0]]{"Start"}."\t".$Regions[$nextReg[0]]{"End"}."\t".($Regions[$nextReg[0]]{"End"}-$Regions[$nextReg[0]]{"Start"}+1)." bp\t".$Regions[$nextReg[0]]{"label"}."\t".($regionIndice{$nextReg[0]}+1)."\t".$Results{$file}{$nextReg[0]}."\t".sprintf("%.3f",$Regions[$nextReg[0]]{$file}{"depth_ratio"}{$norm})."\t".$Regions[$nextReg[0]]{"nb_CNV"}{$Results{$file}{$nextReg[0]}};
+							print CNV1 $Chromosome.":".${$RegionsRef}[$nextReg[0]]{"Start"}."-".${$RegionsRef}[$nextReg[0]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t1\t".sprintf("%.3f",${$RegionsRef}[$nextReg[0]]{$file}{"depth_ratio"}{$norm})."\t.\t.\t$overlapCNT\n";
+							print CNV2 $Chromosome."\t".${$RegionsRef}[$nextReg[0]]{"Start"}."\t".${$RegionsRef}[$nextReg[0]]{"End"}."\t".(${$RegionsRef}[$nextReg[0]]{"End"}-${$RegionsRef}[$nextReg[0]]{"Start"}+1)." bp\t".${$RegionsRef}[$nextReg[0]]{"label"}."\t".($regionIndice{$nextReg[0]}+1)."\t".$Results{$file}{$nextReg[0]}."\t".sprintf("%.3f",${$RegionsRef}[$nextReg[0]]{$file}{"depth_ratio"}{$norm})."\t".${$RegionsRef}[$nextReg[0]]{"nb_CNV"}{$Results{$file}{$nextReg[0]}};
 							if (@cnvFields) {
-								my$txt = printCNVfields($normByGender,\@cnvFields,\%{ $Regions[$nextReg[0]] },\%{ $Patients{$file} });
+								my$txt = printCNVfields($normByGender,\@cnvFields,\%{ ${$RegionsRef}[$nextReg[0]] },\%{ $Patients{$file} });
 								print CNV2 "$txt";
 								}
 							print CNV2 "\n\n";
@@ -834,13 +834,13 @@ foreach my$file (keys%Results) {
 						for (my$j=0;$j<=$cnvOK;$j++) {
 							if (exists $Results{$file}{$nextReg[$j]}) {
 								$Result2{$file}{$nextReg[$j]} = $Results{$file}{$nextReg[$j]};
-								$Result4{$file}{$Chrom}{$Regions[$nextReg[$j]]{"Start"}}{$Regions[$nextReg[$j]]{"End"}} = $Results{$file}{$nextReg[$j]};
-								push(@cleanCNV, $Regions[$nextReg[$j]]{$file}{"depth_ratio"}{$norm});
-								push(@dirtyCNV, $Regions[$nextReg[$j]]{$file}{"depth_ratio"}{$norm});
+								$Result4{$file}{$Chrom}{${$RegionsRef}[$nextReg[$j]]{"Start"}}{${$RegionsRef}[$nextReg[$j]]{"End"}} = $Results{$file}{$nextReg[$j]};
+								push(@cleanCNV, ${$RegionsRef}[$nextReg[$j]]{$file}{"depth_ratio"}{$norm});
+								push(@dirtyCNV, ${$RegionsRef}[$nextReg[$j]]{$file}{"depth_ratio"}{$norm});
 								if (exists $regionIndice{$nextReg[$j]}) {
-									print CNV2 $Chromosome."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".($Regions[$nextReg[$j]]{"End"}-$Regions[$nextReg[$j]]{"Start"}+1)." bp\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t".$Results{$file}{$nextReg[$j]}."\t".sprintf("%.3f",$Regions[$nextReg[$j]]{$file}{"depth_ratio"}{$norm})."\t".$Regions[$nextReg[$j]]{"nb_CNV"}{$Results{$file}{$nextReg[$j]}};
+									print CNV2 $Chromosome."\t".${$RegionsRef}[$nextReg[$j]]{"Start"}."\t".${$RegionsRef}[$nextReg[$j]]{"End"}."\t".(${$RegionsRef}[$nextReg[$j]]{"End"}-${$RegionsRef}[$nextReg[$j]]{"Start"}+1)." bp\t".${$RegionsRef}[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t".$Results{$file}{$nextReg[$j]}."\t".sprintf("%.3f",${$RegionsRef}[$nextReg[$j]]{$file}{"depth_ratio"}{$norm})."\t".${$RegionsRef}[$nextReg[$j]]{"nb_CNV"}{$Results{$file}{$nextReg[$j]}};
 									if (@cnvFields) {
-										my$txt = printCNVfields($normByGender,\@cnvFields,\%{ $Regions[$nextReg[$j]] },\%{ $Patients{$file} });
+										my$txt = printCNVfields($normByGender,\@cnvFields,\%{ ${$RegionsRef}[$nextReg[$j]] },\%{ $Patients{$file} });
 										print CNV2 "$txt";
 										}
 									print CNV2 "\n";
@@ -848,18 +848,18 @@ foreach my$file (keys%Results) {
 								}
 							else {
 								$Result2{$file}{$nextReg[$j]} = "NA";
-								$Result4{$file}{$Chrom}{$Regions[$nextReg[$j]]{"Start"}}{$Regions[$nextReg[$j]]{"End"}} = "NA";
+								$Result4{$file}{$Chrom}{${$RegionsRef}[$nextReg[$j]]{"Start"}}{${$RegionsRef}[$nextReg[$j]]{"End"}} = "NA";
 								if (exists $regionIndice{$nextReg[$j]}) {
-									print CNV2 $Chromosome."\t".$Regions[$nextReg[$j]]{"Start"}."\t".$Regions[$nextReg[$j]]{"End"}."\t".($Regions[$nextReg[$j]]{"End"}-$Regions[$nextReg[$j]]{"Start"}+1)." bp\t".$Regions[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t";
-									if (exists $Regions[$nextReg[$j]]{"Appel"}) { print CNV2 "NA\t"; }
+									print CNV2 $Chromosome."\t".${$RegionsRef}[$nextReg[$j]]{"Start"}."\t".${$RegionsRef}[$nextReg[$j]]{"End"}."\t".(${$RegionsRef}[$nextReg[$j]]{"End"}-${$RegionsRef}[$nextReg[$j]]{"Start"}+1)." bp\t".${$RegionsRef}[$nextReg[$j]]{"label"}."\t".($regionIndice{$nextReg[$j]}+1)."\t";
+									if (exists ${$RegionsRef}[$nextReg[$j]]{"Appel"}) { print CNV2 "NA\t"; }
 									else { print CNV2 "no\t"; }
-									if (exists $Regions[$nextReg[$j]]{$file}{"depth_ratio"}{$norm}) {
-										print CNV2 sprintf("%.3f",$Regions[$nextReg[$j]]{$file}{"depth_ratio"}{$norm})."\t".$Regions[$nextReg[$j]]{"nb_CNV"}{$Results{$file}{$nextReg[0]}};
-										push(@dirtyCNV, $Regions[$nextReg[$j]]{$file}{"depth_ratio"}{$norm});
+									if (exists ${$RegionsRef}[$nextReg[$j]]{$file}{"depth_ratio"}{$norm}) {
+										print CNV2 sprintf("%.3f",${$RegionsRef}[$nextReg[$j]]{$file}{"depth_ratio"}{$norm})."\t".${$RegionsRef}[$nextReg[$j]]{"nb_CNV"}{$Results{$file}{$nextReg[0]}};
+										push(@dirtyCNV, ${$RegionsRef}[$nextReg[$j]]{$file}{"depth_ratio"}{$norm});
 										}
 									else { print CNV2 "na\tna"; }
 									if (@cnvFields) {
-										my$txt = printCNVfields($normByGender,\@cnvFields,\%{ $Regions[$nextReg[$j]] },\%{ $Patients{$file} });
+										my$txt = printCNVfields($normByGender,\@cnvFields,\%{ ${$RegionsRef}[$nextReg[$j]] },\%{ $Patients{$file} });
 										print CNV2 "$txt";
 										}
 									print CNV2 "\n";
@@ -873,7 +873,7 @@ foreach my$file (keys%Results) {
 						my$dirtyAverage = 0;
 						foreach (@dirtyCNV) { $dirtyAverage += $_; }
 						$dirtyAverage /= scalar@dirtyCNV;
-						print CNV1 $Chromosome.":".$Regions[$nextReg[0]]{"Start"}."-".$Regions[$nextReg[$cnvOK]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage)."\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage)."\t$overlapCNT\n";
+						print CNV1 $Chromosome.":".${$RegionsRef}[$nextReg[0]]{"Start"}."-".${$RegionsRef}[$nextReg[$cnvOK]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage)."\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage)."\t$overlapCNT\n";
 						$Result3{$file}{$nextReg[0]} = $Results{$file}{$nextReg[0]};
 						}
 					}
@@ -889,8 +889,8 @@ foreach my$file (keys%Results) {
 
 ##print graph foreach Chrom
 if ($CNVgraph) {
-	for my$file (@Files) {
-		graphChr1($nGraf,"$outdir/$sampleName{$file}",$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,\@Files,\%sampleName,\@Regions,\@ChromOrder,\%regionOrder,\%Patients,\%Result2);
+	for my$file (@{$FilesRef}) {
+		graphChr1($nGraf,"$outdir/${$sampleNameRef}{$file}",$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,\%regionOrder,\%Patients,\%Result2);
 		}
 	}
 
@@ -918,14 +918,14 @@ else { print OUT "\t(during sample normalization, depths from all chr are taken,
 if ($depthTxt) { print OUT "bases counts:\n$depthTxt\n"; }
 if ($sexTxt) { print OUT "\ngender determination:\n$sexTxt\n"; }
 
-print OUT "\nintervals nber: ".scalar@Regions."\n";
+print OUT "\nintervals nber: ".scalar@{$RegionsRef}."\n";
 print OUT "\nintervals discarded:\n";
 my$N_noData=0; my$N_CNV_Recurrent=0; my$N_lowCov=0;
-foreach my$r (0..$#Regions) {
-	if(defined $Regions[$r]{"Appel"}) {
-		if ($Regions[$r]{"Appel"} eq "No_Data") { $N_noData++; }
-		elsif ($Regions[$r]{"Appel"} eq "CNV_Recurrent") { $N_CNV_Recurrent++; }
-		elsif ($Regions[$r]{"Appel"} eq "Couverture_Faible")  { $N_lowCov++; }
+for (my $r = 0 ; $r < scalar@{$RegionsRef} ; $r++) {
+	if(defined ${$RegionsRef}[$r]{"Appel"}) {
+		if (${$RegionsRef}[$r]{"Appel"} eq "No_Data") { $N_noData++; }
+		elsif (${$RegionsRef}[$r]{"Appel"} eq "CNV_Recurrent") { $N_CNV_Recurrent++; }
+		elsif (${$RegionsRef}[$r]{"Appel"} eq "Couverture_Faible")  { $N_lowCov++; }
 		}
 	}
 print OUT "\tnot enough data: $N_noData\n";
@@ -934,21 +934,21 @@ if ($minDP || $minCov) { print OUT "\tlow coverage :  $N_lowCov\n"; }
 
 print OUT "\nsamples discarded:\n";
 my$N_discard=0;
-foreach my$file (@Files) {
-		if ($Patients{$file}{"ecarte"}) { print OUT "\t$sampleName{$file}\n"; $N_discard++; }
+foreach my$file (@{$FilesRef}) {
+		if ($Patients{$file}{"ecarte"}) { print OUT "\t${$sampleNameRef}{$file}\n"; $N_discard++; }
 		}
 unless ($N_discard) { print OUT "\tnone\n"; }
 
 print OUT "\nResults :\n
 patient\tCNV\tnber\n";
-foreach my$file (@Files) {
+foreach my$file (@{$FilesRef}) {
 	unless($Patients{$file}{"ecarte"}) {
 		my$N_dup=0; my$N_del=0;
 		foreach (keys%{ $Result3{$file} }) {
 			if ($Result3{$file}{$_} eq "DUP") { $N_dup++; }
 			elsif ($Result3{$file}{$_} eq "DEL") { $N_del++; }
 			}
-		print OUT "\n$sampleName{$file}: 
+		print OUT "\n${$sampleNameRef}{$file}: 
 		DUP: $N_dup
 		DEL: $N_del\n";
 		}
@@ -970,23 +970,23 @@ return(\%Patients,\%Result4);
 #CNV_tool::CNV_reAnalyse($fichier_cov,$outdir,$nGraf,$fichier_sexe,\%CNV_opt);
 sub CNV_reAnalyse
 {
-my($fichier_cov,$outdir,$nGraf,$fichier_sexe,$h1)=@_;
-my%CNV_opt = %$h1;
-my$norm = $CNV_opt{"norm"};
-my$normByGender = $CNV_opt{"normByGender"};
-my$Ref = $CNV_opt{"RefDepth"};
-my$RefByGender = $CNV_opt{"RefByGender"};
-my$seuil_region = $CNV_opt{"seuil_region"};
-my$seuil_patient = $CNV_opt{"seuil_patient"};
-my$seuil_cov = $CNV_opt{"seuil_cov"};
-my$seuil_deletion = $CNV_opt{"seuil_deletion"};
-my$seuil_duplication = $CNV_opt{"seuil_duplication"};
-my$minCNV = $CNV_opt{"min_following_CNV"};
-my$minDP = $CNV_opt{"min_DP"} ;
-my$maxNonCNV = $CNV_opt{"max_Non_CNV"};
-my$maxNonCNVrate = $CNV_opt{"max_Non_CNV_rate"};
-my$graphByChr = $CNV_opt{"chromGraph"};
-my@cnvFields = @{ $CNV_opt{"fields"} };
+my($fichier_cov,$outdir,$nGraf,$fichier_sexe,$CNV_optRef)=@_;
+#my%CNV_opt = %$h1;
+my$norm = ${$CNV_optRef}{"norm"};
+my$normByGender = ${$CNV_optRef}{"normByGender"};
+my$Ref = ${$CNV_optRef}{"RefDepth"};
+my$RefByGender = ${$CNV_optRef}{"RefByGender"};
+my$seuil_region = ${$CNV_optRef}{"seuil_region"};
+my$seuil_patient = ${$CNV_optRef}{"seuil_patient"};
+my$seuil_cov = ${$CNV_optRef}{"seuil_cov"};
+my$seuil_deletion = ${$CNV_optRef}{"seuil_deletion"};
+my$seuil_duplication = ${$CNV_optRef}{"seuil_duplication"};
+my$minCNV = ${$CNV_optRef}{"min_following_CNV"};
+my$minDP = ${$CNV_optRef}{"min_DP"} ;
+my$maxNonCNV = ${$CNV_optRef}{"max_Non_CNV"};
+my$maxNonCNVrate = ${$CNV_optRef}{"max_Non_CNV_rate"};
+my$graphByChr = ${$CNV_optRef}{"chromGraph"};
+my@cnvFields = @{ ${$CNV_optRef}{"fields"} };
 my$ok = 0;
 foreach my$i (0..$#cnvFields) {
 	if ($cnvFields[$i] eq $norm) { 
@@ -1905,26 +1905,26 @@ close OUT;
 ####################
 
 sub norm {
-my($norm,$h1)=@_;
-my@allDepth=@$h1;
-my$normDepth;
+my($norm,$allDepthRef)=@_;
+#my@allDepth=@$h1;
+my(@sortDepth,$normDepth);
 if ($norm eq "med" || $norm eq "min" || $norm eq "max") {
-	@allDepth = sort{$a<=>$b}@allDepth;
-	if ($norm eq "min") { $normDepth = $allDepth[0]; }
-	elsif ($norm eq "max") { $normDepth = $allDepth[-1]; }
+	@sortDepth = sort{$a<=>$b}@{$allDepthRef};
+	if ($norm eq "min") { $normDepth = $sortDepth[0]; }
+	elsif ($norm eq "max") { $normDepth = $sortDepth[-1]; }
 	else {
 		#odd?
-		if(scalar@allDepth%2) 
-			{ $normDepth = $allDepth[int(scalar@allDepth/2)]; }
+		if(scalar@sortDepth%2) 
+			{ $normDepth = $sortDepth[int(scalar@sortDepth/2)]; }
 		#even
-		else { $normDepth = ( $allDepth[int(scalar@allDepth/2)-1] + $allDepth[int(scalar@allDepth/2)] )/2; }
+		else { $normDepth = ( $sortDepth[int(scalar@sortDepth/2)-1] + $sortDepth[int(scalar@sortDepth/2)] )/2; }
 		}
 	}
 
 else {
-	foreach (@allDepth)
+	foreach (@{$allDepthRef})
 		{ $normDepth += $_; } 
-	$normDepth /= scalar@allDepth;
+	$normDepth /= scalar@{$allDepthRef};
 	}
 
 return($normDepth);
@@ -1934,22 +1934,22 @@ return($normDepth);
 ####################
 
 sub printCNVfields {
-my($normByGender,$h1,$h2,$h3) = @_;
-my@cnvFields = @$h1;
-my%Regions = %$h2;
-my%Patient = %$h3;
+my($normByGender,$cnvFieldsRef,$RegionsRef,$PatientsRef) = @_;
+#my@cnvFields = @$h1;
+#my%Regions = %$h2;
+#my%Patient = %$h3;
 my$txt = "";
-foreach my$val (@cnvFields) {
-	if ($Regions{"normByR_depth"}{$val}) {
-		if (!$normByGender || ($normByGender && ($normByGender eq "gono" && $Regions{"Chrom"} !~ m/^chr[XY]$|^[XY]$/))) {
-			$txt .= "\t".sprintf("%.1f",$Regions{"normByR_depth"}{$val});
+foreach my$val (@{$cnvFieldsRef}) {
+	if (${$RegionsRef}{"normByR_depth"}{$val}) {
+		if (!$normByGender || ($normByGender && ($normByGender eq "gono" && ${$RegionsRef}{"Chrom"} !~ m/^chr[XY]$|^[XY]$/))) {
+			$txt .= "\t".sprintf("%.1f",${$RegionsRef}{"normByR_depth"}{$val});
 			}
 		else {
-			if ($Patient{"Sexe"} eq "F") {
-				$txt .= "\t".sprintf("%.1f",$Regions{"normByR_depth_fem"}{$val});
+			if (${$PatientsRef}{"Sexe"} eq "F") {
+				$txt .= "\t".sprintf("%.1f",${$RegionsRef}{"normByR_depth_fem"}{$val});
 				}
 			else {
-				$txt .= "\t".sprintf("%.1f",$Regions{"normByR_depth_males"}{$val});
+				$txt .= "\t".sprintf("%.1f",${$RegionsRef}{"normByR_depth_males"}{$val});
 				}
 			}
 		}
@@ -1962,19 +1962,19 @@ return ($txt);
 ####################
 
 sub mergeConsecutiveCNV {
-my($maxI,$maxNonCNV,$orderedCNV,$regionIndice,$h1,$h2,$h3)=@_;
-my@regionOrder = @$h1;
-my%Results = %$h2;
-my@Regions = @$h3;
+my($maxI,$maxNonCNV,$orderedCNV,$regionIndice,$regionOrderRef,$ResultsRef,$RegionsRef)=@_;
+#my@regionOrder = @$h1;
+#my%Results = %$h2;
+#my@Regions = @$h3;
 my$ok=1; my$i=0; my$cnvOK=0; my$nonCNV=0; my$nonCNVtot=0;
 my@nextReg=($orderedCNV);
 while ($ok) {
 	$i++;
-	if (exists $regionOrder[($regionIndice + $i)]) {
-		push(@nextReg, $regionOrder[($regionIndice + $i)]);
-		if (exists $Results{$nextReg[$i]}) {
+	if (exists ${$regionOrderRef}[($regionIndice + $i)]) {
+		push(@nextReg, ${$regionOrderRef}[($regionIndice + $i)]);
+		if (exists ${$ResultsRef}{$nextReg[$i]}) {
 			## same CNV type ?
-			if($Results{$nextReg[$i]} eq $Results{$nextReg[0]}) {
+			if(${$ResultsRef}{$nextReg[$i]} eq ${$ResultsRef}{$nextReg[0]}) {
 				$cnvOK = $i;
 				#$nonCNVtot += $nonCNV;
 				$nonCNV=0;		##to reset
@@ -1982,7 +1982,7 @@ while ($ok) {
 			else { $ok=0; }
 			}
 		else {
-			if (!exists $Regions[$nextReg[$i]]{"Appel"}) { 
+			if (!exists ${$RegionsRef}[$nextReg[$i]]{"Appel"}) { 
 				if ($maxNonCNV) {
 					$nonCNV++;
 					if ($nonCNV > $maxNonCNV) { $ok=0; }
@@ -2002,26 +2002,26 @@ return($i,$cnvOK,$nonCNVtot,\@nextReg);
 
 sub graphChr1 {
 
-my($nGraf,$outdir,$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,$h1,$h2,$h3,$h4,$h5,$h6,$h7)= @_;
-my@Files = @$h1;
-my%sampleName = %$h2;
-my@Regions = @$h3;
-my@ChromOrder = @$h4;
-my%regionOrder = %$h5;
-my%Patients = %$h6;
-my%Results = %$h7;
+my($nGraf,$outdir,$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,$regionOrderRef,$PatientsRef,$ResultsRef)= @_;
+#my@Files = @$h1;
+#my%sampleName = %$h2;
+#my@Regions = @$h3;
+#my@ChromOrder = @$h4;
+#my%regionOrder = %$h5;
+#my%Patients = %$h6;
+#my%Results = %$h7;
 
-print "cmdR, for sample $sampleName{$file}\n";
+print "cmdR, for sample ${$sampleNameRef}{$file}\n";
 
 my$normGraf = $norm;
 if ($norm eq "std") { $normGraf = "moy"; }
 
-my$Nbr_Chr= scalar(keys%regionOrder);
+my$Nbr_Chr= scalar(keys%{$regionOrderRef});
 if ($nGraf eq "max") { $nGraf = $Nbr_Chr; }
 
 my$maxX=0;
-foreach my$Chrom (keys%regionOrder) {	
-	if (scalar@{ $regionOrder{$Chrom} } > $maxX) { $maxX = scalar@{ $regionOrder{$Chrom} }; }
+foreach my$Chrom (keys%{$regionOrderRef}) {	
+	if (scalar@{ ${$regionOrderRef}{$Chrom} } > $maxX) { $maxX = scalar@{ ${$regionOrderRef}{$Chrom} }; }
 	}
 
 my$cmdR = "";
@@ -2032,21 +2032,21 @@ my$maxGeneLab=200;
 my$maxGeneSep=500;
 #my$maxLabLen=25;
 
-foreach my$Chrom (@ChromOrder) { 
+foreach my$Chrom (@{$ChromOrderRef}) { 
 	
 	$Chrom =~ s/^chr//i;
 	
-	if (exists $regionOrder{$Chrom}) {
+	if (exists ${$regionOrderRef}{$Chrom}) {
 
 		my$maxYsup=$seuil_duplication; my$maxYinf=$seuil_deletion;	
-		foreach my$region (@{ $regionOrder{$Chrom} }) {
-			foreach my$f (@Files) {
-				if (exists$Regions[$region]{$f}{"depth_ratio"}{$normGraf}) {
-					if ($Regions[$region]{$f}{"depth_ratio"}{$normGraf} > $maxYsup)
-						{ $maxYsup = $Regions[$region]{$f}{"depth_ratio"}{$normGraf}; }
+		foreach my$region (@{ ${$regionOrderRef}{$Chrom} }) {
+			foreach my$f (@{$FilesRef}) {
+				if (exists ${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf}) {
+					if (${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf} > $maxYsup)
+						{ $maxYsup = ${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf}; }
 					if ($normGraf eq "std") {
-						if ($Regions[$region]{$f}{"depth_ratio"}{$normGraf} < $maxYinf)
-							{ $maxYinf = $Regions[$region]{$f}{"depth_ratio"}{$normGraf}; }
+						if (${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf} < $maxYinf)
+							{ $maxYinf = ${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf}; }
 						}
 					}
 				}
@@ -2061,15 +2061,15 @@ foreach my$Chrom (@ChromOrder) {
 		else { $cmdR .= "par(fig=c(0,1,".(1-(($n-0.05)/$nGraf)).",".(1-(($n-0.95)/$nGraf))."), new=TRUE)
 	plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
 
-		my$Nbr_Reg = scalar@{ $regionOrder{$Chrom} };
+		my$Nbr_Reg = scalar@{ ${$regionOrderRef}{$Chrom} };
 
 		##gene separations
 		my$currentGene=""; my$tmpTxt=""; my$Nbr_gene=0;
 		for (my$r=0;$r<$Nbr_Reg;$r++) {
-			if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"}) {
-				if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne $currentGene)  {
+			if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"}) {
+				if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne $currentGene)  {
 					$tmpTxt .= "abline(v=".($r+0.5).", col=\"blue\", lty = \"dotted\", lwd=1)\n";
-					$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"Gene"};
+					$currentGene = ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"};
 					$Nbr_gene++;
 					}
 				}
@@ -2078,7 +2078,7 @@ foreach my$Chrom (@ChromOrder) {
 
 		my$Nbr_CNV=0;
 		for (my$r=0;$r<$Nbr_Reg;$r++) {
-			if (exists$Results{$file}{$regionOrder{$Chrom}[$r]})
+			if (exists ${$ResultsRef}{$file}{${$regionOrderRef}{$Chrom}[$r]})
 				{ $Nbr_CNV++; }
 			}
 
@@ -2087,14 +2087,14 @@ foreach my$Chrom (@ChromOrder) {
 		if ($maxX < $maxGeneLab) {
 			##in grey if invalid
 			for (my$r=0;$r<$Nbr_Reg;$r++) { 
-				if (defined $Regions[$regionOrder{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
+				if (defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
 				}
 			if (@printReg) {
 				$cmdR .= "axis(1, at=c(";
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
 				$cmdR .="), labels=c(";
-				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
+				foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"label"}."\","; }
 				chop $cmdR;
 				$cmdR .= "), col.axis=\"darkgrey\", las=2";
 				if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
@@ -2103,14 +2103,14 @@ foreach my$Chrom (@ChromOrder) {
 			##in black if valid
 			@printReg=();
 			for (my$r=0;$r<$Nbr_Reg;$r++) { 
-				if(!defined $Regions[$regionOrder{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
+				if(!defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
 				}
 			if (@printReg) {
 				$cmdR .= "axis(1, at=c(";
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
 				$cmdR .="), labels=c(";
-				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
+				foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"label"}."\","; }
 				chop $cmdR;
 				$cmdR .= "), col.axis=\"black\", las=2";
 				if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
@@ -2120,7 +2120,7 @@ foreach my$Chrom (@ChromOrder) {
 		else {
 			##in grey if invalid; only ticks
 			for (my$r=0;$r<$Nbr_Reg;$r++) { 
-				if (defined $Regions[$regionOrder{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
+				if (defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
 				}
 			if (@printReg && scalar@printReg<$maxGeneSep) {
 				$cmdR .= "axis(1, at=c(";
@@ -2133,19 +2133,19 @@ foreach my$Chrom (@ChromOrder) {
 			if ($Nbr_gene < $maxGeneLab) { #&& ($Nbr_gene+$Nbr_CNV)>=$maxGeneLab) {
 				$currentGene="";
 				for (my$r=0;$r<$Nbr_Reg;$r++) {
-					if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"}) {
-						if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne $currentGene)  { 
+					if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"}) {
+						if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne $currentGene)  { 
 							push(@printReg,$r); 
-							$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"Gene"};
+							$currentGene = ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"};
 							}
 						}
 					}
 				}
 			#elsif ($Nbr_gene<$maxGeneLab && ($Nbr_gene+$Nbr_CNV)<$maxGeneLab) {
 			#	for (my$r=0;$r<$Nbr_Reg;$r++) {
-			#		if ( ($Regions[$RegionOrder{$Chrom}[$r]]{"Gene"} && $Regions[$RegionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$RegionOrder{$Chrom}[$r]]{"Gene"} ne $currentGene) || (exists$Results{$file}{$RegionOrder{$Chrom}[$r]}) ) {
+			#		if ( (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne $currentGene) || (exists ${$ResultsRef}{$file}{${$regionOrderRef}{$Chrom}[$r]}) ) {
 			#			push(@printReg,$r);
-			#			$currentGene = $Regions[$RegionOrder{$Chrom}[$r]]{"Gene"};
+			#			$currentGene = ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"};
 			#			}
 			#		}
 			#	}
@@ -2154,7 +2154,7 @@ foreach my$Chrom (@ChromOrder) {
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
 				$cmdR .="), labels=c(";
-				foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"Gene"}."\","; }
+				foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"}."\","; }
 				chop $cmdR;
 				$cmdR .= "), col.axis=\"black\", las=2";
 				if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
@@ -2163,7 +2163,7 @@ foreach my$Chrom (@ChromOrder) {
 			##in red if CNV; only ticks
 			@printReg=();
 			for (my$r=0;$r<$Nbr_Reg;$r++) {
-				if (exists $Results{$file}{$regionOrder{$Chrom}[$r]}) { push(@printReg,$r) ; }
+				if (exists ${$ResultsRef}{$file}{${$regionOrderRef}{$Chrom}[$r]}) { push(@printReg,$r) ; }
 				}
 			if (@printReg && scalar@printReg<$maxGeneSep) {
 				$cmdR .= "axis(1, at=c(";
@@ -2176,13 +2176,13 @@ foreach my$Chrom (@ChromOrder) {
 			}
 
 		##all not target sample lines (black):
-		for (my$f=0;$f<scalar@Files;$f++) {
-			unless ($Files[$f] eq $file) {
+		for (my$f=0;$f<scalar@{$FilesRef};$f++) {
+			unless (${$FilesRef}[$f] eq $file) {
 				my$r1=0;
 				while ($r1<$Nbr_Reg) {
 					my$r2=$r1;
 					while ($r2<$Nbr_Reg) {
-						if (exists $Regions[$regionOrder{$Chrom}[$r2]]{$Files[$f]}{"depth_ratio"}{$normGraf}) { $r2++;}
+						if (exists ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r2]]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}) { $r2++;}
 						else { last; }
 						}
 					if (($r2-1) > $r1) {
@@ -2192,12 +2192,12 @@ foreach my$Chrom (@ChromOrder) {
 						chop $cmdR;
 						$cmdR .= "), c(";
 						for (my$r=$r1;$r<$r2;$r++)
-							{ $cmdR .= $Regions[$regionOrder{$Chrom}[$r]]{$Files[$f]}{"depth_ratio"}{$normGraf}.","; }
+							{ $cmdR .= ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}.","; }
 						chop $cmdR;
 						$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
 						}
 					elsif (($r2-1) == $r1) {
-						$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$regionOrder{$Chrom}[$r1]]{$Files[$f]}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"black\")\n";
+						$cmdR .= "lines( c(".($r1+1)."), c(".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"black\")\n";
 						}
 					$r1 = ($r2+1);
 					}
@@ -2211,7 +2211,7 @@ foreach my$Chrom (@ChromOrder) {
 				while ($r1<$Nbr_Reg) {
 					my$r2=$r1;
 					while ($r2<$Nbr_Reg) {
-						if ($Regions[$regionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
+						if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++;}
 						else { last; }
 						}
 					if (($r2-1) > $r1) {
@@ -2222,8 +2222,8 @@ foreach my$Chrom (@ChromOrder) {
 							chop $cmdR;
 							$cmdR .= "), c(";
 							for (my$r=$r1;$r<$r2;$r++) {
-								if ( $Regions[$regionOrder{$Chrom}[$r]]{$gender}{"moy"} )
-									{ $cmdR .= (1+$fold*($Regions[$regionOrder{$Chrom}[$r]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r]]{$gender}{"moy"})).","; }
+								if ( ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$gender}{"moy"} )
+									{ $cmdR .= (1+$fold*(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$gender}{"moy"})).","; }
 								else 	{ $cmdR .= "1,"; }
 								}
 							chop $cmdR;
@@ -2231,8 +2231,8 @@ foreach my$Chrom (@ChromOrder) {
 							}
 						}
 					elsif (($r2-1) == $r1) {
-						$cmdR .= "lines( c(".($r1+1)."), c(".(1+($Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
-						$cmdR .= "lines( c(".($r1+1)."), c(".(1-($Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+						$cmdR .= "lines( c(".($r1+1)."), c(".(1+(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+						$cmdR .= "lines( c(".($r1+1)."), c(".(1-(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
 						}
 					$r1 = ($r2+1);
 					}
@@ -2248,7 +2248,7 @@ foreach my$Chrom (@ChromOrder) {
 		while ($r1<$Nbr_Reg) {
 			my$r2=$r1;
 			while ($r2<$Nbr_Reg) {
-				if (exists$Regions[$regionOrder{$Chrom}[$r2]]{$file}{"depth_ratio"}{$normGraf}) { $r2++;}
+				if (exists ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r2]]{$file}{"depth_ratio"}{$normGraf}) { $r2++;}
 				else { last; }
 				}
 			if (($r2-1) > $r1) {
@@ -2258,26 +2258,26 @@ foreach my$Chrom (@ChromOrder) {
 				chop $cmdR;
 				$cmdR .= "), c(";
 				for (my$r=$r1;$r<$r2;$r++)
-					{ $cmdR .= $Regions[$regionOrder{$Chrom}[$r]]{$file}{"depth_ratio"}{$normGraf}.","; }
+					{ $cmdR .= ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$file}{"depth_ratio"}{$normGraf}.","; }
 				chop $cmdR;
 				$cmdR .= "), type =\"l\", lwd=1, col=\"green\")\n";
 				}
 			elsif (($r2-1) == $r1) {
-				$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$regionOrder{$Chrom}[$r1]]{$file}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"green\")\n";
+				$cmdR .= "lines( c(".($r1+1)."), c(".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$file}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"green\")\n";
 				}
 			$r1 = ($r2+1);
 			}
 		##points for CNVs
 		my$points .= "points( c(";
 		for (my$r=0;$r<$Nbr_Reg;$r++) {
-			if (exists$Results{$file}{$regionOrder{$Chrom}[$r]} && exists$Regions[$regionOrder{$Chrom}[$r]]{$file}{"depth_ratio"}{$normGraf})
+			if (exists ${$ResultsRef}{$file}{${$regionOrderRef}{$Chrom}[$r]} && exists ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$file}{"depth_ratio"}{$normGraf})
 				{ $points .= ($r+1).","; }
 			}
 		chop $points;
 		$points .= "), c(";
-		foreach my$region (@{ $regionOrder{$Chrom} }) {
-			if (exists$Results{$file}{$region} && exists$Regions[$region]{$file}{"depth_ratio"}{$normGraf})
-				{ $points .= $Regions[$region]{$file}{"depth_ratio"}{$normGraf}.","; }
+		foreach my$region (@{ ${$regionOrderRef}{$Chrom} }) {
+			if (exists ${$ResultsRef}{$file}{$region} && exists ${$RegionsRef}[$region]{$file}{"depth_ratio"}{$normGraf})
+				{ $points .= ${$RegionsRef}[$region]{$file}{"depth_ratio"}{$normGraf}.","; }
 			}
 		chop $points;
 		$points .= "), type =\"p\", pch = 16, lwd=2, col=\"red\")\n";
@@ -2289,22 +2289,22 @@ foreach my$Chrom (@ChromOrder) {
 
 
 		if ($c==$Nbr_Chr || $n==$nGraf) {
-			open (CMDR, ">$outdir/$sampleName{$file}\_temp.R") || die;
+			open (CMDR, ">$outdir/${$sampleNameRef}{$file}\_temp.R") || die;
 			print CMDR "#!/usr/bin/env Rscript\n\n" ;
-			if ($nGraf==$Nbr_Chr) { print CMDR "pdf(\"".$outdir."/CNV_$sampleName{$file}.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
+			if ($nGraf==$Nbr_Chr) { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
 			else {
-				if ($N>1) { print CMDR "pdf(\"".$outdir."/CNV_$sampleName{$file}\_$N.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
-				else { print CMDR "pdf(\"".$outdir."/CNV_$sampleName{$file}\_$N.pdf\", width=11.69, height=".($n*3).")\npar(mfrow=c($n,1))\n"; }
+				if ($N>1) { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}\_$N.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
+				else { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}\_$N.pdf\", width=11.69, height=".($n*3).")\npar(mfrow=c($n,1))\n"; }
 				}
 			print CMDR "$cmdR";
-			print CMDR "title(main=\"sample: $sampleName{$file}";
-			if ($Patients{$file}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
+			print CMDR "title(main=\"sample: ${$sampleNameRef}{$file}";
+			if (${$PatientsRef}{$file}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
 			else { print CMDR "\""; }
 			print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
 			print CMDR "dev.off()\nquit(save=\"no\")\n";
 			close CMDR;
-			system "Rscript $outdir/$sampleName{$file}\_temp.R";
-			unlink "$outdir/$sampleName{$file}\_temp.R";
+			system "Rscript $outdir/${$sampleNameRef}{$file}\_temp.R";
+			unlink "$outdir/${$sampleNameRef}{$file}\_temp.R";
 			$cmdR="";
 			$n=0;
 			$N++;
@@ -2320,26 +2320,26 @@ foreach my$Chrom (@ChromOrder) {
 ####################
 sub graphChr2 {
 
-my($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,$h1,$h2,$h3,$h4,$h5)= @_;
-my%Patients = %$h1;
-my@Regions = @$h2;
-my@ChrOrder = @$h3;
-my%regionOrder = %$h4;
-my%Results = %$h5;	#$results{$patient}{$region}
+my($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,$PatientsRef,$RegionsRef,$ChrOrderRef,$regionOrderRef,$ResultsRef)= @_;
+#my%Patients = %$h1;
+#my@Regions = @$h2;
+#my@ChrOrder = @$h3;
+#my%regionOrder = %$h4;
+#my%Results = %$h5;	#$results{$patient}{$region}
 
 my$normGraf = $norm;
 if ($norm eq "std") { $normGraf = "moy"; }
 
 my$maxX=0;
-foreach my$Chrom (keys%regionOrder) {	
-	if (scalar@{ $regionOrder{$Chrom} } > $maxX) { $maxX = scalar@{ $regionOrder{$Chrom} }; }
+foreach my$Chrom (keys%{$regionOrderRef}) {	
+	if (scalar@{ $regionOrderRef->{$Chrom} } > $maxX) { $maxX = scalar@{ $regionOrderRef->{$Chrom} }; }		#or @{ ${$regionOrderRef}{$Chrom} }?
 	}
 
-my$Nbr_Chr= scalar(keys%regionOrder);
-print "cmdR,  for $Patients{$patient}{ID}\n";
-open (CMDR, ">$outdir/$Patients{$patient}{ID}\_temp.R") || die;
+my$Nbr_Chr= scalar(keys%{$regionOrderRef});
+print "cmdR, for ${$PatientsRef}{$patient}{ID}\n";
+open (CMDR, ">$outdir/${$PatientsRef}{$patient}{ID}\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "pdf(\"".$outdir."/CNV_$Patients{$patient}{ID}.pdf\", width=11.69, height=".($Nbr_Chr*3).")\n
+print CMDR "pdf(\"".$outdir."/CNV_".${$PatientsRef}{$patient}{"ID"}.".pdf\", width=11.69, height=".($Nbr_Chr*3).")\n
 par(mfrow=c($Nbr_Chr,1))\n";
 
 my$cmdR = "";
@@ -2348,17 +2348,17 @@ my$maxGeneLab=200;
 my$maxGeneSep=500;
 #my$maxLabLen=25;
 
-for my$Chrom (@ChrOrder) {
+for my$Chrom (@{$ChrOrderRef}) {
 
 	my$maxYsup=$seuil_duplication; my$maxYinf=$seuil_deletion;	
-	foreach my$region (@{ $regionOrder{$Chrom} }) {
-		for (my$p=0;$p<scalar(keys%Patients);$p++) {
-			if (exists $Regions[$region]{$p}{"depth_ratio"}{$normGraf}) {
-				if ($Regions[$region]{$p}{"depth_ratio"}{$normGraf} > $maxYsup)
-					{ $maxYsup = $Regions[$region]{$p}{"depth_ratio"}{$normGraf}; }
+	foreach my$region (@{ $regionOrderRef->{$Chrom} }) {
+		for (my$p=0;$p<scalar(keys%{$PatientsRef});$p++) {
+			if (exists ${$RegionsRef}[$region]{$p}{"depth_ratio"}{$normGraf}) {
+				if (${$RegionsRef}[$region]{$p}{"depth_ratio"}{$normGraf} > $maxYsup)
+					{ $maxYsup = ${$RegionsRef}[$region]{$p}{"depth_ratio"}{$normGraf}; }
 				if ($normGraf eq "std") {
-					if ($Regions[$region]{$p}{"depth_ratio"}{$normGraf} < $maxYinf)
-						{ $maxYinf = $Regions[$region]{$p}{"depth_ratio"}{$normGraf}; }
+					if (${$RegionsRef}[$region]{$p}{"depth_ratio"}{$normGraf} < $maxYinf)
+						{ $maxYinf = ${$RegionsRef}[$region]{$p}{"depth_ratio"}{$normGraf}; }
 					}
 				}
 			}
@@ -2379,14 +2379,14 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"ch
 plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
 		}
 
-	my$Nbr_Reg = scalar@{ $regionOrder{$Chrom} };
+	my$Nbr_Reg = scalar@{ $regionOrderRef->{$Chrom} };
 
 	#gene vertical separations
 	my$currentGene=""; my$tmpTxt=""; my$Nbr_gene=0;
 	for (my$r=0;$r<$Nbr_Reg;$r++) {
-		if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"geneID"} ne $currentGene) {
+		if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"} ne $currentGene) {
 			$tmpTxt .= "abline(v=".($r+0.5).", col=\"blue\", lty = \"dotted\", lwd=1)\n";
-			$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"geneID"};
+			$currentGene = ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"};
 			$Nbr_gene++;
 			}
 		}
@@ -2394,7 +2394,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 
 	my$Nbr_CNV=0;
 	for (my$r=0;$r<$Nbr_Reg;$r++) {
-		if (exists$Results{$patient}{$regionOrder{$Chrom}[$r]})
+		if (exists ${$ResultsRef}{$patient}{${$regionOrderRef}{$Chrom}[$r]})
 			{ $Nbr_CNV++; }
 		}
 
@@ -2403,14 +2403,14 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 	if ($maxX < $maxGeneLab) {
 		##in grey if invalid
 		for (my$r=0;$r<$Nbr_Reg;$r++) { 
-			if (defined $Regions[$regionOrder{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
+			if (defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
 			}
 		if (@printReg) {
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
 			$cmdR .="), labels=c(";
-			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
+			foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
 			$cmdR .= "), col.axis=\"darkgrey\", las=2";
 			if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
@@ -2419,14 +2419,14 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 		##in black if valid
 		@printReg=();
 		for (my$r=0;$r<$Nbr_Reg;$r++) { 
-			if(!defined $Regions[$regionOrder{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
+			if(!defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
 			}
 		if (@printReg) {
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
 			$cmdR .="), labels=c(";
-			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
+			foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
 			$cmdR .= "), col=\"black\", las=2";
 			if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
@@ -2436,7 +2436,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 	else {
 		##in grey if invalid; only ticks
 		for (my$r=0;$r<$Nbr_Reg;$r++) { 
-			if (defined $Regions[$regionOrder{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
+			if (defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
 			}
 		if (@printReg && scalar@printReg<$maxGeneSep) {
 			$cmdR .= "axis(1, at=c(";
@@ -2449,17 +2449,17 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 		if ($Nbr_gene < $maxGeneLab) {	# && ($Nbr_gene+$Nbr_CNV)>=$maxGeneLab) {
 			$currentGene="";
 			for (my$r=0;$r<$Nbr_Reg;$r++) {
-				if ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"geneID"} ne $currentGene) {
+				if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"} ne $currentGene) {
 					push(@printReg,$r);
-					$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"geneID"};
+					$currentGene = ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"};
 					}
 				}
 			}
 		#elsif ($Nbr_gene<$maxGeneLab && ($Nbr_gene+$Nbr_CNV)<$maxGeneLab) {
 		#	for (my$r=0;$r<$Nbr_Reg;$r++) {
-		#		if ( ($Regions[$regionOrder{$Chrom}[$r]]{"Gene"} ne "NA" && $Regions[$regionOrder{$Chrom}[$r]]{"geneID"} ne $currentGene) || (exists$results{$patient}{$regionOrder{$Chrom}[$r]}) ) {
+		#		if ( (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"} ne $currentGene) || (exists ${$ResultsRef}{$patient}{${$regionOrderRef}{$Chrom}[$r]}) ) {
 		#			push(@printReg,$r);
-		#			$currentGene = $Regions[$regionOrder{$Chrom}[$r]]{"geneID"};
+		#			$currentGene = ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"};
 		#			}
 		#		}
 		#	}
@@ -2468,7 +2468,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
 			$cmdR .="), labels=c(";
-			foreach my$r (@printReg) { $cmdR .= "\"".$Regions[$regionOrder{$Chrom}[$r]]{"label"}."\","; }
+			foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"label"}."\","; }
 			chop $cmdR;
 			$cmdR .= "), col.axis=\"black\", las=2";
 			if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
@@ -2477,7 +2477,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 		##in red if CNV; only ticks
 		@printReg=();
 		for (my$r=0;$r<$Nbr_Reg;$r++) {
-			if (exists $Results{$patient}{$regionOrder{$Chrom}[$r]}) { push(@printReg,$r) ; }
+			if (exists ${$ResultsRef}{$patient}{${$regionOrderRef}{$Chrom}[$r]}) { push(@printReg,$r) ; }
 			}
 		if (@printReg && scalar@printReg<$maxGeneSep) {
 			$cmdR .= "axis(1, at=c(";
@@ -2488,14 +2488,14 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 		}
 
 	#all not target sample lines (black):
-	for (my$p=0;$p<scalar(keys%Patients);$p++) {
+	for (my$p=0;$p<scalar(keys%{$PatientsRef});$p++) {
 		unless ($p == $patient) {
 
 			my$r1=0;
 			while ($r1<$Nbr_Reg) {
 				my$r2=$r1;
 				while ($r2<$Nbr_Reg) {
-					if (exists $Regions[$regionOrder{$Chrom}[$r2]]{$p}{"depth_ratio"}{$normGraf}) { $r2++;}
+					if (exists ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r2]]{$p}{"depth_ratio"}{$normGraf}) { $r2++;}
 					else { last; }
 					}
 				if (($r2-1) > $r1) {
@@ -2505,12 +2505,12 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 					chop $cmdR;
 					$cmdR .= "), c(";
 					for (my$r=$r1;$r<$r2;$r++)
-						{ $cmdR .= $Regions[$regionOrder{$Chrom}[$r]]{$p}{"depth_ratio"}{$normGraf}.","; }
+						{ $cmdR .= ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$p}{"depth_ratio"}{$normGraf}.","; }
 					chop $cmdR;
 					$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
 					}
 				elsif (($r2-1) == $r1) {
-					$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$regionOrder{$Chrom}[$r1]]{$p}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"black\")\n";
+					$cmdR .= "lines( c(".($r1+1)."), c(".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$p}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"black\")\n";
 					}
 				$r1 = ($r2+1);
 				}
@@ -2524,7 +2524,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			while ($r1<$Nbr_Reg) {
 				my$r2=$r1;
 				while ($r2<$Nbr_Reg) {
-					if ($Regions[$regionOrder{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++; }
+					if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r2]]{$gender}{"moy"}) { $r2++; }
 					else { last; }
 					}
 				if (($r2-1) > $r1) {
@@ -2536,8 +2536,8 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 						chop $cmdR;
 						$cmdR .= "), c(";
 						for (my$r=$r1;$r<$r2;$r++) {
-							if ( $Regions[$regionOrder{$Chrom}[$r]]{$gender}{"moy"} )
-								{ $cmdR .= (1+$fold*($Regions[$regionOrder{$Chrom}[$r]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r]]{$gender}{"moy"})).","; }
+							if ( ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$gender}{"moy"} )
+								{ $cmdR .= (1+$fold*(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$gender}{"moy"})).","; }
 							else 	{ $cmdR .= "1,"; }
 							}
 						chop $cmdR;
@@ -2545,8 +2545,8 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 						}
 					}
 				elsif (($r2-1) == $r1) {
-					$cmdR .= "lines( c(".($r1+1)."), c(".(1+($Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
-					$cmdR .= "lines( c(".($r1+1)."), c(".(1-($Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"std"} / $Regions[$regionOrder{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+					$cmdR .= "lines( c(".($r1+1)."), c(".(1+(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+					$cmdR .= "lines( c(".($r1+1)."), c(".(1-(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
 					}
 				$r1 = ($r2+1);
 				}
@@ -2562,7 +2562,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 	while ($r1<$Nbr_Reg) {
 		my$r2=$r1;
 		while ($r2<$Nbr_Reg) {
-			if (exists$Regions[$regionOrder{$Chrom}[$r2]]{$patient}{"depth_ratio"}{$normGraf}) { $r2++;}
+			if (exists ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r2]]{$patient}{"depth_ratio"}{$normGraf}) { $r2++;}
 			else { last; }
 			}
 		if (($r2-1) > $r1) {
@@ -2572,12 +2572,12 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			chop $cmdR;
 			$cmdR .= "), c(";
 			for (my$r=$r1;$r<$r2;$r++)
-				{ $cmdR .= $Regions[$regionOrder{$Chrom}[$r]]{$patient}{"depth_ratio"}{$normGraf}.","; }
+				{ $cmdR .= ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$patient}{"depth_ratio"}{$normGraf}.","; }
 			chop $cmdR;
 			$cmdR .= "), type =\"l\", lwd=1, col=\"green\")\n";
 			}
 		elsif (($r2-1) == $r1) {
-			$cmdR .= "lines( c(".($r1+1)."), c(".$Regions[$regionOrder{$Chrom}[$r1]]{$patient}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"green\")\n";
+			$cmdR .= "lines( c(".($r1+1)."), c(".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$patient}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"green\")\n";
 			}
 		$r1 = ($r2+1);
 		}
@@ -2585,14 +2585,14 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 	#points for CNVs
 	my$points .= "points( c(";
 	for (my$r=0;$r<$Nbr_Reg;$r++) {
-		if (exists$Results{$patient}{$regionOrder{$Chrom}[$r]} && exists$Regions[$regionOrder{$Chrom}[$r]]{$patient}{"depth_ratio"}{$normGraf})
+		if (exists ${$ResultsRef}{$patient}{${$regionOrderRef}{$Chrom}[$r]} && exists ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$patient}{"depth_ratio"}{$normGraf})
 			{ $points .= ($r+1).","; }
 		}
 	chop $points;
 	$points .= "), c(";
-	foreach my$region (@{ $regionOrder{$Chrom} }) {
-		if (exists$Results{$patient}{$region} && exists$Regions[$region]{$patient}{"depth_ratio"}{$normGraf})
-			{ $points .= $Regions[$region]{$patient}{"depth_ratio"}{$normGraf}.","; }
+	foreach my$region (@{ ${$regionOrderRef}{$Chrom} }) {
+		if (exists ${$ResultsRef}{$patient}{$region} && exists ${$RegionsRef}[$region]{$patient}{"depth_ratio"}{$normGraf})
+			{ $points .= ${$RegionsRef}[$region]{$patient}{"depth_ratio"}{$normGraf}.","; }
 		}
 	chop $points;
 	$points .= "), type =\"p\", pch = 16, lwd=2, col=\"red\")\n";
@@ -2608,14 +2608,14 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 
 #print "$cmdR\n";
 print CMDR "$cmdR";
-print CMDR "title(main=\"sample: $Patients{$patient}{ID}";
-if ($Patients{$patient}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
+print CMDR "title(main=\"sample: ${$PatientsRef}{$patient}{ID}";
+if (${$PatientsRef}{$patient}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
 else { print CMDR "\""; }
 print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
 print CMDR "dev.off()\nquit(save=\"no\")\n";
 close CMDR;
-system "Rscript $outdir/$Patients{$patient}{ID}\_temp.R";
-unlink "$outdir/$Patients{$patient}{ID}\_temp.R";
+system "Rscript $outdir/${$PatientsRef}{$patient}{ID}\_temp.R";
+unlink "$outdir/${$PatientsRef}{$patient}{ID}\_temp.R";
 
 
 }
