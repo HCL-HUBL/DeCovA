@@ -89,6 +89,7 @@ GetOptions (\%opt,
 	"sex_file=s",
 	"bed_cov=s",
 	"split_bed",
+	"no_overlap_bed",
 	"cut_bed:s",
 	"seuil_region=f",
 	"seuil_patient=f",
@@ -197,6 +198,7 @@ parameters:
 		(default: min,mean,cov)
 	--Lbed : length added out of bed interval ends (default: 0)
 	--split_bed : split overlapping bed intervals for Cov and CNV analyses
+	--no_overlap_bed : remove overlapping bed intervals for Cov and CNV analyses
 	--cut_bed : cut bed intervals in shorter fragments: cutL:x,minL:y,maxL:z,keepLast:s
 				cutL : length of segmentation (def: 150)
 				minL : min length required to keep the last interval, after segmentation (def: --cutL/2)
@@ -672,6 +674,10 @@ if (exists $opt{bed_cov}) {
 
 my$splitBed = "";
 if (exists $opt{split_bed}) { $splitBed = 1; }
+
+my$rmOverlapBed = "";
+if (exists $opt{no_overlap_bed}) { $rmOverlapBed = 1; }
+
 
 my$cutBed = "";
 my%cutB_opt = ();
@@ -1168,19 +1174,27 @@ if ($bedFile) {
 	#print merged bed
 	printBed("original",\%Bed);
 	if ($splitBed) {
-		print "split overlapping intervals from $bedFile\n";
+		print "splitting overlapping intervals from $bedFile\n";
 		$splitBed = "$outdir/$bedName";
 		$splitBed =~ s/.bed$//;
 		$splitBed .= "_split.bed";
 		split_Bed($bedFile,$splitBed);
 		$bedFile = $splitBed;
 		}
+	elsif ($rmOverlapBed) {
+		print "removing overlapping intervals from $bedFile\n";
+		$rmOverlapBed = "$outdir/$bedName";
+		$rmOverlapBed =~ s/.bed$//;
+		$rmOverlapBed .= "_uniq.bed";
+		rm_overlap_Bed($bedFile,$rmOverlapBed);
+		$bedFile = $rmOverlapBed;
+		}
 	elsif ($cutBed) {
-		print "cut intervals from $bedFile 
+		print "cutting intervals from $bedFile 
 	(above $cutB_opt{maxL} bp ; in $cutB_opt{cutL} bp pieces , if longer than  $cutB_opt{minL} bp , else ";
-	if ($cutB_opt{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
-	elsif ($cutB_opt{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
-	else { print "through it)\n"; }
+		if ($cutB_opt{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
+		elsif ($cutB_opt{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
+		else { print "through it)\n"; }
 		$cutBed = "$outdir/$bedName";
 		$cutBed =~ s/.bed$//;
 		$cutBed .= "_cut".$cutB_opt{"cutL"}.".bed";
@@ -2231,7 +2245,7 @@ close BED; close OUT;
 
 
 ######################
-sub split_Bed
+sub split_Bed_inefficient
 {
 #split_Bed($bedFile,$splitBed);
 my($bedFile,$newBed) = @_;
@@ -2259,24 +2273,30 @@ while (my$line=<BED>) {
 unless ($ok) { die "no bed formatted line in $bedFile file"; }
 close BED;
 
-#split intervals with same start
-# $interval2{$chr}[idx]{"start"} = $start;
+#intervals with same start : start = end of second to last; end = end of last
+# $interval2{$chr}[idx]{"start"/"end"/"info"} = ;
 my%interval2;
 foreach my$chr (keys%intervals) {
 	my$i=0;
 	foreach my$start ( sort{$a<=>$b}(keys%{ $intervals{$chr} }) ) {
-		my$currentStart=$start;
-		foreach my$end ( sort{$a<=>$b}(keys%{ $intervals{$chr}{$start} }) ) {
-			$interval2{$chr}[$i]{"start"} = $currentStart;
-			$interval2{$chr}[$i]{"end"} = $end;
-			$interval2{$chr}[$i]{"info"} = $intervals{$chr}{$start}{$end};
-			$currentStart=$end;
+		my@Ends = sort{$a<=>$b}(keys%{ $intervals{$chr}{$start} });
+		if (scalar@Ends > 1) {
+			$interval2{$chr}[$i]{"start"} = $Ends[-2];
+			$interval2{$chr}[$i]{"end"} = $Ends[-1];
+			$interval2{$chr}[$i]{"info"} = $intervals{$chr}{$start}{$Ends[-1]};
+			$i++;
+			}
+		else {
+			$interval2{$chr}[$i]{"start"} = $start;
+			$interval2{$chr}[$i]{"end"} = $Ends[0];
+			$interval2{$chr}[$i]{"info"} = $intervals{$chr}{$start}{$Ends[0]};
 			$i++;
 			}
 		}
 	}
-
-#split overlapping intervals
+%intervals=();
+#overlapping intervals : 
+# $interval3{$chr}{$start}{"end"/"info"} = ;
 my%interval3;
 foreach my$chr (keys%interval2) { 
 	my$i=0;
@@ -2284,8 +2304,7 @@ foreach my$chr (keys%interval2) {
 		if ($interval2{$chr}[$i+1]{"start"} < $interval2{$chr}[$i]{"end"}) {
 			my$End = $interval2{$chr}[$i]{"end"};
 			my$Info = $interval2{$chr}[$i]{"info"};
-			my%tmp1;
-			$tmp1{$interval2{$chr}[$i]{"start"}} = $End; 
+			my%tmp1 = ($interval2{$chr}[$i]{"start"} => $End);
 			my$j=$i;
 			while (($j+1) < scalar@{ $interval2{$chr} } && $interval2{$chr}[$j+1]{"start"} < $End) {
 				my%tmp2;
@@ -2337,7 +2356,7 @@ foreach my$chr (keys%interval2) {
 		$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"info"} = $interval2{$chr}[$i]{"info"};
 		}
 	}
-
+%interval2=();
 #print splitted bed
 open(BED, ">$newBed") || die "can't create file $newBed\n";
 foreach my$chr (@chromOrder) {
@@ -2350,6 +2369,213 @@ foreach my$chr (@chromOrder) {
 close BED;
 
 }
+
+
+######################
+sub split_Bed
+{
+#split_Bed($bedFile,$splitBed);
+my($bedFile,$newBed) = @_;
+
+my(%intervals,@chromOrder,%allChrom);
+# $intervals{$chr}{$start}{$end} = $line;	
+open(BED, $bedFile) || die "can't open file $bedFile\n";
+my$ok=0;
+while (my$line=<BED>) {
+	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
+		$ok++;
+		chomp $line;
+		my@tab = split(/\t/,$line);
+		unless (exists $allChrom{$tab[0]}) 
+			{ push(@chromOrder,$tab[0]); $allChrom{$tab[0]} = 1; }
+		my$info = "";
+		if ($tab[3]) {
+			for my$i (3..$#tab)
+				{ $info .= "\t".$tab[$i]; }
+			}
+		#else { $info = "\t."; }
+		$intervals{$tab[0]}{$tab[1]}{$tab[2]} = $info;
+		}
+	}
+unless ($ok) { die "no bed formatted line in $bedFile file"; }
+close BED;
+
+#split intervals with same start
+# $interval2{$chr}[idx]{"start"/"end"/"info"} = ;
+my%interval2;
+foreach my$chr (keys%intervals) {
+	my$i=0;
+	foreach my$start ( sort{$a<=>$b}(keys%{ $intervals{$chr} }) ) {
+		my$currentStart=$start;
+		foreach my$end ( sort{$a<=>$b}(keys%{ $intervals{$chr}{$start} }) ) {
+			$interval2{$chr}[$i]{"start"} = $currentStart;
+			$interval2{$chr}[$i]{"end"} = $end;
+			$interval2{$chr}[$i]{"info"} = $intervals{$chr}{$start}{$end};
+			$currentStart=$end;
+			$i++;
+			}
+		}
+	}
+%intervals=();
+#split overlapping intervals
+# $interval3{$chr}{$start}{"end"/"info"} = ;
+my%interval3;
+foreach my$chr (keys%interval2) { 
+	my$i=0;
+	while (($i+1) < scalar@{ $interval2{$chr} } ) {
+		if ($interval2{$chr}[$i+1]{"start"} < $interval2{$chr}[$i]{"end"}) {
+			my$End = $interval2{$chr}[$i]{"end"};
+			my$Info = $interval2{$chr}[$i]{"info"};
+			my@allPos = ($interval2{$chr}[$i]{"start"},$interval2{$chr}[$i]{"end"}); 
+			my$j=$i;
+			while (($j+1) < scalar@{ $interval2{$chr} } && $interval2{$chr}[$j+1]{"start"} < $End) {
+				push(@allPos,$interval2{$chr}[$j+1]{"start"});
+				if ($interval2{$chr}[$j+1]{"end"} < $End) { push(@allPos,$interval2{$chr}[$j+1]{"end"}); }
+				else {
+					if ($interval2{$chr}[$j+1]{"end"} > $End)
+						{ $interval2{$chr}[$j+1]{"start"} = $End; }
+					}
+				$j++;
+				}
+			my@allPos2 = sort{$a<=>$b}@allPos;
+			for my$k (0..($#allPos2-1)) {
+				$interval3{$chr}{$allPos2[$k]}{"end"} = $allPos2[$k+1];
+				$interval3{$chr}{$allPos2[$k]}{"info"} = $Info;
+				}
+			}
+		else {
+			unless (exists $interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"}) {
+				$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} = $interval2{$chr}[$i]{"end"};
+				$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"info"} = $interval2{$chr}[$i]{"info"};
+				}
+			}
+		$i++;
+		}
+	unless (exists $interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"}) {
+		$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} = $interval2{$chr}[$i]{"end"};
+		$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"info"} = $interval2{$chr}[$i]{"info"};
+		}
+	}
+%interval2=();
+#print splitted bed
+open(BED, ">$newBed") || die "can't create file $newBed\n";
+foreach my$chr (@chromOrder) {
+	if (exists $interval3{$chr}) {
+		foreach my$start ( sort{$a<=>$b}(keys%{ $interval3{$chr} }) ) { 
+			print BED $chr."\t".$start."\t".$interval3{$chr}{$start}{"end"}.$interval3{$chr}{$start}{"info"}."\n";
+			}
+		}
+	}
+close BED;
+
+}
+
+
+######################
+
+######################
+sub rm_overlap_Bed
+{
+#no_overlap_Bed($bedFile,$splitBed);
+my($bedFile,$newBed) = @_;
+
+my(%intervals,@chromOrder,%allChrom);
+# $intervals{$chr}{$start}{$end} = $line;	
+open(BED, $bedFile) || die "can't open file $bedFile\n";
+my$ok=0;
+while (my$line=<BED>) {
+	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
+		$ok++;
+		chomp $line;
+		my@tab = split(/\t/,$line);
+		unless (exists $allChrom{$tab[0]}) 
+			{ push(@chromOrder,$tab[0]); $allChrom{$tab[0]} = 1; }
+		my$info = "";
+		if ($tab[3]) {
+			for my$i (3..$#tab)
+				{ $info .= "\t".$tab[$i]; }
+			}
+		#else { $info = "\t."; }
+		$intervals{$tab[0]}{$tab[1]}{$tab[2]} = $info;
+		}
+	}
+unless ($ok) { die "no bed formatted line in $bedFile file"; }
+close BED;
+
+#intervals with same start : start = end of second to last; end = end of last
+# $interval2{$chr}[idx]{"start"/"end"/"info"} = ;
+my%interval2;
+foreach my$chr (keys%intervals) {
+	my$i=0;
+	foreach my$start ( sort{$a<=>$b}(keys%{ $intervals{$chr} }) ) {
+		my@Ends = sort{$a<=>$b}(keys%{ $intervals{$chr}{$start} });
+		if (scalar@Ends > 1) {
+			$interval2{$chr}[$i]{"start"} = $Ends[-2];
+			$interval2{$chr}[$i]{"end"} = $Ends[-1];
+			$interval2{$chr}[$i]{"info"} = $intervals{$chr}{$start}{$Ends[-1]};
+			$i++;
+			}
+		else {
+			$interval2{$chr}[$i]{"start"} = $start;
+			$interval2{$chr}[$i]{"end"} = $Ends[0];
+			$interval2{$chr}[$i]{"info"} = $intervals{$chr}{$start}{$Ends[0]};
+			$i++;
+			}
+		}
+	}
+%intervals=();
+#overlapping intervals : 
+# $interval3{$chr}{$start}{"end"/"info"} = ;
+my%interval3;
+foreach my$chr (keys%interval2) { 
+	my$i=0;
+	while (($i+1) < scalar@{ $interval2{$chr} } ) {
+		if ($interval2{$chr}[$i+1]{"start"} < $interval2{$chr}[$i]{"end"}) {
+			if ($interval2{$chr}[$i+1]{"end"} > $interval2{$chr}[$i]{"start"}) {
+				if ($interval2{$chr}[$i+1]{"start"} > $interval2{$chr}[$i]{"start"}) {
+					$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} = $interval2{$chr}[$i+1]{"start"};
+					$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"info"} = $interval2{$chr}[$i]{"info"};
+					}
+				if ($interval2{$chr}[$i+1]{"end"} < $interval2{$chr}[$i]{"end"}) {
+					$interval2{$chr}[$i+1]{"start"} = $interval2{$chr}[$i+1]{"end"};
+					$interval2{$chr}[$i+1]{"end"} = $interval2{$chr}[$i]{"end"};
+					}
+				else {
+					$interval2{$chr}[$i+1]{"start"} = $interval2{$chr}[$i]{"end"};
+					}
+				}
+			else {
+				$interval2{$chr}[$i+1]{"start"} = $interval2{$chr}[$i]{"start"};
+				$interval2{$chr}[$i+1]{"end"} = $interval2{$chr}[$i]{"end"};
+				}
+			}
+		else {
+			unless (exists $interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"}) {
+				$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} = $interval2{$chr}[$i]{"end"};
+				$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"info"} = $interval2{$chr}[$i]{"info"};
+				}
+			}
+		$i++;
+		}
+	unless (exists $interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"}) {
+		$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} = $interval2{$chr}[$i]{"end"};
+		$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"info"} = $interval2{$chr}[$i]{"info"};
+		}
+	}
+%interval2=();
+#print splitted bed
+open(BED, ">$newBed") || die "can't create file $newBed\n";
+foreach my$chr (@chromOrder) {
+	if (exists $interval3{$chr}) {
+		foreach my$start ( sort{$a<=>$b}(keys%{ $interval3{$chr} }) ) { 
+			print BED $chr."\t".$start."\t".$interval3{$chr}{$start}{"end"}.$interval3{$chr}{$start}{"info"}."\n";
+			}
+		}
+	}
+close BED;
+
+}
+
 
 
 ######################
