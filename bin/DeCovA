@@ -364,6 +364,26 @@ if (exists $opt{id}) {
 		{ print "\t".$id."\n"; }
 	}
 
+my@raw_cov_file = ();
+if (exists $opt{raw_cov}) {
+	@raw_cov_file = split(/,/, join(',',@{$opt{raw_cov}}));
+	foreach (@raw_cov_file) {
+		unless ( -s "$_" ) { die "$_ cov file not found or empty\n"; }
+		}
+	}
+if (@Files && @raw_cov_file) { die "must choose between providing bam files or cov files\n"; }
+
+my$bed_cov_file = "";
+if (exists $opt{bed_cov}) { 
+	if (-e $opt{bed_cov}) { $bed_cov_file = $opt{bed_cov}; }
+	else { die "$bed_cov_file file not found\n"; }
+	}
+
+my$genom = "";
+if (exists $opt{genome}) { 
+	$genom = $opt{genome}; 
+	}
+
 ##refseq gene analysis param
 my$nonCod = "";
 if (exists $opt{nonCoding})
@@ -498,67 +518,48 @@ $jobs{"covMut"} = "";
 if ($mutFile) { $jobs{"covMut"} = 1; }
 if (exists $opt{noDepthMut})
 	{ $jobs{"covMut"} = ""; }
-
-my$covPlot = "";
+$jobs{"covPlot"} = "";
 if (exists $opt{covPlot})
-	{ $covPlot = 1; }
-
-my$cov_Bed = "";
-if (exists $opt{covBed})
-	{ $cov_Bed = 1; }
-
-my$toReseq = "";
-if (exists $opt{Reseq})
-	{ $toReseq=$opt{Reseq}; }
-
-my$CNV_tool = "";
-if (exists $opt{CNV}) {
-	$CNV_tool = 1; 
-	}
-
-## plots param
-my$bin = 10; #nber of bin for bar plots
-if (exists $opt{binPlot})
-	{ $bin = $opt{binPlot}; }
-my$maxPl = 100; #max depth for bar plots
-if (exists $opt{maxPlot})
-	{ $maxPl = $opt{maxPlot}; }
-if (($maxPl % $bin) != 0) { die "binPlot needs to be a multiple of maxPlot\n"; }
-
-my$interS = "";
+	{ $jobs{"covPlot"} = 1; }
+$jobs{"interSplot"} = "";
 if (exists $opt{interPlot})
-	{ $interS = 1; }
-
-my$coordPlot = "";
+	{ $jobs{"interSplot"} = 1; }
+$jobs{"genePlot"} = "";
 if (exists $opt{genePlot})
-	{ $coordPlot = 1; }
-
-my$printReports = "";
+	{ $jobs{"genePlot"} = 1; }
+$jobs{"covBed"} = "";
+if (exists $opt{covBed})
+	{ $jobs{"covBed"} = 1; }
+$jobs{"2Reseq"} = "";
+if (exists $opt{Reseq})
+	{ $jobs{"2Reseq"}=$opt{Reseq}; }
+$jobs{"CNV"} = "";
+if (exists $opt{CNV}) {
+	$jobs{"CNV"} = 1; 
+	}
+$jobs{"geneReport"} = "";
 if (exists $opt{geneReport})
-	{ $printReports = 1; }
-
-my$printSummary = "";
+	{ $jobs{"geneReport"} = 1; }
+$jobs{"geneSummary"} = "";
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"})		# || @IDs)
-	{ $printSummary = 1; }
+	{ $jobs{"geneSummary"} = 1; }
 if (exists $opt{summary}) {
 	if ($opt{summary}) {
-		if ($opt{summary} =~ /^y|^o/i) { $printSummary = 1; }
-		elsif ($opt{summary} =~ /^n/i) { $printSummary = ""; }
+		if ($opt{summary} =~ /^y|^o/i) { $jobs{"geneSummary"} = 1; }
+		elsif ($opt{summary} =~ /^n/i) { $jobs{"geneSummary"} = ""; }
 		else { die "opt summary no recognized (y/n)"; }
 		}
-	else { $printSummary = 1; }
+	else { $jobs{"geneSummary"} = 1; }
 	}
-
-my$keepCov = "";
-if (exists $opt{keepCov}) { $keepCov = 1; }
-
-my$keepBed = "";
+$jobs{"keepCov"} = "";
+if (exists $opt{keepCov}) { $jobs{"keepCov"} = 1; }
+$jobs{"keepBed"} = "";
 my$keepBedName = "";
 if ($bedName) { $keepBedName = $bedName; }
 else { $keepBedName = "allID"; }
 my$keepBedDir = ".";
 if (exists $opt{keepBed}) {
-	$keepBed = 1;
+	$jobs{"keepBed"} = 1;
 	if ($opt{keepBed}) { 
 		#$keepBedName = $opt{keepBed};
 		#$keepBedName =~ s/\.bed$//;
@@ -572,15 +573,14 @@ if (exists $opt{keepBed}) {
 		}
 	}
 
-my@raw_cov_file = ();
-if (exists $opt{raw_cov}) {
-	@raw_cov_file = split(/,/, join(',',@{$opt{raw_cov}}));
-	foreach (@raw_cov_file) {
-		unless ( -s "$_" ) { die "$_ cov file not found or empty\n"; }
-		}
-	}
-if (@Files && @raw_cov_file) { die "must choose between providing bam files or cov files\n"; }
-if ($jobs{"covMut"} && @raw_cov_file) { die "cannot compute depth on mutation file from cov files\n"; }
+## plots param
+my$bin = 10; #nber of bin for bar plots
+if (exists $opt{binPlot})
+	{ $bin = $opt{binPlot}; }
+my$maxPl = 100; #max depth for bar plots
+if (exists $opt{maxPlot})
+	{ $maxPl = $opt{maxPlot}; }
+if (($maxPl % $bin) != 0) { die "binPlot needs to be a multiple of maxPlot\n"; }
 
 
 my(@Thresholds,$pThreshold);
@@ -639,10 +639,6 @@ if (exists $opt{gatk}) {
 	$gatk = $opt{gatk}; 
 	if (!$gatk) { $gatk = 1; }	#if exists, but no value: means, just use it, but will test the default command
 	}
-my$genom = "";
-if (exists $opt{genome}) { 
-	$genom = $opt{genome}; 
-	}
 my$ram = "";
 if (exists $opt{ram}) { 
 	$ram = $opt{ram};
@@ -680,11 +676,7 @@ if (exists $opt{sex_file}) {
 	else { die "$fichier_sexe file not found\n"; }
 	}
 
-my$bed_cov_file = "";
-if (exists $opt{bed_cov}) { 
-	if (-e $opt{bed_cov}) { $bed_cov_file = $opt{bed_cov}; }
-	else { die "$bed_cov_file file not found\n"; }
-	}
+
 
 my$splitBed = "";
 if (exists $opt{split_bed}) { $splitBed = 1; }
@@ -726,7 +718,7 @@ if (exists $opt{cut_bed}) {
 		unless ($maxL) { $cutB_opt{"maxL"} = $cutB_opt{"cutL"}; }
 		}
 	}
-if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry...\n";}
+#if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry...\n";}
 
 my%CNV_opt;
 $CNV_opt{"norm"} = "med";
@@ -785,33 +777,34 @@ if (exists $opt{CNV_fields}) {
 ##opt warnings according to actions 
 
 #unless (exists $opt{file} || exists $opt{dir}) { die "requires a list of bam files to analysed (opt -f), or a directory where to find such files (opt -d)\n"; }
+if ($jobs{"covMut"} && @raw_cov_file) { die "cannot compute depth on mutation file from cov files\n"; }
 if ($bed_cov_file) {
-	$CNV_tool=1;
-	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $jobs{"covMut"})
+	$jobs{"CNV"} = 1;
+	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"})
 		{ die "actions other than CNV_detect not allowed if .cov.txt file provided\n"; }
 	}
-if ($CNV_tool && !$bed_cov_file) {
-	$cov_Bed=1;
+if ($jobs{"CNV"} && !$bed_cov_file) {
+	$jobs{"covBed"} = 1;
 	}
 
-if ($jobs{"bedReport"} || $toReseq) {
-	$cov_Bed=1;
+if ($jobs{"bedReport"} || $jobs{"2Reseq"}) {
+	$jobs{"covBed"} = 1;
 	}
 
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $jobs{"covMut"}) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) {
 	if (!@Files && !@raw_cov_file) { die "no .bam files (or coverage file) provided\n"; }
 	}
 
-#unless ($mutFile || ($CNV_tool && $bed_cov_file)) {
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
+#unless ($mutFile || ($jobs{"CNV"} && $bed_cov_file)) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"}) {
 	unless ($bedFile || exists $opt{id} ) 
 		{ die ".bed file (opt -b) or list of genes or transcripts id required (opt -i)\n"; }
 	}
 
 unless (@Thresholds) {
-	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || ($CNV_tool && $CNV_opt{"seuil_cov"}))
+	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || ($jobs{"CNV"} && $CNV_opt{"seuil_cov"}))
 		 { die "at least 1 threshold value required (opt -t)\n"; }
-	if ($cov_Bed) {
+	if ($jobs{"covBed"}) {
 		foreach(@covFields) {
 			if ($_ eq "cov") { die "at least 1 threshold value required (opt -t)\n"; }
 			}
@@ -819,11 +812,11 @@ unless (@Thresholds) {
 		}
 	}
 
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || exists $opt{genePlot} || ($CNV_tool && $CNV_opt{"geneGraph"})) { 
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || exists $opt{genePlot} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"})) { 
 	unless ($ref) { die "RefSeq file required (opt -r)\n"; } 
 	}
 
-unless ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $jobs{"covMut"} || $keepBed)
+unless ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"CNV"} || $jobs{"covMut"} || $jobs{"keepBed"})
 	{ die "no job selected!\n"; }
 
 
@@ -862,7 +855,7 @@ if ($genom) {
 		}
 	}
 
-if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $jobs{"covMut"}) && (!$bed_cov_file) ) {
+if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) && (!$bed_cov_file) ) {
 
 	if ($raw_cov_file[0]) {
 		open(COV, "$raw_cov_file[0]") or die "cannot open $raw_cov_file[0]\n";;
@@ -892,7 +885,7 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 				}
 			}
 		unless (@Files) { die "not able to find sample names in $raw_cov_file[0]\nmissing header line?\n"; }
-		$keepCov = "";
+		$jobs{"keepCov"} = "";
 		}
 
 	else {
@@ -1009,7 +1002,7 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 		if ($mmq && !$gatk) {
 			unless ($samT) { die "samtools not installed or not found\n"; }
 			}
-		if ($CNV_tool && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
+		if ($jobs{"CNV"} && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
 		if ($dedup eq "do" && !$picard) { die "picard tools not installed or not found\n"; }
 		if (!$bedT && !$gatk) { die "bedtools or GATK required\n"; }
 
@@ -1058,7 +1051,7 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 		#genome index
 		if ($genom) {
 			unless (-e "$genom.fai") { 
-				if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $jobs{"covMut"}) { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
+				if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
 				}
 			}
 		else { die "reference genome.fa required\n"; }
@@ -1087,7 +1080,7 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 						}
 					}
 				else {
-					if ($CNV_tool && $CNV_opt{"RefDepth"} eq "tot")
+					if ($jobs{"CNV"} && $CNV_opt{"RefDepth"} eq "tot")
 						{ die "cannot determine chr idx of bam files\n"; }
 					}
 				}
@@ -1117,17 +1110,17 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 use POSIX qw/strftime/;
 my$outdir = "";
 my$chromLength = "";
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $jobs{"covMut"}) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"CNV"} || $jobs{"covMut"}) {
 	if (exists $opt{outdir}) { 
 		$outdir = $opt{outdir}; 
 		$outdir =~ s/\/$//;
 		if (-d $outdir) {
-			if ($CNV_tool && $bed_cov_file) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+			if ($jobs{"CNV"} && $bed_cov_file) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 			else { $outdir .= "/covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 			}
 		}
 	else {
-		if ($CNV_tool && $bed_cov_file) { $outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+		if ($jobs{"CNV"} && $bed_cov_file) { $outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 		else { $outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 		}
 	mkdir($outdir);
@@ -1140,7 +1133,7 @@ else {
 		}
 	else { $outdir = "."; }
 	}
-if ($jobs{"graphBySample"} || $printReports || $jobs{"bedReport"}) { 
+if ($jobs{"graphBySample"} || $jobs{"geneReport"} || $jobs{"bedReport"}) { 
 	foreach (@Files)
 		{ mkdir("$outdir/cov\_$sName2{$_}"); }
 	}
@@ -1160,7 +1153,7 @@ else {
 		}
 	}
 
-if ($keepBed && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs{"graphBySample"} && !$printSummary && !$printReports && !$covPlot && !$coordPlot && !$interS && !$cov_Bed && !$CNV_tool && !$jobs{"covMut"}) {
+if ($jobs{"keepBed"} && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs{"graphBySample"} && !$jobs{"geneSummary"} && !$jobs{"geneReport"} && !$jobs{"covPlot"} && !$jobs{"genePlot"} && !$jobs{"interSplot"} && !$jobs{"covBed"} && !$jobs{"CNV"} && !$jobs{"covMut"}) {
 	unless (exists $opt{outdir}) { $outdir = $keepBedDir; }
 	$bedName = $keepBedName;
 	}
@@ -1231,7 +1224,7 @@ if ($mutFile) {
 	print "read $mutFile\n"; 
 	%Mut = readMut($mutFile);		#$Mut{$chr}{$startMut} = $infoMut (1-based coord)
 	if($jobs{"covMut"}) { 
-		if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool) 
+		if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"CNV"}) 
 			{ $keepTmp = 1; }
 		%tmpFile = depthMut($mutFile,\%path,$extenS,\@Files,\%fName,\%sName,\%sName2,\%Mut,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$mbq,$dedup,$threads,$chromLength,$bedT,$bedTversion,$samT,$picard,$gatk,$genom);
 		}
@@ -1240,7 +1233,7 @@ if ($mutFile) {
 ##find and design transcripts:
 my(@hashSub,%geneNM,%NMgene,%NMchr,%NMsens,%NMstartCod,%NMendCod,%Regions,%txtRegions,%NM_Ex,%txt_NM_Ex,%Genes,%RegBed,%NMlength,%intron,%UTR,%Cod,%RegMut,%coordBed,$id2Bed);
 
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || (@IDs && !$bedFile) || $coordPlot || $printSummary || $printReports || ($CNV_tool && $CNV_opt{"geneGraph"})) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || (@IDs && !$bedFile) || $jobs{"genePlot"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"})) {
 
 ##print in $idFile lines of RefSeq matching each $id of @IDs
 my$idFile="$outdir/id_List.txt";
@@ -1280,7 +1273,7 @@ unless ($bedFile) {
 #	}
 
 ##for summary txt file:
-if (($keepBed || $cov_Bed || $CNV_tool) && (!$bedFile)) {
+if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 	$bedName = $keepBedName;
 	$id2Bed = "$outdir/$bedName.bed";
 	}
@@ -1451,7 +1444,7 @@ foreach my$gene (keys%Genes) {
 #Job 2: bams analysis:
 my(%allInterval,$intervalName,%headers);
 
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"}) {
 
 	if (scalar(keys%{ $Regions{"raw"} }) > 0) {
 		#merge intervals from %Regions (for example, if several transcripts for the same gene)
@@ -1552,12 +1545,12 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $p
 ###################
 #Job 3: Graphs:
 
-if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( ($printReports || $printSummary) && (($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream)) ) ) {
+if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( ($jobs{"geneReport"} || $jobs{"geneSummary"}) && (($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream)) ) ) {
 
 	my%NMnotCov;	##$NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
 	my%NM_UC;	##NM_UC{$NM}{$threshold} = 1 if 1 region not cov
 
-	if($printReports) {
+	if($jobs{"geneReport"}) {
 		foreach (@Files) {
 			open(OUT, ">", "$outdir/cov\_$sName2{$_}/$outfile$sName2{$_}\_geneReport.txt") || die "can't create file $outdir/cov\_$sName2{$_}/$outfile$sName2{$_}\_geneReport.txt\n";
 			print OUT "## SAMPLE : $sName2{$_}\n\n";
@@ -1637,7 +1630,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 			my%notCov = %{ $hashSub[1] };
 			my%notCovStarts = %{ $hashSub[2] };
 
-			if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports) {
+			if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"}) {
 				##for depth-line :
 				##create a hash : foreach file, foreach NM, foreach exon, return an array of values for ordered positions
 				## @{ $NMdepth{$NM}{$file}{$startReg} } = [ depth foreach ordered bp of exon ]
@@ -1656,7 +1649,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 				## @{ $NMcovStart{$NM}{$threshold}{$ex} } = [ordered $notCovStarts]
 				my(%NMcovStart,%NMcovEnd);
 				my$printR = "";
-				if ( ($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream) ) { $printR = $printReports; }
+				if ( ($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream) ) { $printR = $jobs{"geneReport"}; }
 				if ($All) {
 					@hashSub = notCovDomains2(\@Thresholds,\%{ $Regions{"raw"}{$chr}{$gene} },\%notCov,\%notCovStarts);
 					%{ $NMcovStart{$gene} } = %{ $hashSub[0] } ;
@@ -1860,7 +1853,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 		}
 	##summary , if $wUTR = $UTRinTxt and if $lenForTxt = $len
 	##$NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
-	if ($printSummary && ( ($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream) )) {
+	if ($jobs{"geneSummary"} && ( ($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream) )) {
 		open (OUT, ">$outdir/notCovSummary.txt"); 
 		print OUT "depth threshold: $pThreshold\n";
 		print OUT "coverage analysis
@@ -1888,7 +1881,7 @@ target regions: exons\n";
 	}
 
 ##re-analyse for $printReports || $printSummary, if $wUTR != $UTRinTxt, or if $lenForTxt != $len
-if ( ($printReports || $printSummary) && (($UTRinTxt != $wUTR) || ($lenTxt5 != $len5) || ($lenTxt3 != $len3) || ($UpInTxt != $upstream) || ($DownInTxt != $downstream)) ) {
+if ( ($jobs{"geneReport"} || $jobs{"geneSummary"}) && (($UTRinTxt != $wUTR) || ($lenTxt5 != $len5) || ($lenTxt3 != $len3) || ($UpInTxt != $upstream) || ($DownInTxt != $downstream)) ) {
 
 	my%NMnotCov;	## $NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
 	my%NM_UC;	## NM_UC{$NM}{$threshold} = 1 if 1 region not cov
@@ -1916,17 +1909,17 @@ if ( ($printReports || $printSummary) && (($UTRinTxt != $wUTR) || ($lenTxt5 != $
 			my%notCov = %{ $hashSub[1] };
 			my%notCovStarts = %{ $hashSub[2] };
 
-			if ($printSummary || $printReports) {
+			if ($jobs{"geneSummary"} || $jobs{"geneReport"}) {
 				if ($All) {
 					foreach my$NM (@NMs) {
-						@hashSub = notCovDomains1($All,$fName{$file},$sName2{$file},$outdir,$outfile,$gene,$chr,$NM,$NMsens{$NM},\@Thresholds,$pThreshold,\%{ $txtRegions{$chr}{$gene} },\%{ $txt_NM_Ex{$NM} },$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%notCov,\%notCovStarts,\%NMnotCov,$printReports);
+						@hashSub = notCovDomains1($All,$fName{$file},$sName2{$file},$outdir,$outfile,$gene,$chr,$NM,$NMsens{$NM},\@Thresholds,$pThreshold,\%{ $txtRegions{$chr}{$gene} },\%{ $txt_NM_Ex{$NM} },$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%notCov,\%notCovStarts,\%NMnotCov,$jobs{"geneReport"});
 						%NMnotCov = %{ $hashSub[0] } ;
 						%{ $NM_UC{$NM}{$fName{$file}} } = %{ $hashSub[3] } ;
 						}
 					}
 				else {
 					foreach my$NM (@NMs) {
-						@hashSub = notCovDomains1($All,$fName{$file},$sName2{$file},$outdir,$outfile,$gene,$chr,$NM,$NMsens{$NM},\@Thresholds,$pThreshold,\%{ $txtRegions{$chr}{$NM} },\%{ $txt_NM_Ex{$NM} },$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%notCov,\%notCovStarts,\%NMnotCov,$printReports);
+						@hashSub = notCovDomains1($All,$fName{$file},$sName2{$file},$outdir,$outfile,$gene,$chr,$NM,$NMsens{$NM},\@Thresholds,$pThreshold,\%{ $txtRegions{$chr}{$NM} },\%{ $txt_NM_Ex{$NM} },$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%notCov,\%notCovStarts,\%NMnotCov,$jobs{"geneReport"});
 						%NMnotCov = %{ $hashSub[0] } ;
 						%{ $NM_UC{$NM}{$fName{$file}} } = %{ $hashSub[3] } ;
 						}
@@ -1936,7 +1929,7 @@ if ( ($printReports || $printSummary) && (($UTRinTxt != $wUTR) || ($lenTxt5 != $
 		}
 	##summary
 	## $NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
-	if ($printSummary) {
+	if ($jobs{"geneSummary"}) {
 		open (OUT, ">$outdir/notCovSummary.txt");
 		print OUT "coverage analysis
 \ndepth threshold: $pThreshold
@@ -1967,19 +1960,19 @@ target regions: exons\n";
 #Job 4: Plots:
 
 #classiq
-if ($covPlot) { 
+if ($jobs{"covPlot"}) { 
 	mkdir ("$outdir/covPlot");
-	if (!$bedFile || $coordPlot) 
+	if (!$bedFile || $jobs{"genePlot"}) 
 		{ %withChr = covPlot($bin,$maxPl,"all_Genes_Regions",\%path,$extenS,\@Files,\%fName,\%sName2,$outdir,\%coordBed); }
 	if ($bedFile) 
 		{ %withChr = covPlot($bin,$maxPl,$bedName,\%path,$extenS,\@Files,\%fName,\%sName2,$outdir,\%Bed); }
 	}
 
 #plots for samples intersection
-if ($interS) {
+if ($jobs{"interSplot"}) {
 	unless (-e "$outdir/covPlot")
 		{ mkdir ("$outdir/covPlot"); }
-	if (!$bedFile || $coordPlot) { 
+	if (!$bedFile || $jobs{"genePlot"}) { 
 		InterS($bin,$maxPl,$maxGr,\%coordBed,"all_Genes_Regions",\@Files,\%fName,$outdir,$gatk,\%gatkIdx); 
 		}
 	if ($bedFile) {		
@@ -1991,20 +1984,20 @@ if ($interS) {
 #Job 5: cov of each bed interval
 
 my($refBedLines);
-if ($cov_Bed) {
+if ($jobs{"covBed"}) {
 	if ($bedFile) {
-		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$toReseq,$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
+		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
 		#%bedLines = %{$hashSub[0]};		
 		}
 	else {
-		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$toReseq,$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
+		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
 		#%bedLines = %{$hashSub[0]};		
 
 		}
 	}
 
 my(%cnv_Patients,%cnv_Results);
-if ($CNV_tool) {
+if ($jobs{"CNV"}) {
 
 
 	if ($bed_cov_file) {
@@ -2165,8 +2158,8 @@ foreach my$f ("regions","original","merge")
 if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream))
 	{ unlink "$outdir/txtRegions_0Chr.bed","$outdir/txtRegions_wChr.bed"; }
 
-if (!$keepBed) {
-	if ($cov_Bed && !$bedFile)
+if (!$jobs{"keepBed"}) {
+	if ($jobs{"covBed"} && !$bedFile)
 		{ unlink "$outdir/$bedName.bed"; }
 	if ($splitBed)
 		{ unlink "$splitBed"; }
@@ -2176,7 +2169,7 @@ if (!$keepBed) {
 		{ unlink "$cutBed"; }
 	}
 
-if ($keepCov) {
+if ($jobs{"keepCov"}) {
 	if ($gatk) {
 		open(my$fhOut, ">", "$outdir/gatk.all.cov.txt") or die "cannot create $outdir/gatk.all.cov.txt file\n";
 		foreach (@{ $headers{"$outdir/all.cov"} }) { print $fhOut "$_"; }
@@ -2190,12 +2183,12 @@ if (-e "$outdir/chromLength.txt") { unlink "$outdir/chromLength.txt"; }
 
 if ($gatk) {
 	unlink glob "$outdir/all.cov*"; 
-	if ($CNV_tool) { unlink glob "$outdir/all.norm.cov*"; }
+	if ($jobs{"CNV"}) { unlink glob "$outdir/all.norm.cov*"; }
 	}
 else {
 	foreach (@Files) {
 		unlink glob "$outdir/$fName{$_}.cov*";
-		if ($CNV_tool) { unlink glob "$outdir/$fName{$_}.norm.cov*"; }
+		if ($jobs{"CNV"}) { unlink glob "$outdir/$fName{$_}.norm.cov*"; }
 		}
 	}
 
