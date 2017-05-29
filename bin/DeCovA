@@ -471,38 +471,41 @@ if (exists $opt{Lbed}) {
 
 my$spacer = 0;
 
-##jobs
-my$bedReport = 0;
-if (exists $opt{bedReport})
-	{ $bedReport = 1; }
 my$Rev = 1;
 if (exists $opt{noReverse})
 	{ $Rev=0; }
+
 my$All = 1;
 if (exists $opt{noEachTranscript}) 
 	{ $All=0; }
-my$Sum = "";
-if (exists $opt{graphSum})
-	{ $Sum=1; }
-my$allS = "";
-if (exists $opt{allSample})
-	{ $allS=1; }
-my$byS = "";
-if (exists $opt{bySample})
-	{ $byS=1; }
 
-my$covMut = "";
-if ($mutFile) { $covMut=1; }
+
+##jobs
+my%jobs = ();
+$jobs{"bedReport"} = 0;
+if (exists $opt{bedReport})
+	{ $jobs{"bedReport"} = 1; }
+$jobs{"graphSum"} = "";
+if (exists $opt{graphSum})
+	{ $jobs{"graphSum"} = 1; }
+$jobs{"graphAllSampls"} = "";
+if (exists $opt{allSample})
+	{ $jobs{"graphAllSampls"} = 1; }
+$jobs{"graphBySample"} = "";
+if (exists $opt{bySample})
+	{ $jobs{"graphBySample"} = 1; }
+$jobs{"covMut"} = "";
+if ($mutFile) { $jobs{"covMut"} = 1; }
 if (exists $opt{noDepthMut})
-	{ $covMut=""; }
+	{ $jobs{"covMut"} = ""; }
 
 my$covPlot = "";
 if (exists $opt{covPlot})
-	{ $covPlot=1; }
+	{ $covPlot = 1; }
 
 my$cov_Bed = "";
 if (exists $opt{covBed})
-	{ $cov_Bed=1; }
+	{ $cov_Bed = 1; }
 
 my$toReseq = "";
 if (exists $opt{Reseq})
@@ -510,9 +513,10 @@ if (exists $opt{Reseq})
 
 my$CNV_tool = "";
 if (exists $opt{CNV}) {
-	$CNV_tool=1; 
+	$CNV_tool = 1; 
 	}
 
+## plots param
 my$bin = 10; #nber of bin for bar plots
 if (exists $opt{binPlot})
 	{ $bin = $opt{binPlot}; }
@@ -534,7 +538,7 @@ if (exists $opt{geneReport})
 	{ $printReports = 1; }
 
 my$printSummary = "";
-if ($Sum || $allS || $byS)		# || @IDs)
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"})		# || @IDs)
 	{ $printSummary = 1; }
 if (exists $opt{summary}) {
 	if ($opt{summary}) {
@@ -549,12 +553,22 @@ my$keepCov = "";
 if (exists $opt{keepCov}) { $keepCov = 1; }
 
 my$keepBed = "";
-my$keepBedName = "allID";
+my$keepBedName = "";
+if ($bedName) { $keepBedName = $bedName; }
+else { $keepBedName = "allID"; }
+my$keepBedDir = ".";
 if (exists $opt{keepBed}) {
 	$keepBed = 1;
 	if ($opt{keepBed}) { 
-		$keepBedName = $opt{keepBed};
-		$keepBedName =~ s/\.bed$//;
+		#$keepBedName = $opt{keepBed};
+		#$keepBedName =~ s/\.bed$//;
+		if (-f $opt{keepBed}) { die "$opt{keepBed} already exists\n"; }
+		my($name,$dir) = fileparse($opt{keepBed},".bed");
+		if ($name) { $keepBedName = $name; }
+		if ($dir) {
+			if (-d $keepBedDir) { $keepBedDir = $dir; }
+			else { die "$keepBedDir not found\n"; }
+			}
 		}
 	}
 
@@ -566,7 +580,7 @@ if (exists $opt{raw_cov}) {
 		}
 	}
 if (@Files && @raw_cov_file) { die "must choose between providing bam files or cov files\n"; }
-if ($covMut && @raw_cov_file) { die "cannot compute depth on mutation file from cov files\n"; }
+if ($jobs{"covMut"} && @raw_cov_file) { die "cannot compute depth on mutation file from cov files\n"; }
 
 
 my(@Thresholds,$pThreshold);
@@ -712,7 +726,7 @@ if (exists $opt{cut_bed}) {
 		unless ($maxL) { $cutB_opt{"maxL"} = $cutB_opt{"cutL"}; }
 		}
 	}
-if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry\n";}
+if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry...\n";}
 
 my%CNV_opt;
 $CNV_opt{"norm"} = "med";
@@ -773,43 +787,43 @@ if (exists $opt{CNV_fields}) {
 #unless (exists $opt{file} || exists $opt{dir}) { die "requires a list of bam files to analysed (opt -f), or a directory where to find such files (opt -d)\n"; }
 if ($bed_cov_file) {
 	$CNV_tool=1;
-	if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut)
+	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $jobs{"covMut"})
 		{ die "actions other than CNV_detect not allowed if .cov.txt file provided\n"; }
 	}
 if ($CNV_tool && !$bed_cov_file) {
 	$cov_Bed=1;
 	}
 
-if ($bedReport || $toReseq) {
+if ($jobs{"bedReport"} || $toReseq) {
 	$cov_Bed=1;
 	}
 
-if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $jobs{"covMut"}) {
 	if (!@Files && !@raw_cov_file) { die "no .bam files (or coverage file) provided\n"; }
 	}
 
 #unless ($mutFile || ($CNV_tool && $bed_cov_file)) {
-if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
 	unless ($bedFile || exists $opt{id} ) 
 		{ die ".bed file (opt -b) or list of genes or transcripts id required (opt -i)\n"; }
 	}
 
 unless (@Thresholds) {
-	if ($Sum || $allS || $byS || $printSummary || $printReports || ($CNV_tool && $CNV_opt{"seuil_cov"}))
+	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || ($CNV_tool && $CNV_opt{"seuil_cov"}))
 		 { die "at least 1 threshold value required (opt -t)\n"; }
 	if ($cov_Bed) {
 		foreach(@covFields) {
 			if ($_ eq "cov") { die "at least 1 threshold value required (opt -t)\n"; }
 			}
-		if ($bedReport)  { die "at least 1 threshold value required (opt -t)\n"; }
+		if ($jobs{"bedReport"})  { die "at least 1 threshold value required (opt -t)\n"; }
 		}
 	}
 
-if ($Sum || $allS || $byS || exists $opt{genePlot} || ($CNV_tool && $CNV_opt{"geneGraph"})) { 
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || exists $opt{genePlot} || ($CNV_tool && $CNV_opt{"geneGraph"})) { 
 	unless ($ref) { die "RefSeq file required (opt -r)\n"; } 
 	}
 
-unless ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $covMut || $keepBed)
+unless ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $jobs{"covMut"} || $keepBed)
 	{ die "no job selected!\n"; }
 
 
@@ -848,7 +862,7 @@ if ($genom) {
 		}
 	}
 
-if ( ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) && (!$bed_cov_file) ) {
+if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $jobs{"covMut"}) && (!$bed_cov_file) ) {
 
 	if ($raw_cov_file[0]) {
 		open(COV, "$raw_cov_file[0]") or die "cannot open $raw_cov_file[0]\n";;
@@ -1044,7 +1058,7 @@ if ( ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $co
 		#genome index
 		if ($genom) {
 			unless (-e "$genom.fai") { 
-				if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $covMut) { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
+				if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $jobs{"covMut"}) { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
 				}
 			}
 		else { die "reference genome.fa required\n"; }
@@ -1099,13 +1113,11 @@ if ( ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $co
 	}
 
 
-unless ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $covMut || $keepBed)
-	{ die "no job selected!\n"; }
 #create output dirs
 use POSIX qw/strftime/;
 my$outdir = "";
 my$chromLength = "";
-if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $covMut) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool || $jobs{"covMut"}) {
 	if (exists $opt{outdir}) { 
 		$outdir = $opt{outdir}; 
 		$outdir =~ s/\/$//;
@@ -1128,11 +1140,11 @@ else {
 		}
 	else { $outdir = "."; }
 	}
-if ($byS || $printReports || $bedReport) { 
+if ($jobs{"graphBySample"} || $printReports || $jobs{"bedReport"}) { 
 	foreach (@Files)
 		{ mkdir("$outdir/cov\_$sName2{$_}"); }
 	}
-if ($allS || $Sum)
+if ($jobs{"graphAllSampls"} || $jobs{"graphSum"})
 	{ mkdir("$outdir/cov_All"); }
 if ($raw_cov_file[0]) {
 	my$cmd = "tail -n +2 $raw_cov_file[0] > $outdir/all.cov";
@@ -1148,6 +1160,10 @@ else {
 		}
 	}
 
+if ($keepBed && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs{"graphBySample"} && !$printSummary && !$printReports && !$covPlot && !$coordPlot && !$interS && !$cov_Bed && !$CNV_tool && !$jobs{"covMut"}) {
+	unless (exists $opt{outdir}) { $outdir = $keepBedDir; }
+	$bedName = $keepBedName;
+	}
 
 
 ###################
@@ -1156,7 +1172,7 @@ else {
 ##if bedFile provided:
 my(%Bed);	#$Bed{$chr}{$start} = $end , in 1-based
 if ($bedFile) {
-	print "reading $bedFile\n";
+	print "processing $bedFile\n";
 	if ($lenForBed) {
 		print "adding $lenForBed bp to $bedFile intervals ends\n";
 		my$expandedBed = "$outdir/$bedName";
@@ -1167,40 +1183,42 @@ if ($bedFile) {
 		}
 	#transform in 1-based coord; keep longest intervals
 	%Bed = readBed($bedFile);
-	#merge overlapping inyervals
+	#merge overlapping intervals
 	foreach my$chr (keys%Bed) {
 		%{ $Bed{$chr} } = merge(\%{ $Bed{$chr} });
 		}
 	#print merged bed
 	printBed("original",\%Bed);
-	if ($splitBed) {
-		print "splitting overlapping intervals from $bedFile\n";
-		$splitBed = "$outdir/$bedName";
-		$splitBed =~ s/.bed$//;
-		$splitBed .= "_split.bed";
-		split_Bed($bedFile,$splitBed);
-		$bedFile = $splitBed;
-		}
-	elsif ($rmOverlapBed) {
-		print "removing overlapping intervals from $bedFile\n";
-		$rmOverlapBed = "$outdir/$bedName";
-		$rmOverlapBed =~ s/.bed$//;
-		$rmOverlapBed .= "_uniq.bed";
-		rm_overlap_Bed($bedFile,$rmOverlapBed);
-		$bedFile = $rmOverlapBed;
-		}
-	elsif ($cutBed) {
-		print "cutting intervals from $bedFile 
-	(above $cutB_opt{maxL} bp ; in $cutB_opt{cutL} bp pieces , if longer than  $cutB_opt{minL} bp , else ";
-		if ($cutB_opt{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
-		elsif ($cutB_opt{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
-		else { print "through it)\n"; }
-		$cutBed = "$outdir/$bedName";
-		$cutBed =~ s/.bed$//;
-		$cutBed .= "_cut".$cutB_opt{"cutL"}.".bed";
-		cut_Bed($bedFile,$cutBed,\%cutB_opt); 
-		$bedFile = $cutBed;
-		}
+	#eventually slice bed intervals
+	$bedFile = sliceBedIntervals($bedFile,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt);
+#	if ($splitBed) {
+#		print "splitting overlapping intervals from $bedFile\n";
+#		$splitBed = "$outdir/$bedName";
+#		$splitBed =~ s/.bed$//;
+#		$splitBed .= "_split.bed";
+#		split_Bed($bedFile,$splitBed);
+#		$bedFile = $splitBed;
+#		}
+#	elsif ($rmOverlapBed) {
+#		print "removing overlapping intervals from $bedFile\n";
+#		$rmOverlapBed = "$outdir/$bedName";
+#		$rmOverlapBed =~ s/.bed$//;
+#		$rmOverlapBed .= "_flat.bed";
+#		rm_overlap_Bed($bedFile,$rmOverlapBed);
+#		$bedFile = $rmOverlapBed;
+#		}
+#	if ($cutBed) {
+#		print "cutting intervals from $bedFile 
+#	(above $cutB_opt{maxL} bp ; in $cutB_opt{cutL} bp pieces , if longer than  $cutB_opt{minL} bp , else ";
+#		if ($cutB_opt{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
+#		elsif ($cutB_opt{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
+#		else { print "through it)\n"; }
+#		$cutBed = "$outdir/$bedName";
+#		$cutBed =~ s/.bed$//;
+#		$cutBed .= "_cut".$cutB_opt{"cutL"}.".bed";
+#		cut_Bed($bedFile,$cutBed,\%cutB_opt); 
+#		$bedFile = $cutBed;
+#		}
 	}
 
 my$keepTmp = "";
@@ -1212,8 +1230,8 @@ my(%Mut);
 if ($mutFile) { 
 	print "read $mutFile\n"; 
 	%Mut = readMut($mutFile);		#$Mut{$chr}{$startMut} = $infoMut (1-based coord)
-	if($covMut) { 
-		if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool) 
+	if($jobs{"covMut"}) { 
+		if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed || $CNV_tool) 
 			{ $keepTmp = 1; }
 		%tmpFile = depthMut($mutFile,\%path,$extenS,\@Files,\%fName,\%sName,\%sName2,\%Mut,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$mbq,$dedup,$threads,$chromLength,$bedT,$bedTversion,$samT,$picard,$gatk,$genom);
 		}
@@ -1222,7 +1240,7 @@ if ($mutFile) {
 ##find and design transcripts:
 my(@hashSub,%geneNM,%NMgene,%NMchr,%NMsens,%NMstartCod,%NMendCod,%Regions,%txtRegions,%NM_Ex,%txt_NM_Ex,%Genes,%RegBed,%NMlength,%intron,%UTR,%Cod,%RegMut,%coordBed,$id2Bed);
 
-if ($Sum || $allS || $byS || (@IDs && !$bedFile) || $coordPlot || $printSummary || $printReports || ($CNV_tool && $CNV_opt{"geneGraph"})) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || (@IDs && !$bedFile) || $coordPlot || $printSummary || $printReports || ($CNV_tool && $CNV_opt{"geneGraph"})) {
 
 ##print in $idFile lines of RefSeq matching each $id of @IDs
 my$idFile="$outdir/id_List.txt";
@@ -1247,10 +1265,11 @@ else
 %Genes = %{$hashSub[8]};
 unless ($bedFile) { 
 	%Bed = %{$hashSub[9]};		#$Bed{$chr}{$start} = $end; 
-	foreach my$chr (keys%Bed)
-		{ %{ $Bed{$chr} } = merge(\%{ $Bed{$chr} }); }
+	foreach my$chr (keys%Bed) {
+		%{ $Bed{$chr} } = merge(\%{ $Bed{$chr} });
+		}
 	}
-#if ($allS || $byS || $Sum) {
+#if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"}) {
 #	my$nG=scalar(keys%geneNM);
 #	if ($nG>200) {
 #		print "$nG genes to analyse ; continue?(Y/n)\n";
@@ -1271,7 +1290,7 @@ if (($keepBed || $cov_Bed || $CNV_tool) && (!$bedFile)) {
 %coordBed = %{$hashSub[9]};		# as %Bed, but for coordPlot and cov_Bed if no bedfile
 foreach my$chr (keys%coordBed)
 	{ %{ $coordBed{$chr} } = merge(\%{ $coordBed{$chr} }); }
-
+$id2Bed = sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt);
 unlink "$idFile" or warn "Could not unlink: $!";
 
 #changes Regions{gene} according to each NM (without -A N)
@@ -1432,7 +1451,7 @@ foreach my$gene (keys%Genes) {
 #Job 2: bams analysis:
 my(%allInterval,$intervalName,%headers);
 
-if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports || $covPlot || $coordPlot || $interS || $cov_Bed) {
 
 	if (scalar(keys%{ $Regions{"raw"} }) > 0) {
 		#merge intervals from %Regions (for example, if several transcripts for the same gene)
@@ -1533,7 +1552,7 @@ if ($Sum || $allS || $byS || $printSummary || $printReports || $covPlot || $coor
 ###################
 #Job 3: Graphs:
 
-if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream)) ) ) {
+if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( ($printReports || $printSummary) && (($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream)) ) ) {
 
 	my%NMnotCov;	##$NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
 	my%NM_UC;	##NM_UC{$NM}{$threshold} = 1 if 1 region not cov
@@ -1569,7 +1588,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 
 		##initialyzes %NMCov: @{ $NMCov{$threshold}{$NM}{$nReg} } = [0 foreach pos of Regions{$NM}{$startReg}]
 		my%NMCov;
-		if ($Sum) {
+		if ($jobs{"graphSum"}) {
 			foreach my$threshold (@Thresholds) {
 				if ($All) {
 					my$r=0; ##idx of reg of $NM
@@ -1618,7 +1637,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 			my%notCov = %{ $hashSub[1] };
 			my%notCovStarts = %{ $hashSub[2] };
 
-			if ($allS || $byS || $printSummary || $printReports) {
+			if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $printSummary || $printReports) {
 				##for depth-line :
 				##create a hash : foreach file, foreach NM, foreach exon, return an array of values for ordered positions
 				## @{ $NMdepth{$NM}{$file}{$startReg} } = [ depth foreach ordered bp of exon ]
@@ -1662,7 +1681,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 				##and	if end of exon = x, start of next exon = x+1
 				## $covEnd01{$NM}{$file}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
 				## @{ $covStart01{$NM}{$file}{$threshold}{$ex} } = [ordered $notCovStarts00]
-				if ($allS || $byS) {
+				if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"}) {
 					if ($All) {
 						@hashSub = transposeCov(\@Thresholds,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $Regions{"coord0"}{$gene} },\%{ $NMcovStart{$gene} },\%{ $NMcovEnd{$gene} });
 						%{ $covStart01{$gene}{$file} } = %{ $hashSub[0] };
@@ -1679,7 +1698,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 				}
 
 			## @{ $NMCov{$NM}{$threshold}{$nReg} } = [nber of covered samples foreach pos of Regions{$NM}{$startReg}]
-			if ($Sum) {
+			if ($jobs{"graphSum"}) {
 				if ($All) {
 					foreach my$threshold (@Thresholds)
 						{ %{ $NMCov{$gene}{$threshold} } = covByThreshold($threshold,\%{ $Regions{"raw"}{$chr}{$gene} },\%allDepth,\%{ $NMCov{$gene}{$threshold} }); }
@@ -1695,7 +1714,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 
 		##foreach NM, find max cov, among all samples (A) or foreach sample (S)
 		my(%maxCovA,%maxCovS);	##$maxCov{$NM} = $maxDepth;
-		if ($allS || $byS) {
+		if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"}) {
 			if ($maxGr) {
 				if ($All) {
 					$maxCovA{$gene} = $maxGr;
@@ -1728,7 +1747,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 		if ($Rev) {
 			if ($sens eq "-") {
 				if ($All) {
-					@hashSub = ReverseCov_Gene($Sum,$allS,$byS,$gene,$NMlength{$gene},\@Thresholds,\%{ $NMdepth{$gene} },\%{ $covEnd01{$gene} },\%{ $covStart01{$gene} },\%{ $NMCov{$gene} });
+					@hashSub = ReverseCov_Gene($jobs{"graphSum"},$jobs{"graphAllSampls"},$jobs{"graphBySample"},$gene,$NMlength{$gene},\@Thresholds,\%{ $NMdepth{$gene} },\%{ $covEnd01{$gene} },\%{ $covStart01{$gene} },\%{ $NMCov{$gene} });
 					%{ $NMdepth{$gene} } = %{$hashSub[0]};
 					%{ $covEnd01{$gene} } = %{$hashSub[1]};
 					%{ $covStart01{$gene} } = %{$hashSub[2]};
@@ -1736,7 +1755,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 					}
 				else {
 					foreach my$NM (@NMs) {
-						@hashSub = ReverseCov_NMs($Sum,$allS,$byS,$NM,$NMlength{$NM},\@Thresholds,\%{ $NMdepth{$NM} },\%{ $covEnd01{$NM} },\%{ $covStart01{$NM} },\%{ $NMCov{$NM} });
+						@hashSub = ReverseCov_NMs($jobs{"graphSum"},$jobs{"graphAllSampls"},$jobs{"graphBySample"},$NM,$NMlength{$NM},\@Thresholds,\%{ $NMdepth{$NM} },\%{ $covEnd01{$NM} },\%{ $covStart01{$NM} },\%{ $NMCov{$NM} });
 						%{ $NMdepth{$NM} } = %{$hashSub[0]};
 						%{ $covEnd01{$NM} } = %{$hashSub[1]};
 						%{ $covStart01{$NM} } = %{$hashSub[2]};
@@ -1750,7 +1769,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 		##$NMCovEnd{$NM}{$threshold}{$ex}{$start}=$end
 		##$NMCovVal{$NM}{$threshold}{$ex}{$start}=$value
 		my(%NMCovEnd,%NMCovVal);
-		if ($Sum) {
+		if ($jobs{"graphSum"}) {
 			if ($All) {
 				@hashSub= covDomains(\@Thresholds,\%{ $Regions{"rev"}{$gene} },\%{ $NMCov{$gene} });
 				%{ $NMCovEnd{$gene} } = %{$hashSub[0]};		
@@ -1769,7 +1788,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 		my@colors=("gold","orange","orangered","red1","magenta4");
 
 		##graph covByGene
-		if ($Sum) { 
+		if ($jobs{"graphSum"}) { 
 			if ($All)
 				{ graphSumG($nGraf,$gene,$suff,$outdir,$sens,$chr,$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $NM_Ex{"rev"} },\%{ $RegBed{"rev"}{$gene} },\%{ $intron{"rev"} },\%{ $UTR{"rev"} },\%{ $Cod{"rev"} },\%{ $RegMut{"rev"}{$gene} },\%{ $NMCovEnd{$gene} },\%{ $NMCovVal{$gene} }); }
 			else
@@ -1777,7 +1796,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 			}
 
 		##graph covBySample
-		if ($allS) {
+		if ($jobs{"graphAllSampls"}) {
 			if ($All) {
 				my$ok=0;
 				if ($gThreshold) {
@@ -1808,7 +1827,7 @@ if ($allS || $byS || $Sum || ( ($printReports || $printSummary) && (($UTRinTxt =
 				}
 			}
 
-		if ($byS) {
+		if ($jobs{"graphBySample"}) {
 			if ($All) { 
 				my$ok=0;
 				if ($gThreshold) {
@@ -1974,11 +1993,11 @@ if ($interS) {
 my($refBedLines);
 if ($cov_Bed) {
 	if ($bedFile) {
-		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$toReseq,$bedReport,\@covFields,$gatk,\%gatkIdx);
+		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$toReseq,$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
 		#%bedLines = %{$hashSub[0]};		
 		}
 	else {
-		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$toReseq,$bedReport,\@covFields,$gatk,\%gatkIdx);
+		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$toReseq,$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
 		#%bedLines = %{$hashSub[0]};		
 
 		}
@@ -2146,12 +2165,16 @@ foreach my$f ("regions","original","merge")
 if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream))
 	{ unlink "$outdir/txtRegions_0Chr.bed","$outdir/txtRegions_wChr.bed"; }
 
-if ($cov_Bed && !$bedFile && !$keepBed)
-	{ unlink "$outdir/$bedName.bed"; }
-if ($splitBed && !$keepBed)
-	{ unlink "$splitBed"; }
-if ($cutBed && !$keepBed)
-	{ unlink "$cutBed"; }
+if (!$keepBed) {
+	if ($cov_Bed && !$bedFile)
+		{ unlink "$outdir/$bedName.bed"; }
+	if ($splitBed)
+		{ unlink "$splitBed"; }
+	if ($rmOverlapBed)
+		{ unlink "$rmOverlapBed"; }
+	if ($cutBed)
+		{ unlink "$cutBed"; }
+	}
 
 if ($keepCov) {
 	if ($gatk) {
@@ -2241,6 +2264,42 @@ while (my$line=<BED>) {
 		}
 	}
 close BED; close OUT;
+}
+
+
+######################
+sub sliceBedIntervals {
+my($bedFile,$outFile,$splitBed,$rmOverlapBed,$cutBed,$cutB_optRef) = @_;
+if ($splitBed) {
+	print "splitting overlapping intervals from $bedFile\n";
+	$splitBed = "$outFile";
+	$splitBed =~ s/.bed$//;
+	$splitBed .= "_split.bed";
+	split_Bed($bedFile,$splitBed);
+	$bedFile = $splitBed;
+	}
+elsif ($rmOverlapBed) {
+	print "removing overlapping intervals from $bedFile\n";
+	$rmOverlapBed = "$outFile";
+	$rmOverlapBed =~ s/.bed$//;
+	$rmOverlapBed .= "_flat.bed";
+	rm_overlap_Bed($bedFile,$rmOverlapBed);
+	$bedFile = $rmOverlapBed;
+	}
+if ($cutBed) {
+	print "cutting intervals from $bedFile 
+(above $cutB_opt{maxL} bp ; in $cutB_opt{cutL} bp pieces , if longer than  $cutB_opt{minL} bp , else ";
+	if ($cutB_opt{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
+	elsif ($cutB_opt{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
+	else { print "through it)\n"; }
+	$cutBed = "$outFile";
+	$cutBed =~ s/.bed$//;
+	$cutBed .= "_cut".$cutB_opt{"cutL"}.".bed";
+	cut_Bed($bedFile,$cutBed,$cutB_optRef);
+	if ($splitBed || $rmOverlapBed) { unlink $bedFile; }
+	$bedFile = $cutBed;
+	}
+return($bedFile);
 }
 
 
@@ -2470,8 +2529,6 @@ close BED;
 
 }
 
-
-######################
 
 ######################
 sub rm_overlap_Bed
@@ -4314,14 +4371,13 @@ return (%interval2)	#$interval2{$chr}{$start} = $end;
 #####################
 sub printBed
 {
-my($bedFile,$h1) = @_;
-my%interval = %$h1;
+my($bedFile,$intervalRef) = @_;
 open (OUT0, ">$outdir/$bedFile\_0Chr.bed")  || die "cannot create $outdir/$bedFile\_0Chr.bed\n";
 open (OUTw, ">$outdir/$bedFile\_wChr.bed")  || die "cannot create $outdir/$bedFile\_wChr.bed\n";
-foreach my$chr (sort(keys%interval)) {
-	foreach my$start (sort{$a<=>$b}keys%{ $interval{$chr} }) {
-		print OUT0 $chr."\t".($start-1)."\t".$interval{$chr}{$start}."\n";
-		print OUTw "chr".$chr."\t".($start-1)."\t".$interval{$chr}{$start}."\n";
+foreach my$chr (sort(keys%{$intervalRef})) {
+	foreach my$start (sort{$a<=>$b}keys%{ ${$intervalRef}{$chr} }) {
+		print OUT0 $chr."\t".($start-1)."\t".${$intervalRef}{$chr}{$start}."\n";
+		print OUTw "chr".$chr."\t".($start-1)."\t".${$intervalRef}{$chr}{$start}."\n";
 		}
 	}
 close OUT0;
@@ -5178,22 +5234,21 @@ return(%dataR);
 #%interval2 = merge(\%interval);
 sub merge
 {
-my($h1) = @_;
-my%interval = %$h1;
-my@Starts = sort{$a<=>$b}(keys%interval);
+my($intervalRef) = @_;
+my@Starts = sort{$a<=>$b}(keys%{$intervalRef});
 my$start = $Starts[0];
-my$end = $interval{$start};
+my$end = ${$intervalRef}{$start};
 my%interval2;
 for (my$i=1;$i<scalar(@Starts);$i++) {
 	if ($Starts[$i] <= $end) {
-		if ($interval{$Starts[$i]} > $end)
-			{ $end = $interval{$Starts[$i]}; }
+		if (${$intervalRef}{$Starts[$i]} > $end)
+			{ $end = ${$intervalRef}{$Starts[$i]}; }
 		else { next; }
 		}
 	else {
 		$interval2{$start} = $end;
 		$start = $Starts[$i];
-		$end = $interval{$start};
+		$end = ${$intervalRef}{$start};
 		}
 	}
 $interval2{$start} = $end;
