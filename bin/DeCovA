@@ -165,18 +165,18 @@ outputs:
 parameters:
   *refseq gene analysis:
 	-N / --nonCoding : analyse also Non coding transcripts (default: no)
-	-U / --noUTR : does not take into account UTR regions for graphs (default: yes)
-	-u / --noUTRinTxt : does not take into account UTR regions for summary txt file and plots (default: yes)
+	-U / --noUTR : does not take into account UTR regions, for graphs (default: yes)
+	-u / --noUTRinTxt : does not take into account UTR regions, for summary txt file and plots (default: yes)
 	-t / --depthThreshold : depth thresholds, comma separated
 	-T / --printThreshold : depth threshold used for txt outputs (must be one of those in opt -t; default : the smallest one)
 	--noGraphThreshold : all graphs will be printed, whatever the coverage 
 		(default: only the genes not fully covered at threshold in -opt -T will be drawn)
 	--noAllTranscripts : does not print All transcripts on same file, in graphBySample (default: yes)
 	--maxDepth : max depth value when printing graph (optional)
-	-l / --expand2val : int: length to add at each ends of exons (default: 0) ; or int1,int2 : lengths to add in 5' and 3'
-	--UDstream : int: length to add at each ends of genes ; or int1,int2 : lengths to add upstram and downstream
+	-l / --expand2val : int: length to add at each ends of exons, on graphs (default: 0) ; or int1,int2 : lengths to add in 5' and 3'
+	--UDstream : int: length to add at each ends of genes, on graphs ; or int1,int2 : lengths to add upstram and downstream
 	--noOverlap : if padding creates overlapping exons, take the mid between them (for report)
-	-L / --expand2bed : expand length of gene analysed regions to bed coord, if -l < bed (default: no)
+	-L / --expand2bed : expand length of gene analysed regions to bed coord, if -l < bed , on graphs (default: no)
 	--Ltxt : does take into account expanded length (from -l and -L) for txt outputs (default: no), or add a different length
 	--UDtxt : does take into account up/downStream length for txt outputs (default: no), or add a different length
 	-R / --noReverse : does not reverse regions if sens of transcript = (-) (default: yes)
@@ -384,7 +384,113 @@ if (exists $opt{genome}) {
 	$genom = $opt{genome}; 
 	}
 
+my$fichier_sexe = "";
+if (exists $opt{sex_file}) { 
+	if (-e $opt{sex_file}) { $fichier_sexe = $opt{sex_file}; }
+	else { die "$fichier_sexe file not found\n"; }
+	}
+
+##jobs
+my%jobs = ();
+$jobs{"bedReport"} = 0;
+if (exists $opt{bedReport})
+	{ $jobs{"bedReport"} = 1; }
+$jobs{"graphSum"} = "";
+if (exists $opt{graphSum})
+	{ $jobs{"graphSum"} = 1; }
+$jobs{"graphAllSampls"} = "";
+if (exists $opt{allSample})
+	{ $jobs{"graphAllSampls"} = 1; }
+$jobs{"graphBySample"} = "";
+if (exists $opt{bySample})
+	{ $jobs{"graphBySample"} = 1; }
+$jobs{"covMut"} = "";
+if ($mutFile) { $jobs{"covMut"} = 1; }
+if (exists $opt{noDepthMut})
+	{ $jobs{"covMut"} = ""; }
+$jobs{"covPlot"} = "";
+if (exists $opt{covPlot})
+	{ $jobs{"covPlot"} = 1; }
+$jobs{"interSplot"} = "";
+if (exists $opt{interPlot})
+	{ $jobs{"interSplot"} = 1; }
+$jobs{"genePlot"} = "";
+if (exists $opt{genePlot})
+	{ $jobs{"genePlot"} = 1; }
+$jobs{"covBed"} = "";
+if (exists $opt{covBed})
+	{ $jobs{"covBed"} = 1; }
+$jobs{"2Reseq"} = "";
+if (exists $opt{Reseq})
+	{ $jobs{"2Reseq"}=$opt{Reseq}; }
+$jobs{"CNV"} = "";
+if (exists $opt{CNV}) {
+	$jobs{"CNV"} = 1; 
+	}
+$jobs{"geneReport"} = "";
+if (exists $opt{geneReport})
+	{ $jobs{"geneReport"} = 1; }
+$jobs{"geneSummary"} = "";
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"})		# || @IDs)
+	{ $jobs{"geneSummary"} = 1; }
+if (exists $opt{summary}) {
+	if ($opt{summary}) {
+		if ($opt{summary} =~ /^y|^o/i) { $jobs{"geneSummary"} = 1; }
+		elsif ($opt{summary} =~ /^n/i) { $jobs{"geneSummary"} = ""; }
+		else { die "opt summary no recognized (y/n)"; }
+		}
+	else { $jobs{"geneSummary"} = 1; }
+	}
+$jobs{"keepCov"} = "";
+if (exists $opt{keepCov}) { $jobs{"keepCov"} = 1; }
+$jobs{"keepBed"} = "";
+my$keepBedName = "";
+if ($bedName) { $keepBedName = $bedName; }
+else { $keepBedName = "allID"; }
+my$keepBedDir = ".";
+if (exists $opt{keepBed}) {
+	$jobs{"keepBed"} = 1;
+	if ($opt{keepBed}) { 
+		#$keepBedName = $opt{keepBed};
+		#$keepBedName =~ s/\.bed$//;
+		if (-f $opt{keepBed}) { die "$opt{keepBed} already exists\n"; }
+		my($name,$dir) = fileparse($opt{keepBed},".bed");
+		if ($name) { $keepBedName = $name; }
+		if ($dir) {
+			if (-d $keepBedDir) { $keepBedDir = $dir; }
+			else { die "$keepBedDir not found\n"; }
+			}
+		}
+	}
+
 ##refseq gene analysis param
+my(@Thresholds,$pThreshold);
+if (exists $opt{printThreshold})
+	{ $pThreshold = $opt{printThreshold}; }
+if (exists $opt{depthThreshold}) {
+	@Thresholds = split(/,/, join(',',@{$opt{depthThreshold}}));
+	foreach (@Thresholds) {
+		if ($_ =~ /^\d+$/) { print "depth threshold: $_\n"; }
+		else { die "$_ depth threshold value need to be an integer\n"; }
+		}
+	@Thresholds = sort{$b<=>$a}@Thresholds;	#decroissant
+	#check if $pThreshold one of those in @Thresholds
+	if ($pThreshold) {
+		my$ok=0;
+		foreach (@Thresholds) {
+			if ($pThreshold==$_) 
+				{ $ok=1; last; }
+			}
+		unless ($ok) 
+			{ die "opt -T threshold value need to be 1 of those in opt -t\n"; }
+		}
+	else { $pThreshold = $Thresholds[-1]; }
+	print "threshold for summary: $pThreshold \n";
+	}
+else { 
+	if ($pThreshold) { @Thresholds = ($pThreshold); }
+	}
+##regions extent
 my$nonCod = "";
 if (exists $opt{nonCoding})
 	{ $nonCod = 1; }
@@ -483,95 +589,24 @@ my$Expand = "";
 if (exists $opt{expand2bed})
 	{ $Expand = 1; }
 
-my$lenForBed = 0;
-if (exists $opt{Lbed}) {
-	if ($opt{Lbed} =~ /^\d+$/) { $lenForBed = $opt{Lbed}; }
-	else { die "--Lbed value need to be an integer\n"; }
-	}
-
 my$spacer = 0;
 
 my$Rev = 1;
 if (exists $opt{noReverse})
 	{ $Rev=0; }
 
-my$All = 1;
+my$All = 1;		##all transcripts on same graph; no longer disable possibility
 if (exists $opt{noEachTranscript}) 
 	{ $All=0; }
 
+my$gThreshold = 1;
+if (exists $opt{noGraphThreshold})
+	{  $gThreshold=""; }
 
-##jobs
-my%jobs = ();
-$jobs{"bedReport"} = 0;
-if (exists $opt{bedReport})
-	{ $jobs{"bedReport"} = 1; }
-$jobs{"graphSum"} = "";
-if (exists $opt{graphSum})
-	{ $jobs{"graphSum"} = 1; }
-$jobs{"graphAllSampls"} = "";
-if (exists $opt{allSample})
-	{ $jobs{"graphAllSampls"} = 1; }
-$jobs{"graphBySample"} = "";
-if (exists $opt{bySample})
-	{ $jobs{"graphBySample"} = 1; }
-$jobs{"covMut"} = "";
-if ($mutFile) { $jobs{"covMut"} = 1; }
-if (exists $opt{noDepthMut})
-	{ $jobs{"covMut"} = ""; }
-$jobs{"covPlot"} = "";
-if (exists $opt{covPlot})
-	{ $jobs{"covPlot"} = 1; }
-$jobs{"interSplot"} = "";
-if (exists $opt{interPlot})
-	{ $jobs{"interSplot"} = 1; }
-$jobs{"genePlot"} = "";
-if (exists $opt{genePlot})
-	{ $jobs{"genePlot"} = 1; }
-$jobs{"covBed"} = "";
-if (exists $opt{covBed})
-	{ $jobs{"covBed"} = 1; }
-$jobs{"2Reseq"} = "";
-if (exists $opt{Reseq})
-	{ $jobs{"2Reseq"}=$opt{Reseq}; }
-$jobs{"CNV"} = "";
-if (exists $opt{CNV}) {
-	$jobs{"CNV"} = 1; 
-	}
-$jobs{"geneReport"} = "";
-if (exists $opt{geneReport})
-	{ $jobs{"geneReport"} = 1; }
-$jobs{"geneSummary"} = "";
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"})		# || @IDs)
-	{ $jobs{"geneSummary"} = 1; }
-if (exists $opt{summary}) {
-	if ($opt{summary}) {
-		if ($opt{summary} =~ /^y|^o/i) { $jobs{"geneSummary"} = 1; }
-		elsif ($opt{summary} =~ /^n/i) { $jobs{"geneSummary"} = ""; }
-		else { die "opt summary no recognized (y/n)"; }
-		}
-	else { $jobs{"geneSummary"} = 1; }
-	}
-$jobs{"keepCov"} = "";
-if (exists $opt{keepCov}) { $jobs{"keepCov"} = 1; }
-$jobs{"keepBed"} = "";
-my$keepBedName = "";
-if ($bedName) { $keepBedName = $bedName; }
-else { $keepBedName = "allID"; }
-my$keepBedDir = ".";
-if (exists $opt{keepBed}) {
-	$jobs{"keepBed"} = 1;
-	if ($opt{keepBed}) { 
-		#$keepBedName = $opt{keepBed};
-		#$keepBedName =~ s/\.bed$//;
-		if (-f $opt{keepBed}) { die "$opt{keepBed} already exists\n"; }
-		my($name,$dir) = fileparse($opt{keepBed},".bed");
-		if ($name) { $keepBedName = $name; }
-		if ($dir) {
-			if (-d $keepBedDir) { $keepBedDir = $dir; }
-			else { die "$keepBedDir not found\n"; }
-			}
-		}
-	}
+my$nGraf = "max";
+if (exists $opt{nGraph} && $opt{nGraph}!=0)
+	{ $nGraf = $opt{nGraph}; }
+
 
 ## plots param
 my$bin = 10; #nber of bin for bar plots
@@ -582,49 +617,7 @@ if (exists $opt{maxPlot})
 	{ $maxPl = $opt{maxPlot}; }
 if (($maxPl % $bin) != 0) { die "binPlot needs to be a multiple of maxPlot\n"; }
 
-
-my(@Thresholds,$pThreshold);
-if (exists $opt{printThreshold})
-	{ $pThreshold = $opt{printThreshold}; }
-if (exists $opt{depthThreshold}) {
-	@Thresholds = split(/,/, join(',',@{$opt{depthThreshold}}));
-	foreach (@Thresholds) {
-		if ($_ =~ /^\d+$/) { print "depth threshold: $_\n"; }
-		else { die "$_ depth threshold value need to be an integer\n"; }
-		}
-	@Thresholds = sort{$b<=>$a}@Thresholds;	#decroissant
-	#check if $pThreshold one of those in @Thresholds
-	if ($pThreshold) {
-		my$ok=0;
-		foreach (@Thresholds) {
-			if ($pThreshold==$_) 
-				{ $ok=1; last; }
-			}
-		unless ($ok) 
-			{ die "opt -T threshold value need to be 1 of those in opt -t\n"; }
-		}
-	else { $pThreshold = $Thresholds[-1]; }
-	print "threshold for summary: $pThreshold \n";
-	}
-else { 
-	if ($pThreshold) { @Thresholds = ($pThreshold); }
-	}
-
-my@covFields =(); 
-if ($pThreshold) { @covFields = ("min","mean","cov"); }
-else { @covFields = ("min","mean","tot"); }
-my%covFieldList = ("min"=>1,"max"=>1,"tot"=>1,"mean"=>1,"median"=>1,"cov"=>1);
-if (exists $opt{cov_fields}) {
-	@covFields = split(/,/, join(',',@{$opt{cov_fields}}));
-	foreach (@covFields) {
-		unless (exists $covFieldList{$_}) { die "cov field not recognized (min,max,tot,mean,median,cov)\n"; }
-		}
-	}
-
-my$gThreshold = 1;
-if (exists $opt{noGraphThreshold})
-	{  $gThreshold=""; }
-
+##external tools paths and param
 my$bedT = "";
 if (exists $opt{bedtools})
 	{ $bedT = $opt{bedtools}; }
@@ -666,24 +659,22 @@ if (exists $opt{mmq}) {
 my$gz = "";
 if (exists $opt{compress})
 	{ $gz = 1; }
-my$nGraf = "max";
-if (exists $opt{nGraph} && $opt{nGraph}!=0)
-	{ $nGraf = $opt{nGraph}; }
 
-my$fichier_sexe = "";
-if (exists $opt{sex_file}) { 
-	if (-e $opt{sex_file}) { $fichier_sexe = $opt{sex_file}; }
-	else { die "$fichier_sexe file not found\n"; }
+
+
+
+##bed param
+my$lenForBed = 0;
+if (exists $opt{Lbed}) {
+	if ($opt{Lbed} =~ /^\d+$/) { $lenForBed = $opt{Lbed}; }
+	else { die "--Lbed value need to be an integer\n"; }
 	}
-
-
 
 my$splitBed = "";
 if (exists $opt{split_bed}) { $splitBed = 1; }
 
 my$rmOverlapBed = "";
 if (exists $opt{no_overlap_bed}) { $rmOverlapBed = 1; }
-
 
 my$cutBed = "";
 my%cutB_opt = ();
@@ -719,7 +710,18 @@ if (exists $opt{cut_bed}) {
 		}
 	}
 #if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry...\n";}
+my@covFields =(); 
+if ($pThreshold) { @covFields = ("min","mean","cov"); }
+else { @covFields = ("min","mean","tot"); }
+my%covFieldList = ("min"=>1,"max"=>1,"tot"=>1,"mean"=>1,"median"=>1,"cov"=>1);
+if (exists $opt{cov_fields}) {
+	@covFields = split(/,/, join(',',@{$opt{cov_fields}}));
+	foreach (@covFields) {
+		unless (exists $covFieldList{$_}) { die "cov field not recognized (min,max,tot,mean,median,cov)\n"; }
+		}
+	}
 
+## CNV param
 my%CNV_opt;
 $CNV_opt{"norm"} = "med";
 if (exists $opt{normStat}) {
