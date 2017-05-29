@@ -50,7 +50,8 @@ GetOptions (\%opt,
 	"maxDepth=i",
 	"expand2val|l=s",
 	"UDstream=s",
-	"noOverlap",
+	"splitBedFromId",
+	"mergeBedFromId",
 	"expand2bed|L",
 	"Ltxt:s",
 	"UDtxt:s",
@@ -175,7 +176,8 @@ parameters:
 	--maxDepth : max depth value when printing graph (optional)
 	-l / --expand2val : int: length to add at each ends of exons, on graphs (default: 0) ; or int1,int2 : lengths to add in 5' and 3'
 	--UDstream : int: length to add at each ends of genes, on graphs ; or int1,int2 : lengths to add upstram and downstream
-	--noOverlap : if padding creates overlapping exons, take the mid between them (for report)
+	--splitBedFromId : if padding creates overlapping exons, take the mid between them (for report)
+	--mergeBedFromId : merge overlapping exons
 	-L / --expand2bed : expand length of gene analysed regions to bed coord, if -l < bed , on graphs (default: no)
 	--Ltxt : does take into account expanded length (from -l and -L) for txt outputs (default: no), or add a different length
 	--UDtxt : does take into account up/downStream length for txt outputs (default: no), or add a different length
@@ -523,8 +525,10 @@ if (exists $opt{expand2val}) {
 		}
 	}
 
-my$noOverlap = 0;
-if (exists $opt{noOverlap}) { $noOverlap = 1; }
+my$splitBedFromId = 0;
+if (exists $opt{splitBedFromId}) { $splitBedFromId = 1; }
+my$mergeBedFromId = 0;
+if (exists $opt{mergeBedFromId}) { $mergeBedFromId = 1; }
 
 my$lenTxt5 = 0; my$lenTxt3 = 0;
 if (exists $opt{Ltxt}) {
@@ -1176,7 +1180,7 @@ if ($bedFile) {
 	%Bed = readBed($bedFile);
 	#merge overlapping intervals
 	foreach my$chr (keys%Bed) {
-		%{ $Bed{$chr} } = merge(\%{ $Bed{$chr} });
+		%{ $Bed{$chr} } = mergeIntervals(\%{ $Bed{$chr} });
 		}
 	#print merged bed
 	printBed("original",\%Bed);
@@ -1243,7 +1247,7 @@ else
 
 ##for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
-@hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed,\@ChromOrder);
+@hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,\@ChromOrder);
 #return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
 %geneNM = %{$hashSub[0]};		# @{ $geneNM{$gene} } = [$NM1,...]
 %NMgene = %{$hashSub[1]};		# $NMgene{$NM} = $gene;
@@ -1257,7 +1261,7 @@ else
 unless ($bedFile) { 
 	%Bed = %{$hashSub[9]};		#$Bed{$chr}{$start} = $end; 
 	foreach my$chr (keys%Bed) {
-		%{ $Bed{$chr} } = merge(\%{ $Bed{$chr} });
+		%{ $Bed{$chr} } = mergeIntervals(\%{ $Bed{$chr} });
 		}
 	}
 #if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"}) {
@@ -1275,12 +1279,12 @@ if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 	$bedName = $keepBedName;
 	$id2Bed = "$outdir/$bedName.bed";
 	}
-@hashSub = Id2Coord($idFile,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$noOverlap,$nonCod,$UTRinTxt,$id2Bed,\@ChromOrder);
+@hashSub = Id2Coord($idFile,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$splitBedFromId,$mergeBedFromId,$nonCod,$UTRinTxt,$id2Bed,\@ChromOrder);
 %txtRegions = %{$hashSub[6]};		# as %Regions, but for summary txt file
 %txt_NM_Ex = %{$hashSub[7]};		# as %NM_Ex, but for summary txt file
 %coordBed = %{$hashSub[9]};		# as %Bed, but for coordPlot and cov_Bed if no bedfile
 foreach my$chr (keys%coordBed)
-	{ %{ $coordBed{$chr} } = merge(\%{ $coordBed{$chr} }); }
+	{ %{ $coordBed{$chr} } = mergeIntervals(\%{ $coordBed{$chr} }); }
 $id2Bed = sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt);
 unlink "$idFile" or warn "Could not unlink: $!";
 
@@ -1449,7 +1453,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		#% $Regions{"raw"}{chr}{NM}{exonstart} = exonend
 		#% $allInterval{chr}{start of region} = end of region
 		#print bed corresponding to regions
-		%allInterval = mergeIntervals(%{ $Regions{"raw"} });
+		%allInterval = mergeRegions(%{ $Regions{"raw"} });
 		$intervalName = "regions";
 		printBed($intervalName,\%allInterval);
 		if ($bedFile || ($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
@@ -1472,7 +1476,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 			close MERGE; 
 			my%Merge = readBed("$outdir/$intervalName.bed");
 			foreach my$chr (keys%Merge)
-				{ %{ $Merge{$chr} } = merge(\%{ $Merge{$chr} }); }
+				{ %{ $Merge{$chr} } = mergeIntervals(\%{ $Merge{$chr} }); }
 			printBed($intervalName,\%Merge);
 			unlink "$outdir/$intervalName.bed";
 			}
@@ -1573,7 +1577,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 			foreach my$NM (@NMs) {
 				%{ $NMinterval{$chr}{$NM} } = %{ $Regions{"raw"}{$chr}{$NM} };
 				}
-			my%tmp = mergeIntervals(%NMinterval);
+			my%tmp = mergeRegions(%NMinterval);
 			%{ $Regions{"raw"}{$chr}{$gene} } = %{ $tmp{$chr} };
 			}
 
@@ -1893,7 +1897,7 @@ if ( ($jobs{"geneReport"} || $jobs{"geneSummary"}) && (($UTRinTxt != $wUTR) || (
 			my%NMinterval;
 			foreach my$NM (@NMs)
 				{ %{ $NMinterval{$chr}{$NM} } = %{ $txtRegions{$chr}{$NM} }; }
-			my%tmp = mergeIntervals(%NMinterval);
+			my%tmp = mergeRegions(%NMinterval);
 			%{ $txtRegions{$chr}{$gene} } = %{ $tmp{$chr} };
 			}
 
@@ -2035,7 +2039,7 @@ if ($jobs{"CNV"}) {
 						}
 					}
 				foreach my$chr (keys%{ $CNVbed{$file} }) {
-					%{ $CNVbed{$file}{$chr} } = merge(\%{ $CNVbed{$file}{$chr} });	
+					%{ $CNVbed{$file}{$chr} } = mergeIntervals(\%{ $CNVbed{$file}{$chr} });	
 					}
 				@{ $IDs{$file} } = geneFromBed2("$outdir/id.tmp",$ref,\%{ $CNVbed{$file} });
 				unlink "$outdir/id.tmp";
@@ -2047,7 +2051,7 @@ if ($jobs{"CNV"}) {
 			close MERGE;
 			%{ $CNVbed{"allFiles"} } = readBed("$outdir/allCNVs.bed");
 			foreach my$chr (keys%{ $CNVbed{"allFiles"} }) {
-				%{ $CNVbed{"allFiles"}{$chr} } = merge(\%{ $CNVbed{"allFiles"}{$chr} }); 
+				%{ $CNVbed{"allFiles"}{$chr} } = mergeIntervals(\%{ $CNVbed{"allFiles"}{$chr} }); 
 				}
 			@{ $IDs{"allFiles"} } = geneFromBed2("$outdir/id.tmp",$ref,\%{ $CNVbed{"allFiles"} });
 			unlink "$outdir/id.tmp";
@@ -2211,7 +2215,7 @@ exit;
 sub readBed
 {
 my($bed) = @_;
-my%covBed;			#$covbed{$chr}{$start} = $end;	transform in 1-based coord
+my%covBed;			#$covbed{$chr}{$start} = $end;	transform in hash with 1-based coord
 open(BED, $bed) || die "can't open file $bed\n";
 print "reading $bed\n";
 my$ok=0;
@@ -2886,7 +2890,7 @@ return(@Transcripts);
 ##Id2Coord($idFile,$lenForTxt,$nonCod,$UTRinTxt)
 sub Id2Coord
 {
-my($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed,$h1) = @_;
+my($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,$h1) = @_;
 my@ChromOrder = @$h1;
 my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%hashBed,%printBed);
 
@@ -3066,41 +3070,121 @@ while (my$line=<IDS>) {
 		}
 	}
 close(IDS);
-if ($id2Bed) { open(BED, ">$id2Bed") || die "can't create $id2Bed\n"; }
-my@allChrom = ();
-if (@ChromOrder) {
-	foreach my$chr (@ChromOrder) {
-		$chr =~ s/^chr//i;
-		if (exists $printBed{$chr}) { push(@allChrom,$chr); }
+
+if ($id2Bed) {
+	my@allChrom = ();
+	if (@ChromOrder) {
+		foreach my$chr (@ChromOrder) {
+			$chr =~ s/^chr//i;
+			if (exists $printBed{$chr}) { push(@allChrom,$chr); }
+			}
 		}
-	}
-else {
-	foreach my$chr (sort(keys%printBed)) { push(@allChrom,$chr); }
-	}
-foreach my$chr (@allChrom) {
-	foreach my$start (sort{$a<=>$b}keys%{ $printBed{$chr} }) {
-		foreach my$end (sort{$a<=>$b}keys%{ $printBed{$chr}{$start} }) {
-			my$info="";
-			foreach my$gene (sort(keys%{ $printBed{$chr}{$start}{$end} })) {
-				$info .= "$gene:";
-				foreach my$NM (sort(keys%{ $printBed{$chr}{$start}{$end}{$gene} })) {
-					$info .= "$NM:".$printBed{$chr}{$start}{$end}{$gene}{$NM}.",";
-					}
-				chop $info;
-				$info .= ";";
+	else {
+		foreach my$chr (sort(keys%printBed)) { push(@allChrom,$chr); }
+		}
+
+	open(my$fh, ">", "$id2Bed") || die "can't create $id2Bed\n";
+	if ($mergeBedFromId) {
+		foreach my$chr (@allChrom) {
+			#exons with same start
+			my%printBed2 = ();
+			foreach my$start (keys%{ $printBed{$chr} }) {
+				my@ends = sort{$a<=>$b}keys%{ $printBed{$chr}{$start} };
+				$printBed2{$start}{"end"} = $ends[-1];
+				foreach my$end (keys%{ $printBed{$chr}{$start} }) {
+					foreach my$gene (keys%{ $printBed{$chr}{$start}{$end} }) {
+						foreach my$NM (keys%{ $printBed{$chr}{$start}{$end}{$gene} }) {
+							push(@{ $printBed2{$start}{"info"}{$gene}{$NM} }, $printBed{$chr}{$start}{$end}{$gene}{$NM});
+							}
+						}
+					}	
 				}
-			chop $info;
-			print BED "$chr\t$start\t$end\t$info\n";
-			}	
+			#overlapping exons
+			my@Starts = sort{$a<=>$b}(keys%printBed2);
+			my$start = $Starts[0];
+			my$end = $printBed2{$start}{"end"};
+			my%printBed3 = ();
+			foreach my$gene (keys%{ $printBed2{$start}{"info"} }) {
+				foreach my$NM (keys%{ $printBed2{$start}{"info"}{$gene} }) {
+					push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$start}{"info"}{$gene}{$NM} });
+					}
+				}
+			for (my$i=1;$i<scalar(@Starts);$i++) {
+				if ($Starts[$i] <= $end) {
+					foreach my$gene (keys%{ $printBed2{$Starts[$i]}{"info"} }) {
+						foreach my$NM (keys%{ $printBed2{$Starts[$i]}{"info"}{$gene} }) {
+							push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$Starts[$i]}{"info"}{$gene}{$NM} });
+							}
+						}
+					if ($printBed2{$Starts[$i]}{"end"} > $end)
+						{ $end = $printBed2{$Starts[$i]}{"end"}; }
+					else { next; }
+					}
+				else {
+					printID2BedMerge($fh,$chr,$start,$end,\%printBed3);
+					%printBed3 = ();
+					foreach my$gene (keys%{ $printBed2{$Starts[$i]}{"info"} }) {
+						foreach my$NM (keys%{ $printBed2{$Starts[$i]}{"info"}{$gene} }) {
+							push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$Starts[$i]}{"info"}{$gene}{$NM} });
+							}
+						}
+					$start = $Starts[$i];
+					$end = $printBed2{$start}{"end"};
+					}
+				}
+			printID2BedMerge($fh,$chr,$start,$end,\%printBed3);
+			}
 		}
+
+	else {
+		foreach my$chr (@allChrom) {
+			foreach my$start (sort{$a<=>$b}keys%{ $printBed{$chr} }) {
+				foreach my$end (sort{$a<=>$b}keys%{ $printBed{$chr}{$start} }) {
+					my$info="";
+					foreach my$gene (sort(keys%{ $printBed{$chr}{$start}{$end} })) {
+						$info .= "$gene:";
+						foreach my$NM (sort(keys%{ $printBed{$chr}{$start}{$end}{$gene} })) {
+							$info .= "$NM:".$printBed{$chr}{$start}{$end}{$gene}{$NM}.",";
+							}
+						chop $info;
+						$info .= ";";
+						}
+					chop $info;
+					print $fh "$chr\t$start\t$end\t$info\n";
+					}	
+				}
+			}
+		}
+
+	close $fh;
 	}
-if ($id2Bed) { close BED; }
+
 my%Genes;
 foreach (keys%geneNM) { 
 	$Genes{$_} = 1;
 	@{ $geneNM{$_} } = sort@{ $geneNM{$_} };
 	}
 return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%hashBed);
+}
+####
+sub printID2BedMerge {
+my($fh,$chr,$start,$end,$infoRef) = @_;
+my$info = "";
+foreach my$gene (sort(keys%{$infoRef})) {
+	$info .= "$gene:";
+	foreach my$NM (sort(keys%{ ${$infoRef}{$gene} })) {
+		$info .= "$NM:";
+		foreach my$ex (@{ ${$infoRef}{$gene}{$NM} }) {
+			$info .= "$ex-";
+			}
+		chop $info;
+		$info .= ",";
+		}
+	chop $info;
+	$info .= ";";
+	}
+chop $info;
+print $fh "$chr\t$start\t$end\t$info\n";
 }
 
 
@@ -4308,8 +4392,8 @@ return(\%RegR,\%NM_ExR,\%intron,\%UTR,\%Cod,\%NMbedR,\%NMmutR);
 ###########################
 #merge intervals from %Regions: 
 #$Regions{chr}{NM}{start of region} = end of region
-#my%allInterval = mergeIntervals(%Regions);
-sub mergeIntervals
+#my%allInterval = mergeRegions(%Regions);
+sub mergeRegions
 {
 print "merge overlapping intervals from RefSeq selected transcripts\n";
 # %allExon : key1 = chr, value1 = %( key2 = NM, value2 = %(key3 = exonstart, value3 = exonend) ) 
@@ -5222,8 +5306,8 @@ return(%dataR);
 
 #################################
 #merge overlapping intervals 
-#%interval2 = merge(\%interval);
-sub merge
+#%interval2 = mergeIntervals(\%interval);
+sub mergeIntervals
 {
 my($intervalRef) = @_;
 my@Starts = sort{$a<=>$b}(keys%{$intervalRef});
