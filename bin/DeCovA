@@ -607,7 +607,6 @@ my$nGraf = "max";
 if (exists $opt{nGraph} && $opt{nGraph}!=0)
 	{ $nGraf = $opt{nGraph}; }
 
-
 ## plots param
 my$bin = 10; #nber of bin for bar plots
 if (exists $opt{binPlot})
@@ -659,9 +658,6 @@ if (exists $opt{mmq}) {
 my$gz = "";
 if (exists $opt{compress})
 	{ $gz = 1; }
-
-
-
 
 ##bed param
 my$lenForBed = 0;
