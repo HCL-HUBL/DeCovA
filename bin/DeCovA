@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
 
-our $VERSION="1.4.5e";
+our $VERSION="1.4.6a";
 
 use warnings;
 use strict;
@@ -358,7 +358,7 @@ if (exists $opt{id}) {
 		}
 	else { @IDs = split(/,/, join(',',@{$opt{id}})); }
 	foreach my$id(@IDs) { 
-		if ($id =~ /^NM_/)
+		if ($id =~ /^N[MR]_/)
 			{ $id =~ s/\.(\d+)$//; }
 		$IDs{$id} = 1;
 		}
@@ -1226,10 +1226,10 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || (@
 ##print in $idFile lines of RefSeq matching each $id of @IDs
 my$idFile="$outdir/id_List.txt";
 if ($opt{id})
-	{ gene2Ref($idFile,$ref,\@IDs)}
+	{ gene2Ref2($idFile,$ref,\@IDs); }
 else
 	##if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
-	{ @IDs = geneFromBed2($idFile,$ref,\%Bed) ; }
+	{ @IDs = geneFromBed2($idFile,$ref,\%Bed); }
 
 ##for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
@@ -2476,7 +2476,7 @@ close ($fh);
 sub reAnnotBed3
 {
 print"look for transcripts overlapping bed file\n";
-my($bedFile,$outFile,$refFile,$chromOrderRf,$nonCod) = @_;	#refseq is in 0-based
+my($bedFile,$outFile,$refFile,$chromOrderRf,$nonCod) = @_;	#refseq is in 0-based		if (exists ${$IDrf}{$nm})
 
 my@chromOrder = @{$chromOrderRf};
 #refFile in %RefCoord,%RefID
@@ -2561,7 +2561,7 @@ foreach my$chr (keys%intervals) {
 					}
 				}
 
-			elsif (($c==$#refStarts) && ($bedstart>$RefEndC[0])) {		##beyond last gene
+			elsif (($c==$#refStarts) && ($bedstart>$RefEndC[0])) {	##beyond last gene
 				foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$RefEndC[0]} }) {
 					$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "+".($bedstart - $RefEndC[0]);
 					}
@@ -3219,6 +3219,7 @@ if ($ref) {
 	while (my$line=<REF>) {
 		unless($line =~ /^#/) {
 			chomp $line;
+			my@tab = split(/\t/,$line);
 			push(@Ref, $line);
 			}
 		}
@@ -3234,6 +3235,44 @@ foreach my$id (@IDs) {
 open(IDS, ">$idFile") || die "can't create file $idFile\n";
 foreach(@Ref2) { print IDS "$_\n"; }
 close(IDS);
+}
+
+##############################
+#print lines of RefSeq matching each $id of @IDs
+sub gene2Ref2
+{
+my($idFile,$refFile,$IDrf)=@_;
+my(%allRefs);
+#bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
+#830	NM_004557	chr6	-	32162619	32191844	32163213	32191705	30	32162619,32164100,32164701,32165075,32166197,32166425,32166702,32168607,32168893,32169852,32171546,32171913,32178528,32180250,32180600,32180911,32181464,32181886,32183002,32184721,32184929,32185771,32187368,32187905,32188181,32188532,32188754,32190287,32190781,32191632,  32163927,32164198,32164849,32165371,32166336,32166507,32166922,32168783,32169277,32170376,32171659,32172166,32178713,32180404,32180688,32181029,32181617,32182032,32183162,32184844,32185043,32185885,32187563,32188061,32188418,32188655,32189102,32190583,32190863,32191844,  0	NOTCH4	cmpl	cmpl	0,1,0,1,0,2,1,2,2,0,1,0,1,0,2,1,1,2,1,1,1,1,1,1,1,1,1,2,1,0,
+open(my$fh, "<", "$refFile") || die "can't open file $refFile\n";
+while (my$line=<$fh>) {
+	unless($line =~ /^#/) {
+		chomp $line;
+		my@tab=split(/\t/,$line);
+		push(@{ $allRefs{"NM"}{uc($tab[1])} }, $line);
+		push(@{ $allRefs{"gene"}{uc($tab[12])} }, uc($tab[1]));
+		}
+	}
+close($fh);
+
+my%targets;
+foreach my$id (@{$IDrf}) {
+	$id = uc($id);
+	if (exists $allRefs{"NM"}{$id}) { $targets{$id} = 1; }
+	elsif (exists $allRefs{"gene"}{$id}) { 
+		foreach my$nm (@{ $allRefs{"gene"}{$id} }) { $targets{$nm} = 1; }
+		}
+	else { die "can't find $id in $refFile file\n"; }
+	}
+
+open($fh, ">", "$idFile") || die "can't create file $idFile\n";
+foreach my$nm (keys%targets) {
+	foreach (@{ $allRefs{"NM"}{$nm} }) {
+		print $fh "$_\n";
+		}
+	}
+close($fh);
 }
 
 
@@ -3286,8 +3325,8 @@ return(sort@Transcripts);
 #new one, refseq in ram
 sub geneFromBed2
 {
-print"look for transcripts overlapping bed file\n";
-my($idFile,$refFile,$intervalRef) = @_;	#refseq in 0-based
+print"looking for transcripts overlapping bed file\n";
+my($idFile,$refFile,$interval_rf) = @_;	#refseq in 0-based
 #my%interval = %$h1;	#$Bed{$chr}{$start} = $end , in 1-based
 my(%NM,@Transcripts,%RefCoord,%newLines);
 #$RefCoord{$chr}{$start} = $end, in 1-based
@@ -3304,8 +3343,8 @@ while (my$line=<REF>) {
 	}
 close(REF);
 
-foreach my$chr (sort(keys%{$intervalRef})) {
-	my@bedStarts = sort{$a<=>$b}keys%{ ${$intervalRef}{$chr} };
+foreach my$chr (sort(keys%{$interval_rf})) {
+	my@bedStarts = sort{$a<=>$b}keys%{ ${$interval_rf}{$chr} };
 	my@refStarts = sort{$a<=>$b}keys%{ $RefCoord{$chr} };
 	my$c=0;	#idx of @refStarts
 	my@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
@@ -3315,7 +3354,7 @@ foreach my$chr (sort(keys%{$intervalRef})) {
 			@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
 			}
 		my$c2=$c;
-		while (($c2<(scalar@refStarts-1)) && (${$intervalRef}{$chr}{$bedstart}>=$refStarts[$c2])) {
+		while (($c2<(scalar@refStarts-1)) && (${$interval_rf}{$chr}{$bedstart}>=$refStarts[$c2])) {
 			foreach my$end (@RefEnds) {
 				if ($bedstart<=$end) { 
 					foreach(@{ $RefCoord{$chr}{$refStarts[$c2]}{$end}{"NM"} }) 
@@ -3328,7 +3367,7 @@ foreach my$chr (sort(keys%{$intervalRef})) {
 			$c2++;
 			@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c2]} };
 			}
-		if (${$intervalRef}{$chr}{$bedstart}>=$refStarts[$c2]) {
+		if (${$interval_rf}{$chr}{$bedstart}>=$refStarts[$c2]) {
 			foreach my$end (@RefEnds) {
 				if ($bedstart<=$end) { 
 					foreach(@{ $RefCoord{$chr}{$refStarts[$c2]}{$end}{"NM"} }) 
