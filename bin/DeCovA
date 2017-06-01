@@ -1187,7 +1187,7 @@ if ($bedFile) {
 		$reAnnotBed = "$outdir/$bedName";
 		$reAnnotBed =~ s/.bed$//;
 		$reAnnotBed .= "_ann.bed";
-		reAnnotBed3($bedFile,$reAnnotBed,$ref,\@ChromOrder);
+		reAnnotBed3($bedFile,$reAnnotBed,$ref,\@ChromOrder,$nonCod);
 		$bedFile = $reAnnotBed;
 		}
 	#transform in 1-based coord; keep longest intervals
@@ -2476,7 +2476,8 @@ close ($fh);
 sub reAnnotBed3
 {
 print"look for transcripts overlapping bed file\n";
-my($bedFile,$outFile,$refFile,$chromOrderRf) = @_;	#refseq is in 0-based
+my($bedFile,$outFile,$refFile,$chromOrderRf,$nonCod) = @_;	#refseq is in 0-based
+
 my@chromOrder = @{$chromOrderRf};
 #refFile in %RefCoord,%RefID
 #bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
@@ -2487,14 +2488,15 @@ while (my$line=<$fh>) {
 	unless($line =~ /^#/) {
 		chomp $line;
 		my@tab=split(/\t/,$line);
-		$tab[2] =~ s/^chr//i;
-		push(@{ $RefCoord{$tab[2]}{$tab[4]}{$tab[5]} }, $tab[1]);
-		$RefID{$tab[1]}{"cdsStart"} = $tab[6];
-		$RefID{$tab[1]}{"cdsEnd"} = $tab[7];
-		@{ $RefID{$tab[1]}{"exonStarts"} } = split(/,/,$tab[9]);
-		@{ $RefID{$tab[1]}{"exonEnds"} } = split(/,/,$tab[10]);
-		$RefID{$tab[1]}{"geneID"} = $tab[12];
-
+		if(($nonCod) || ($tab[6] != $tab[7])) {
+			$tab[2] =~ s/^chr//i;
+			push(@{ $RefCoord{$tab[2]}{$tab[4]}{$tab[5]} }, $tab[1]);
+			$RefID{$tab[1]}{"cdsStart"} = $tab[6];
+			$RefID{$tab[1]}{"cdsEnd"} = $tab[7];
+			@{ $RefID{$tab[1]}{"exonStarts"} } = split(/,/,$tab[9]);
+			@{ $RefID{$tab[1]}{"exonEnds"} } = split(/,/,$tab[10]);
+			$RefID{$tab[1]}{"geneID"} = $tab[12];
+			}
 		}
 	}
 close($fh);
@@ -2572,22 +2574,7 @@ foreach my$chr (keys%intervals) {
 					foreach my$refEnd (@RefEndC2) {
 						if ($bedstart<=$refEnd) {
 							foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c2]}{$refEnd} }) {
-								my$i = 0;
-								while ( ($i<(scalar@{ $RefID{$nm}{"exonStarts"} }-1)) && ($bedstart > $RefID{$nm}{"exonEnds"}[$i]) ) {
-									$i++;
-									}
-								if ($bedEnd < $RefID{$nm}{"exonStarts"}[$i]) {
-									$intervals{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"intron"} = $i;
-									}
-								else {
-									while (($i<(scalar@{ $RefID{$nm}{"exonStarts"} }-1)) && ($bedEnd >= $RefID{$nm}{"exonStarts"}[$i])) {
-										push(@{ $intervals{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1));
-										$i++
-										}
-									if ($bedEnd >= $RefID{$nm}{"exonStarts"}[$i]) {
-										push(@{ $intervals{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1));
-										}
-									}
+								complete_intervalBed($chr,$bedstart,$bedEnd,$nm,\%intervals,\%RefID);
 								}
 							}
 						else { last; }
@@ -2599,22 +2586,7 @@ foreach my$chr (keys%intervals) {
 					foreach my$refEnd (@RefEndC2) {
 						if ($bedstart<=$refEnd) { 
 							foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c2]}{$refEnd} }) {
-								my$i = 0;
-								while ( ($i<(scalar@{ $RefID{$nm}{"exonStarts"} }-1)) && ($bedstart > $RefID{$nm}{"exonEnds"}[$i]) ) {
-									$i++;
-									}
-								if ($bedEnd < $RefID{$nm}{"exonStarts"}[$i]) {
-									$intervals{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"intron"} = $i;
-									}
-								else {
-									while (($i<(scalar@{ $RefID{$nm}{"exonStarts"} }-1)) && ($bedEnd >= $RefID{$nm}{"exonStarts"}[$i])) {
-										push(@{ $intervals{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1));
-										$i++
-										}
-									if ($bedEnd >= $RefID{$nm}{"exonStarts"}[$i]) {
-										push(@{ $intervals{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1));
-										}
-									}
+								complete_intervalBed($chr,$bedstart,$bedEnd,$nm,\%intervals,\%RefID);
 								}
 							}
 						else { last; }
@@ -2664,9 +2636,11 @@ foreach my$chr (@chromOrder) {
 								}
 							}
 						else {
-							$line .= "$nm:exon";
+							$line .= "$nm:exon-";
 							foreach (@{ $intervals{$chr}{$start}{$end}{"NM"}{$nm}{"exon"} }) {
-								$line .= "$_-";
+								$line .= "$_";
+								if ($intervals{$chr}{$start}{$end}{"NM"}{$nm}{"NC"}) { $line .= ".NC"; }
+								$line .= "-";
 								}
 							chop $line;
 							$line .= ",";
@@ -2686,6 +2660,39 @@ foreach my$chr (@chromOrder) {
 	}
 close ($fh);
 
+}
+####
+sub complete_intervalBed
+{
+my($chr,$bedstart,$bedEnd,$nm,$interval_rf,$RefID_rf) = @_;
+my$i = 0;
+while ( ($i<(scalar@{ ${$RefID_rf}{$nm}{"exonStarts"} }-1)) && ($bedstart > ${$RefID_rf}{$nm}{"exonEnds"}[$i]) ) {
+	$i++;
+	}
+if ($bedEnd < ${$RefID_rf}{$nm}{"exonStarts"}[$i]) {
+	${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"intron"} = $i;
+	}
+else {
+	while (($i<(scalar@{ ${$RefID_rf}{$nm}{"exonStarts"} }-1)) && ($bedEnd >= ${$RefID_rf}{$nm}{"exonStarts"}[$i])) {
+		push(@{ ${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1));
+		if ($bedstart >= ${$RefID_rf}{$nm}{"cdsEnd"}) {
+			${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
+			}
+		if ($bedEnd <= ${$RefID_rf}{$nm}{"cdsStart"}) {
+			${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
+			}
+		$i++
+		}
+	if ($bedEnd >= ${$RefID_rf}{$nm}{"exonStarts"}[$i]) {
+		push(@{ ${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1));
+		if ($bedstart >= ${$RefID_rf}{$nm}{"cdsEnd"}) {
+			${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
+			}
+		if ($bedEnd <= ${$RefID_rf}{$nm}{"cdsStart"}) {
+			${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
+			}
+		}
+	}
 }
 
 
