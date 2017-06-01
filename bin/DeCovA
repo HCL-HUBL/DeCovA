@@ -1170,6 +1170,13 @@ if ($jobs{"keepBed"} && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs
 ###################
 ##Job 1:find coordinates (genes, transcripts, bed, mut)
 
+## if ID list provided : print in $idFile lines of RefSeq matching each $id of @ID
+my$idFile = "";
+if (@IDs) {
+	$idFile = "$outdir/id_List.txt";
+	gene2Ref2($idFile,$ref,\@IDs);
+	}
+
 ##if bedFile provided:
 my(%Bed);	#$Bed{$chr}{$start} = $end , in 1-based
 if ($bedFile) {
@@ -1187,7 +1194,8 @@ if ($bedFile) {
 		$reAnnotBed = "$outdir/$bedName";
 		$reAnnotBed =~ s/.bed$//;
 		$reAnnotBed .= "_ann.bed";
-		reAnnotBed3($bedFile,$reAnnotBed,$ref,\@ChromOrder,$nonCod);
+		if ($idFile) { reAnnotBed3($bedFile,$reAnnotBed,$idFile,\@ChromOrder,$nonCod); }
+		else { reAnnotBed3($bedFile,$reAnnotBed,$ref,\@ChromOrder,$nonCod); }
 		$bedFile = $reAnnotBed;
 		}
 	#transform in 1-based coord; keep longest intervals
@@ -1223,13 +1231,11 @@ my(@hashSub,%geneNM,%NMgene,%NMchr,%NMsens,%NMstartCod,%NMendCod,%Regions,%txtRe
 
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || (@IDs && !$bedFile) || $jobs{"genePlot"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"})) {
 
-##print in $idFile lines of RefSeq matching each $id of @IDs
-my$idFile="$outdir/id_List.txt";
-if ($opt{id})
-	{ gene2Ref2($idFile,$ref,\@IDs); }
-else
-	##if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
-	{ @IDs = geneFromBed2($idFile,$ref,\%Bed); }
+##if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
+unless ($idFile) {
+	$idFile = "$outdir/id_List.txt";
+	@IDs = geneFromBed2($idFile,$ref,\%Bed);
+	}
 
 ##for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
@@ -2528,68 +2534,70 @@ unless (@{$chromOrderRf}) { @chromOrder = @tmpOrder; }
 
 
 foreach my$chr (keys%intervals) {
-	my@bedStarts = sort{$a<=>$b}keys%{ $intervals{$chr} };
-	my@refStarts = sort{$a<=>$b}keys%{ $RefCoord{$chr} };
-	my$c=0;	#idx of @refStarts
-	my@RefEndC = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
-	foreach my$bedstart (@bedStarts) {
-		while ( ($c < $#refStarts) && ($bedstart > $RefEndC[0]) ) {
-			$c++;
-			@RefEndC = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
-			}
-		foreach my$bedEnd (sort{$a<=>$b}keys%{ $intervals{$chr}{$bedstart} }) {
-			if ($bedEnd < $refStarts[$c]) {					##out of genes
-				if ($c==0) {								##before 1st gene
-					foreach my$refEnd (@RefEndC) {
-						foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$refEnd} }) {
-							$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "--".($refStarts[$c] - $bedEnd);
-							}
-						}
-					}
-				else {								##between 2 genes
-					my@RefEnd0 = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[($c-1)]} };
-					if (($refStarts[$c] - $bedEnd) < ($bedstart - $RefEnd0[0])) {
-						foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$RefEndC[0]} }) {
-							$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "--".($refStarts[$c] - $bedEnd);
-							}
-						}
-					else {
-						foreach my$nm (@{ $RefCoord{$chr}{$refStarts[($c-1)]}{$RefEnd0[0]} }) {
-							$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "+".($bedstart - $RefEnd0[0]);
-							}
-						}
-					}
+	if (exists $RefCoord{$chr}) {
+		my@bedStarts = sort{$a<=>$b}keys%{ $intervals{$chr} };
+		my@refStarts = sort{$a<=>$b}keys%{ $RefCoord{$chr} };
+		my$c=0;	#idx of @refStarts
+		my@RefEndC = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
+		foreach my$bedstart (@bedStarts) {
+			while ( ($c < $#refStarts) && ($bedstart > $RefEndC[0]) ) {
+				$c++;
+				@RefEndC = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
 				}
-
-			elsif (($c==$#refStarts) && ($bedstart>$RefEndC[0])) {	##beyond last gene
-				foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$RefEndC[0]} }) {
-					$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "+".($bedstart - $RefEndC[0]);
-					}
-				}
-
-			else {
-				my$c2=$c;
-				my@RefEndC2 = @RefEndC;
-				while (($c2 < $#refStarts) && ($bedEnd >= $refStarts[$c2])) {
-					foreach my$refEnd (@RefEndC2) {
-						if ($bedstart<=$refEnd) {
-							foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c2]}{$refEnd} }) {
-								complete_intervalBed($chr,$bedstart,$bedEnd,$nm,\%intervals,\%RefID);
+			foreach my$bedEnd (sort{$a<=>$b}keys%{ $intervals{$chr}{$bedstart} }) {
+				if ($bedEnd < $refStarts[$c]) {					##out of genes
+					if ($c==0) {								##before 1st gene
+						foreach my$refEnd (@RefEndC) {
+							foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$refEnd} }) {
+								$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "--".($refStarts[$c] - $bedEnd);
 								}
 							}
-						else { last; }
 						}
-					$c2++;
-					@RefEndC2 = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c2]} };
-					}
-				if ($bedEnd >= $refStarts[$c2]) {	##for $c2==$#refStarts
-					foreach my$refEnd (@RefEndC2) {
-						if ($bedstart<=$refEnd) { 
-							foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c2]}{$refEnd} }) {
-								complete_intervalBed($chr,$bedstart,$bedEnd,$nm,\%intervals,\%RefID);
+					else {								##between 2 genes
+						my@RefEnd0 = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[($c-1)]} };
+						if (($refStarts[$c] - $bedEnd) < ($bedstart - $RefEnd0[0])) {
+							foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$RefEndC[0]} }) {
+								$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "--".($refStarts[$c] - $bedEnd);
 								}
 							}
-						else { last; }
+						else {
+							foreach my$nm (@{ $RefCoord{$chr}{$refStarts[($c-1)]}{$RefEnd0[0]} }) {
+								$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "+".($bedstart - $RefEnd0[0]);
+								}
+							}
+						}
+					}
+
+				elsif (($c==$#refStarts) && ($bedstart>$RefEndC[0])) {	##beyond last gene
+					foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$RefEndC[0]} }) {
+						$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "+".($bedstart - $RefEndC[0]);
+						}
+					}
+
+				else {
+					my$c2=$c;
+					my@RefEndC2 = @RefEndC;
+					while (($c2 < $#refStarts) && ($bedEnd >= $refStarts[$c2])) {
+						foreach my$refEnd (@RefEndC2) {
+							if ($bedstart<=$refEnd) {
+								foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c2]}{$refEnd} }) {
+									complete_intervalBed($chr,$bedstart,$bedEnd,$nm,\%intervals,\%RefID);
+									}
+								}
+							else { last; }
+							}
+						$c2++;
+						@RefEndC2 = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c2]} };
+						}
+					if ($bedEnd >= $refStarts[$c2]) {	##for $c2==$#refStarts
+						foreach my$refEnd (@RefEndC2) {
+							if ($bedstart<=$refEnd) { 
+								foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c2]}{$refEnd} }) {
+									complete_intervalBed($chr,$bedstart,$bedEnd,$nm,\%intervals,\%RefID);
+									}
+								}
+							else { last; }
+							}
 						}
 					}
 				}
@@ -2621,7 +2629,7 @@ foreach my$chr (@chromOrder) {
 					}
 				chop $line;
 				}
-			else {
+			elsif (exists $intervals{$chr}{$start}{$end}{"NM"}) {
 				my(%genes,%someExon);
 				foreach my$nm (keys%{ $intervals{$chr}{$start}{$end}{"NM"} }) {
 					push(@{ $genes{$RefID{$nm}{"geneID"}} }, $nm);
@@ -2651,6 +2659,7 @@ foreach my$chr (@chromOrder) {
 					}
 				chop $line;
 				}
+			else { $line .= "."; }
 			if ($intervals{$chr}{$start}{$end}{"info"}) {
 				$line .= $intervals{$chr}{$start}{$end}{"info"};
 				}
