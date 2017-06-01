@@ -1187,7 +1187,7 @@ if ($bedFile) {
 		$reAnnotBed = "$outdir/$bedName";
 		$reAnnotBed =~ s/.bed$//;
 		$reAnnotBed .= "_ann.bed";
-		reAnnotBed3($bedFile,$reAnnotBed,$ref);
+		reAnnotBed3($bedFile,$reAnnotBed,$ref,\@ChromOrder);
 		$bedFile = $reAnnotBed;
 		}
 	#transform in 1-based coord; keep longest intervals
@@ -1199,7 +1199,7 @@ if ($bedFile) {
 	#print merged bed
 	printBed("original",\%Bed);
 	#eventually slice bed intervals
-	$bedFile = sliceBedIntervals($bedFile,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt);
+	$bedFile = sliceBedIntervals($bedFile,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
 	}
 
 my$keepTmp = "";
@@ -1271,7 +1271,7 @@ if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 %coordBed = %{$hashSub[9]};		# as %Bed, but for coordPlot and cov_Bed if no bedfile
 foreach my$chr (keys%coordBed)
 	{ %{ $coordBed{$chr} } = mergeIntervals(\%{ $coordBed{$chr} }); }
-$id2Bed = sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt);
+$id2Bed = sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
 unlink "$idFile" or warn "Could not unlink: $!";
 
 #changes Regions{gene} according to each NM (without -A N)
@@ -2228,7 +2228,7 @@ return(%covBed);
 
 
 ######################
-#just genes and transcipts
+#only genes and transcipts
 sub reAnnotBed1
 {
 print"look for transcripts overlapping bed file\n";
@@ -2476,20 +2476,18 @@ close ($fh);
 sub reAnnotBed3
 {
 print"look for transcripts overlapping bed file\n";
-my($bedFile,$outFile,$refFile) = @_;	#refseq is in 0-based
-
-#$RefCoord{$chr}{$start} = $end, in 1-based
-#@{ $RefCoord{$chr}{$start}{$end} } = [$NM1,$NM2,...]
+my($bedFile,$outFile,$refFile,$chromOrderRf) = @_;	#refseq is in 0-based
+my@chromOrder = @{$chromOrderRf};
+#refFile in %RefCoord,%RefID
 #bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
 #830	NM_004557	chr6	-	32162619	32191844	32163213	32191705	30	32162619,32164100,32164701,32165075,32166197,32166425,32166702,32168607,32168893,32169852,32171546,32171913,32178528,32180250,32180600,32180911,32181464,32181886,32183002,32184721,32184929,32185771,32187368,32187905,32188181,32188532,32188754,32190287,32190781,32191632,  32163927,32164198,32164849,32165371,32166336,32166507,32166922,32168783,32169277,32170376,32171659,32172166,32178713,32180404,32180688,32181029,32181617,32182032,32183162,32184844,32185043,32185885,32187563,32188061,32188418,32188655,32189102,32190583,32190863,32191844,  0	NOTCH4	cmpl	cmpl	0,1,0,1,0,2,1,2,2,0,1,0,1,0,2,1,1,2,1,1,1,1,1,1,1,1,1,2,1,0,
-#my(%NMCoord,%ExCoord,%RefID);
 my(%RefCoord,%RefID);
 open(my$fh, "<", $refFile) || die "can't open file $refFile\n";
 while (my$line=<$fh>) {
 	unless($line =~ /^#/) {
 		chomp $line;
 		my@tab=split(/\t/,$line);
-		$tab[2] =~ s/chr//i;
+		$tab[2] =~ s/^chr//i;
 		push(@{ $RefCoord{$tab[2]}{$tab[4]}{$tab[5]} }, $tab[1]);
 		$RefID{$tab[1]}{"cdsStart"} = $tab[6];
 		$RefID{$tab[1]}{"cdsEnd"} = $tab[7];
@@ -2500,8 +2498,8 @@ while (my$line=<$fh>) {
 		}
 	}
 close($fh);
-
-my(%intervals,@chromOrder,%allChrom);
+##bedFile in %intervals
+my(%intervals,@tmpOrder,%allChrom,%trueChr);		
 open($fh, "<", $bedFile) || die "can't open file $bedFile\n";
 my$ok=0;
 while (my$line=<$fh>) {
@@ -2509,15 +2507,23 @@ while (my$line=<$fh>) {
 		$ok++;
 		chomp $line;
 		my@tab = split(/\t/,$line);
-		unless (exists $allChrom{$tab[0]}) { push(@chromOrder,$tab[0]); $allChrom{$tab[0]} = 1; }
-		$intervals{$tab[0]}{$tab[1]}{$tab[2]}{"info"} = "";
+		my$chr = $tab[0];
+		$chr =~ s/^chr//i;
+		unless (exists $allChrom{$chr}) {
+			push(@tmpOrder,$chr);
+			$allChrom{$chr} = 1;
+			$trueChr{$chr} = $tab[0];
+			}
+		$intervals{$chr}{$tab[1]}{$tab[2]}{"info"} = "";
 		if ($tab[4]) {
-			for my$i (4..$#tab) { $intervals{$tab[0]}{$tab[1]}{$tab[2]}{"info"} .= "\t".$tab[$i]; }
+			for my$i (4..$#tab) { $intervals{$chr}{$tab[1]}{$tab[2]}{"info"} .= "\t".$tab[$i]; }
 			}
 		}
 	}
 unless ($ok) { die "no bed formatted line in $bedFile file"; }
 close ($fh);
+unless (@{$chromOrderRf}) { @chromOrder = @tmpOrder; }
+
 
 foreach my$chr (keys%intervals) {
 	my@bedStarts = sort{$a<=>$b}keys%{ $intervals{$chr} };
@@ -2538,7 +2544,7 @@ foreach my$chr (keys%intervals) {
 							}
 						}
 					}
-				else {	print "$bedstart\t$bedEnd\n";				##between 2 genes
+				else {								##between 2 genes
 					my@RefEnd0 = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[($c-1)]} };
 					if (($refStarts[$c] - $bedEnd) < ($bedstart - $RefEnd0[0])) {
 						foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$RefEndC[0]} }) {
@@ -2622,8 +2628,9 @@ foreach my$chr (keys%intervals) {
 #print annotated bed
 open($fh, ">", "$outFile") || die "can't create file $outFile\n";
 foreach my$chr (@chromOrder) {
+	$chr =~ s/^chr//i;
 	foreach my$start ( sort{$a<=>$b}(keys%{ $intervals{$chr} }) ) {
-		my$line = $chr."\t".$start;
+		my$line = $trueChr{$chr}."\t".$start;
 		foreach my$end ( sort{$a<=>$b}(keys%{ $intervals{$chr}{$start} }) ) {
 			$line .= "\t".$end."\t";
 			if (exists $intervals{$chr}{$start}{$end}{"interG"}) {
@@ -2653,11 +2660,11 @@ foreach my$chr (@chromOrder) {
 					foreach my$nm (sort@{ $genes{$gene} }) {
 						if (exists $intervals{$chr}{$start}{$end}{"NM"}{$nm}{"intron"}) {
 							unless (exists $someExon{$gene}) {
-								$line .= "$nm:intr".$intervals{$chr}{$start}{$end}{"NM"}{$nm}{"intron"}.",";
+								$line .= "$nm:ivs-".$intervals{$chr}{$start}{$end}{"NM"}{$nm}{"intron"}.",";
 								}
 							}
 						else {
-							$line .= "$nm:ex";
+							$line .= "$nm:exon";
 							foreach (@{ $intervals{$chr}{$start}{$end}{"NM"}{$nm}{"exon"} }) {
 								$line .= "$_-";
 								}
@@ -2705,13 +2712,13 @@ close BED; close OUT;
 
 ######################
 sub sliceBedIntervals {
-my($bedFile,$outFile,$splitBed,$rmOverlapBed,$cutBed,$cutB_optRef) = @_;
+my($bedFile,$outFile,$splitBed,$rmOverlapBed,$cutBed,$cutB_optRf,$chromOrderRf) = @_;
 if ($splitBed) {
 	print "splitting overlapping intervals from $bedFile\n";
 	$splitBed = "$outFile";
 	$splitBed =~ s/.bed$//;
 	$splitBed .= "_split.bed";
-	split_Bed($bedFile,$splitBed);
+	split_Bed($bedFile,$splitBed,$chromOrderRf);
 	$bedFile = $splitBed;
 	}
 elsif ($rmOverlapBed) {
@@ -2719,19 +2726,19 @@ elsif ($rmOverlapBed) {
 	$rmOverlapBed = "$outFile";
 	$rmOverlapBed =~ s/.bed$//;
 	$rmOverlapBed .= "_flat.bed";
-	rm_overlap_Bed($bedFile,$rmOverlapBed);
+	rm_overlap_Bed($bedFile,$rmOverlapBed,$chromOrderRf);
 	$bedFile = $rmOverlapBed;
 	}
 if ($cutBed) {
 	print "cutting intervals from $bedFile 
-(above $cutB_opt{maxL} bp ; in $cutB_opt{cutL} bp pieces , if longer than  $cutB_opt{minL} bp , else ";
+(above $cutB_opt{maxL} bp ; in $cutB_opt{cutL} bp pieces , if longer than $cutB_opt{minL} bp , else ";
 	if ($cutB_opt{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
 	elsif ($cutB_opt{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
 	else { print "through it)\n"; }
 	$cutBed = "$outFile";
 	$cutBed =~ s/.bed$//;
 	$cutBed .= "_cut".$cutB_opt{"cutL"}.".bed";
-	cut_Bed($bedFile,$cutBed,$cutB_optRef);
+	cut_Bed($bedFile,$cutBed,$cutB_optRf);
 	if ($splitBed || $rmOverlapBed) { unlink $bedFile; }
 	$bedFile = $cutBed;
 	}
@@ -2870,30 +2877,36 @@ close BED;
 sub split_Bed
 {
 #split_Bed($bedFile,$splitBed);
-my($bedFile,$newBed) = @_;
+my($bedFile,$newBed,$chromOrderRf) = @_;
+my@chromOrder = @{$chromOrderRf};
 
-my(%intervals,@chromOrder,%allChrom);
-# $intervals{$chr}{$start}{$end} = $line;	
-open(BED, $bedFile) || die "can't open file $bedFile\n";
+##bedFile in %intervals
+my(%intervals,@tmpOrder,%allChrom,%trueChr);		
+open(my$fh, "<", $bedFile) || die "can't open file $bedFile\n";
 my$ok=0;
-while (my$line=<BED>) {
+while (my$line=<$fh>) {
 	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
 		$ok++;
 		chomp $line;
 		my@tab = split(/\t/,$line);
-		unless (exists $allChrom{$tab[0]}) 
-			{ push(@chromOrder,$tab[0]); $allChrom{$tab[0]} = 1; }
-		my$info = "";
+		my$chr = $tab[0];
+		$chr =~ s/^chr//i;
+		unless (exists $allChrom{$chr}) {
+			push(@tmpOrder,$chr);
+			$allChrom{$chr} = 1;
+			$trueChr{$chr} = $tab[0];
+			}
+		$intervals{$chr}{$tab[1]}{$tab[2]} = "";
 		if ($tab[3]) {
 			for my$i (3..$#tab)
-				{ $info .= "\t".$tab[$i]; }
+				{ $intervals{$chr}{$tab[1]}{$tab[2]} .= "\t".$tab[$i]; }
 			}
-		#else { $info = "\t."; }
-		$intervals{$tab[0]}{$tab[1]}{$tab[2]} = $info;
+		#else { $intervals{$chr}{$tab[1]}{$tab[2]} = "\t."; }
 		}
 	}
 unless ($ok) { die "no bed formatted line in $bedFile file"; }
-close BED;
+close ($fh);
+unless (@{$chromOrderRf}) { @chromOrder = @tmpOrder; }
 
 #split intervals with same start
 # $interval2{$chr}[idx]{"start"/"end"/"info"} = ;
@@ -2953,15 +2966,16 @@ foreach my$chr (keys%interval2) {
 	}
 %interval2=();
 #print splitted bed
-open(BED, ">$newBed") || die "can't create file $newBed\n";
+open($fh, ">", "$newBed") || die "can't create file $newBed\n";
 foreach my$chr (@chromOrder) {
+	$chr =~ s/^chr//i;
 	if (exists $interval3{$chr}) {
 		foreach my$start ( sort{$a<=>$b}(keys%{ $interval3{$chr} }) ) { 
-			print BED $chr."\t".$start."\t".$interval3{$chr}{$start}{"end"}.$interval3{$chr}{$start}{"info"}."\n";
+			print $fh $trueChr{$chr} ."\t".$start."\t".$interval3{$chr}{$start}{"end"}.$interval3{$chr}{$start}{"info"}."\n";
 			}
 		}
 	}
-close BED;
+close $fh;
 
 }
 
@@ -2970,30 +2984,36 @@ close BED;
 sub rm_overlap_Bed
 {
 #no_overlap_Bed($bedFile,$splitBed);
-my($bedFile,$newBed) = @_;
+my($bedFile,$newBed,$chromOrderRf) = @_;
+my@chromOrder = @{$chromOrderRf};
 
-my(%intervals,@chromOrder,%allChrom);
-# $intervals{$chr}{$start}{$end} = $line;	
-open(BED, $bedFile) || die "can't open file $bedFile\n";
+##bedFile in %intervals
+my(%intervals,@tmpOrder,%allChrom,%trueChr);		
+open(my$fh, "<", $bedFile) || die "can't open file $bedFile\n";
 my$ok=0;
-while (my$line=<BED>) {
+while (my$line=<$fh>) {
 	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
 		$ok++;
 		chomp $line;
 		my@tab = split(/\t/,$line);
-		unless (exists $allChrom{$tab[0]}) 
-			{ push(@chromOrder,$tab[0]); $allChrom{$tab[0]} = 1; }
-		my$info = "";
+		my$chr = $tab[0];
+		$chr =~ s/^chr//i;
+		unless (exists $allChrom{$chr}) {
+			push(@tmpOrder,$chr);
+			$allChrom{$chr} = 1;
+			$trueChr{$chr} = $tab[0];
+			}
+		$intervals{$chr}{$tab[1]}{$tab[2]} = "";
 		if ($tab[3]) {
 			for my$i (3..$#tab)
-				{ $info .= "\t".$tab[$i]; }
+				{ $intervals{$chr}{$tab[1]}{$tab[2]} .= "\t".$tab[$i]; }
 			}
-		#else { $info = "\t."; }
-		$intervals{$tab[0]}{$tab[1]}{$tab[2]} = $info;
+		#else { $intervals{$chr}{$tab[1]}{$tab[2]} = "\t."; }
 		}
 	}
 unless ($ok) { die "no bed formatted line in $bedFile file"; }
-close BED;
+close ($fh);
+unless (@{$chromOrderRf}) { @chromOrder = @tmpOrder; }
 
 #intervals with same start : start = end of second to last; end = end of last
 # $interval2{$chr}[idx]{"start"/"end"/"info"} = ;
@@ -3059,9 +3079,10 @@ foreach my$chr (keys%interval2) {
 #print no_overlap bed
 open(BED, ">$newBed") || die "can't create file $newBed\n";
 foreach my$chr (@chromOrder) {
+	$chr =~ s/^chr//i;
 	if (exists $interval3{$chr}) {
 		foreach my$start ( sort{$a<=>$b}(keys%{ $interval3{$chr} }) ) { 
-			print BED $chr."\t".$start."\t".$interval3{$chr}{$start}{"end"}.$interval3{$chr}{$start}{"info"}."\n";
+			print BED $trueChr{$chr}."\t".$start."\t".$interval3{$chr}{$start}{"end"}.$interval3{$chr}{$start}{"info"}."\n";
 			}
 		}
 	}
@@ -3078,9 +3099,9 @@ my($bedFile,$newBed,$h1) = @_;
 my%c_opt = %$h1;
 my$cutL = $c_opt{"cutL"};
 
-open(OUT, ">", "$newBed") || die "can't create file $newBed\n";
-open(BED, "<", "$bedFile") || die "can't open file $bedFile\n";
-while (my$line=<BED>) {
+open(my$fhOut, ">", "$newBed") || die "can't create file $newBed\n";
+open(my$fhBed, "<", "$bedFile") || die "can't open file $bedFile\n";
+while (my$line=<$fhBed>) {
 	chomp $line;
 	my@tab = split(/\t/,$line);
 	my$line2;
@@ -3099,7 +3120,7 @@ while (my$line=<BED>) {
 				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+(($i+1)*$cutL))."\t";
 				if ($info) { $line2 .= $info; }
 				else { chop $line2; }
-				print OUT $line2."\n";
+				print $fhOut $line2."\n";
 				$i++;
 				}
 			if ($c_opt{"keepLast"} eq "merge") {
@@ -3112,26 +3133,26 @@ while (my$line=<BED>) {
 				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+($i*$cutL)+int($lastI/2))."\t";
 				if ($info) { $line2 .= $info; }
 				else { chop $line2; }
-				print OUT $line2."\n";
+				print $fhOut $line2."\n";
 				$line2 = $tab[0]."\t".($start+($i*$cutL)+int($lastI/2))."\t".$end."\t";
 				if ($info) { $line2 .= $info; }
 				else { chop $line2; }
 				}
-			print OUT $line2."\n";
+			print $fhOut $line2."\n";
 			}
 		else {
 			while ($i<$div) {
 				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+(($i+1)*$cutL))."\t";
 				if ($info) { $line2 .= $info; }
 				else { chop $line2; }
-				print OUT $line2."\n";
+				print $fhOut $line2."\n";
 				$i++;
 				}
 			if ($mod>=$c_opt{"minL"}) {
 				$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".$end."\t";
 				if ($info) { $line2 .= $info; }
 				else { chop $line2; }
-				print OUT $line2."\n";
+				print $fhOut $line2."\n";
 				}
 			}
 		}
@@ -3139,11 +3160,11 @@ while (my$line=<BED>) {
 		foreach my$i (@tab)
 			{ $line2 .= $i."\t"; }
 		chop $line2;
-		print OUT $line2."\n";
+		print $fhOut $line2."\n";
 		}
 	}
-close(BED);
-close(OUT);
+close($fhBed);
+close($fhOut);
 
 }
 
@@ -3259,53 +3280,53 @@ return(sort@Transcripts);
 sub geneFromBed2
 {
 print"look for transcripts overlapping bed file\n";
-my($idFile,$ref,$intervalRef) = @_;	#refseq in 0-based
+my($idFile,$refFile,$intervalRef) = @_;	#refseq in 0-based
 #my%interval = %$h1;	#$Bed{$chr}{$start} = $end , in 1-based
-my(%NM,@Transcripts,%RefNames,%RefLines,%newLines);
+my(%NM,@Transcripts,%RefCoord,%newLines);
 #$RefCoord{$chr}{$start} = $end, in 1-based
 #@{ $RefCoord{$chr}{$start}{$end} } = [$NM1,$NM2,...]		
-open(REF, $ref) || die "can't open file $ref\n";
+open(REF, $refFile) || die "can't open file $refFile\n";
 while (my$line=<REF>) {
 	unless($line =~ /^#/) {
 		chomp $line;
 		my@tab=split(/\t/,$line);
 		$tab[2] =~ s/chr//i;			
-		push(@{ $RefNames{$tab[2]}{($tab[4]+1)}{$tab[5]} }, $tab[1]);
-		push(@{ $RefLines{$tab[2]}{($tab[4]+1)}{$tab[5]} }, $line);
+		push(@{ $RefCoord{$tab[2]}{($tab[4]+1)}{$tab[5]}{"NM"} }, $tab[1]);
+		push(@{ $RefCoord{$tab[2]}{($tab[4]+1)}{$tab[5]}{"line"} }, $line);
 		}
 	}
 close(REF);
 
 foreach my$chr (sort(keys%{$intervalRef})) {
 	my@bedStarts = sort{$a<=>$b}keys%{ ${$intervalRef}{$chr} };
-	my@refStarts = sort{$a<=>$b}keys%{ $RefNames{$chr} };
+	my@refStarts = sort{$a<=>$b}keys%{ $RefCoord{$chr} };
 	my$c=0;	#idx of @refStarts
-	my@RefEnds = sort{$b<=>$a}keys%{ $RefNames{$chr}{$refStarts[$c]} };
+	my@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
 	foreach my$bedstart(@bedStarts) {
 		while ( ($c<(scalar@refStarts-1)) && ($bedstart > $RefEnds[0]) ) { 
 			$c++; 
-			@RefEnds = sort{$b<=>$a}keys%{ $RefNames{$chr}{$refStarts[$c]} };
+			@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
 			}
 		my$c2=$c;
 		while (($c2<(scalar@refStarts-1)) && (${$intervalRef}{$chr}{$bedstart}>=$refStarts[$c2])) {
 			foreach my$end (@RefEnds) {
 				if ($bedstart<=$end) { 
-					foreach(@{ $RefNames{$chr}{$refStarts[$c2]}{$end} }) 
+					foreach(@{ $RefCoord{$chr}{$refStarts[$c2]}{$end}{"NM"} }) 
 						{ $NM{$_}=1; }
-					foreach(@{ $RefLines{$chr}{$refStarts[$c2]}{$end} }) 
+					foreach(@{ $RefCoord{$chr}{$refStarts[$c2]}{$end}{"line"} }) 
 						{ $newLines{$_}=1;}
 					}
 				else { last; }
 				}
 			$c2++;
-			@RefEnds = sort{$b<=>$a}keys%{ $RefNames{$chr}{$refStarts[$c2]} };
+			@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c2]} };
 			}
 		if (${$intervalRef}{$chr}{$bedstart}>=$refStarts[$c2]) {
 			foreach my$end (@RefEnds) {
 				if ($bedstart<=$end) { 
-					foreach(@{ $RefNames{$chr}{$refStarts[$c2]}{$end} }) 
+					foreach(@{ $RefCoord{$chr}{$refStarts[$c2]}{$end}{"NM"} }) 
 						{ $NM{$_}=1; }
-					foreach(@{ $RefLines{$chr}{$refStarts[$c2]}{$end} }) 
+					foreach(@{ $RefCoord{$chr}{$refStarts[$c2]}{$end}{"line"} }) 
 						{ $newLines{$_}=1;}
 					}
 				else { last; }
