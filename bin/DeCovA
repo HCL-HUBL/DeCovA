@@ -820,7 +820,7 @@ unless (@Thresholds) {
 		}
 	}
 
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"genePlot"} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"}) || ($bedFile && $reAnnotBed)) { 
+if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"genePlot"} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"}) || ($bedFile && $reAnnotBed) || @IDs) { 
 	unless ($ref) { die "RefSeq file required (opt -r)\n"; } 
 	}
 
@@ -3254,16 +3254,19 @@ my($idFile,$refFile,$IDrf)=@_;
 my(%allRefs);
 #bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
 #830	NM_004557	chr6	-	32162619	32191844	32163213	32191705	30	32162619,32164100,32164701,32165075,32166197,32166425,32166702,32168607,32168893,32169852,32171546,32171913,32178528,32180250,32180600,32180911,32181464,32181886,32183002,32184721,32184929,32185771,32187368,32187905,32188181,32188532,32188754,32190287,32190781,32191632,  32163927,32164198,32164849,32165371,32166336,32166507,32166922,32168783,32169277,32170376,32171659,32172166,32178713,32180404,32180688,32181029,32181617,32182032,32183162,32184844,32185043,32185885,32187563,32188061,32188418,32188655,32189102,32190583,32190863,32191844,  0	NOTCH4	cmpl	cmpl	0,1,0,1,0,2,1,2,2,0,1,0,1,0,2,1,1,2,1,1,1,1,1,1,1,1,1,2,1,0,
-open(my$fh, "<", "$refFile") || die "can't open file $refFile\n";
-while (my$line=<$fh>) {
-	unless($line =~ /^#/) {
-		chomp $line;
-		my@tab=split(/\t/,$line);
-		push(@{ $allRefs{"NM"}{uc($tab[1])} }, $line);
-		push(@{ $allRefs{"gene"}{uc($tab[12])} }, uc($tab[1]));
+if ($refFile) {
+	open(my$fh, "<", "$refFile") || die "can't open file $refFile\n";
+	while (my$line=<$fh>) {
+		unless($line =~ /^#/) {
+			chomp $line;
+			my@tab=split(/\t/,$line);
+			push(@{ $allRefs{"NM"}{uc($tab[1])} }, $line);
+			push(@{ $allRefs{"gene"}{uc($tab[12])} }, uc($tab[1]));
+			}
 		}
+	close($fh);
 	}
-close($fh);
+else { die "RefSeq file required (opt -r)"; }
 
 my%targets;
 foreach my$id (@{$IDrf}) {
@@ -3275,7 +3278,7 @@ foreach my$id (@{$IDrf}) {
 	else { die "can't find $id in $refFile file\n"; }
 	}
 
-open($fh, ">", "$idFile") || die "can't create file $idFile\n";
+open(my$fh, ">", "$idFile") || die "can't create file $idFile\n";
 foreach my$nm (keys%targets) {
 	foreach (@{ $allRefs{"NM"}{$nm} }) {
 		print $fh "$_\n";

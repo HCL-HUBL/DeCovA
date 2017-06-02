@@ -2517,7 +2517,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			}
 		}
 
-	##threshold lines:
+	##threshold lines (black):
 	if ($norm eq "std" && $normGraf eq "moy") {
 		foreach my$gender ("normByR_depth","normByR_depth_fem","normByR_depth_males") {
 			my$r1=0;
