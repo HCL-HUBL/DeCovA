@@ -3475,6 +3475,8 @@ while (my$line=<IDS>) {
 						if ($tab[3] eq "+") { $exonNb = ($i+1); }
 						else { $exonNb = (scalar(@Starts)-$i); }
 						$printBed{$chr}{($Starts[$i]-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+						if (($Ends[$i] < $NMstartCod{$NM}) || ($Starts[$i] > $NMendCod{$NM}))
+							{ $printBed{$chr}{($Starts[$i]-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} .= ".NC"; }
 						}
 					}
 				if ($tab[3] eq "+" && $downstream)
