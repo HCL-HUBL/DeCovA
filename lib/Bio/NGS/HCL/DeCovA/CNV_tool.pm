@@ -2175,7 +2175,7 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 			
 			}
 
-		##all not target sample lines (black):
+		##all not target sample lines (grey):
 		for (my$f=0;$f<scalar@{$FilesRef};$f++) {
 			unless (${$FilesRef}[$f] eq $file) {
 				my$r1=0;
@@ -2194,17 +2194,17 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 						for (my$r=$r1;$r<$r2;$r++)
 							{ $cmdR .= ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}.","; }
 						chop $cmdR;
-						$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
+						$cmdR .= "), type =\"l\", lwd=1, col=\"darkgrey\")\n";
 						}
 					elsif (($r2-1) == $r1) {
-						$cmdR .= "lines( c(".($r1+1)."), c(".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"black\")\n";
+						$cmdR .= "lines( c(".($r1+1)."), c(".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
 						}
 					$r1 = ($r2+1);
 					}
 				}
 			}
 
-		##threshold lines:
+		##threshold lines (black):
 		if ($norm eq "std" && $normGraf eq "moy") {
 			foreach my$gender ("normByR_depth","normByR_depth_fem","normByR_depth_males") {
 				my$r1=0;
@@ -2227,20 +2227,20 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 								else 	{ $cmdR .= "1,"; }
 								}
 							chop $cmdR;
-							$cmdR .= "), type =\"l\", lwd=1, col=\"darkgrey\")\n";
+							$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
 							}
 						}
 					elsif (($r2-1) == $r1) {
-						$cmdR .= "lines( c(".($r1+1)."), c(".(1+(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
-						$cmdR .= "lines( c(".($r1+1)."), c(".(1-(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+						$cmdR .= "lines( c(".($r1+1)."), c(".(1+(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"black\")\n";
+						$cmdR .= "lines( c(".($r1+1)."), c(".(1-(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"black\")\n";
 						}
 					$r1 = ($r2+1);
 					}
 				}
 			}
 		else {
-			$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
-			$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
+			$cmdR .= "abline(h=$seuil_deletion, col=\"black\", lty = \"dashed\", lwd=1)\n";
+			$cmdR .= "abline(h=$seuil_duplication, col=\"black\", lty = \"dashed\", lwd=1)\n";
 			}
 
 		##target sample line (green)
@@ -2487,7 +2487,7 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 			}
 		}
 
-	#all not target sample lines (black):
+	#all not-target sample lines (grey):
 	for (my$p=0;$p<scalar(keys%{$PatientsRef});$p++) {
 		unless ($p == $patient) {
 
@@ -2507,10 +2507,10 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 					for (my$r=$r1;$r<$r2;$r++)
 						{ $cmdR .= ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{$p}{"depth_ratio"}{$normGraf}.","; }
 					chop $cmdR;
-					$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
+					$cmdR .= "), type =\"l\", lwd=1, col=\"darkgrey\")\n";
 					}
 				elsif (($r2-1) == $r1) {
-					$cmdR .= "lines( c(".($r1+1)."), c(".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$p}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"black\")\n";
+					$cmdR .= "lines( c(".($r1+1)."), c(".${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$p}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
 					}
 				$r1 = ($r2+1);
 				}
@@ -2541,20 +2541,20 @@ plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $C
 							else 	{ $cmdR .= "1,"; }
 							}
 						chop $cmdR;
-						$cmdR .= "), type =\"l\", lwd=1, col=\"darkgrey\")\n";
+						$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
 						}
 					}
 				elsif (($r2-1) == $r1) {
-					$cmdR .= "lines( c(".($r1+1)."), c(".(1+(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
-					$cmdR .= "lines( c(".($r1+1)."), c(".(1-(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+					$cmdR .= "lines( c(".($r1+1)."), c(".(1+(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"black\")\n";
+					$cmdR .= "lines( c(".($r1+1)."), c(".(1-(${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"std"} / ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r1]]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"black\")\n";
 					}
 				$r1 = ($r2+1);
 				}
 			}
 		}
 	else {
-		$cmdR .= "abline(h=$seuil_deletion, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
-		$cmdR .= "abline(h=$seuil_duplication, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
+		$cmdR .= "abline(h=$seuil_deletion, col=\"black\", lty = \"dashed\", lwd=1)\n";
+		$cmdR .= "abline(h=$seuil_duplication, col=\"black\", lty = \"dashed\", lwd=1)\n";
 		}
 
 	#target sample line (green):
