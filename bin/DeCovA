@@ -326,7 +326,7 @@ if (@Files) {
 		else { die "$path{$_}$fName{$_}$extenS file not found\n"; }
 		}
 	}
-exit;
+
 my$ref="";
 if (exists $opt{refseq}) { $ref = $opt{refseq}; }
 
