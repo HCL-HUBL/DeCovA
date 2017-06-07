@@ -257,7 +257,7 @@ if (exists $opt{dir}) {
 			open(LIST, $_) || die "can't open file $_\n";
 			while (my$line=<LIST>) {
 				unless ($line =~ /^\s*$/) {
-					chomp $line;
+					$line =~ s/\s*$//;
 					push (@dir, $line);
 					}
 				}
