@@ -285,7 +285,7 @@ if (exists $opt{file}) {
 			open(LIST, $_) || die "can't open file $_\n";
 			while (my$line=<LIST>) {
 				unless ($line =~ /^\s*$/) {
-					chomp $line;
+					$line =~ s/\s*$//;
 					push (@Files, $line);
 					}
 				}
@@ -321,12 +321,12 @@ if (@Files) {
 			if (scalar@dir>1) { die "not possible to affect path to files if several paths specified\n"; }
 			else { $path{$_} = $dir[0]; }
 			}
-		if ( -f $path{$_}.$fName{$_}.$extenS ) 
-			{ print "will process $path{$_}$fName{$_}$extenS\n"; }
+		if ( -f "$path{$_}$fName{$_}$extenS" ) 
+			{ print "\t$path{$_}$fName{$_}$extenS\n"; }
 		else { die "$path{$_}$fName{$_}$extenS file not found\n"; }
 		}
 	}
-
+exit;
 my$ref="";
 if (exists $opt{refseq}) { $ref = $opt{refseq}; }
 
