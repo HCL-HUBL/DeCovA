@@ -768,7 +768,7 @@ if (exists $opt{max_nonCNVrate}) { $CNV_opt{"max_Non_CNV_rate"} = $opt{max_nonCN
 $CNV_opt{"min_DP"} = 0;
 if (exists $opt{min_DP}) { $CNV_opt{"min_DP"} = $opt{min_DP}; }
 $CNV_opt{"geneGraph"} = 1;
-if (exists $opt{noCNV_byGene} || $bed_cov_file) { $CNV_opt{"geneGraph"} = ""; }
+if (exists $opt{noCNV_byGene} || ($bed_cov_file && !@raw_cov_file)) { $CNV_opt{"geneGraph"} = ""; }
 $CNV_opt{"chromGraph"} = 1;
 if (exists $opt{noCNV_byChr}) { $CNV_opt{"chromGraph"} = ""; }
 @{ $CNV_opt{"fields"} } = ();
@@ -1277,7 +1277,10 @@ if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 %coordBed = %{$hashSub[9]};		# as %Bed, but for coordPlot and cov_Bed if no bedfile
 foreach my$chr (keys%coordBed)
 	{ %{ $coordBed{$chr} } = mergeIntervals(\%{ $coordBed{$chr} }); }
-$id2Bed = sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
+if ($id2Bed) {
+	$id2Bed = sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
+	}
+	
 unlink "$idFile" or warn "Could not unlink: $!";
 
 #changes Regions{gene} according to each NM (without -A N)
