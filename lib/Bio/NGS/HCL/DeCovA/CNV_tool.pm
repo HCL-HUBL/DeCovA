@@ -890,7 +890,7 @@ foreach my$file (keys%Results) {
 ##print graph foreach Chrom
 if ($CNVgraph) {
 	for my$file (@{$FilesRef}) {
-		graphChr1($nGraf,"$outdir/${$sampleNameRef}{$file}",$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,\%regionOrder,\%Patients,\%Result2);
+		graphByChr1($nGraf,"$outdir/${$sampleNameRef}{$file}",$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,\%regionOrder,\%Patients,\%Result2);
 		}
 	}
 
@@ -1834,8 +1834,23 @@ foreach my$patient (keys%Results) {
 
 ##print graph foreach Chrom
 if ($graphByChr) {
-	for my$patient (keys%Patients) {
-		graphChr3($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2,\%Result3);
+
+	my$Nbr_Reg_max = 0;
+	my$switch2graphByCNV = 250;
+	foreach my$Chrom (@ChrOrder) {
+		if (scalar@{ $regionOrder{$Chrom} } > $Nbr_Reg_max) {
+			$Nbr_Reg_max = scalar@{ $regionOrder{$Chrom} };
+			}
+		}
+	if ($Nbr_Reg_max > $switch2graphByCNV) {
+		foreach my$patient (keys%Patients) {
+			graphByCNV2($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2,\%Result3);
+			}
+		}
+	else {
+		foreach my$patient (keys%Patients) {
+			graphByChr2($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2);
+			}
 		}
 	}
 
@@ -2002,7 +2017,7 @@ return($i,$cnvOK,$nonCNVtot,\@nextReg);
 
 ####################
 
-sub graphChr1 {
+sub graphByChr1 {
 
 my($nGraf,$outdir,$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,$regionOrderRef,$PatientsRef,$ResultsRef)= @_;
 #my@Files = @$h1;
@@ -2320,14 +2335,9 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 
 
 ####################
-sub graphChr2 {
+sub graphByChr2 {
 
 my($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,$PatientsRef,$RegionsRef,$ChrOrderRef,$regionOrderRef,$ResultsRef)= @_;
-#my%Patients = %$h1;
-#my@Regions = @$h2;
-#my@ChrOrder = @$h3;
-#my%regionOrder = %$h4;
-#my%Results = %$h5;	#$results{$patient}{$region}
 
 my$normGraf = $norm;
 if ($norm eq "std") { $normGraf = "moy"; }
@@ -2636,11 +2646,9 @@ unlink "$outdir/${$PatientsRef}{$patient}{ID}\_temp.R";
 
 }
 
-####################
-
 
 ####################
-sub graphChr3 {
+sub graphByCNV2 {
 
 my($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,$PatientsRef,$RegionsRef,$ChrOrderRef,$regionOrderRef,$Result2Ref,$Result3Ref)= @_;
 
