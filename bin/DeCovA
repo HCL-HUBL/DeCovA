@@ -1301,32 +1301,25 @@ if ($Expand) {
 			my@NMs =  @{ $geneNM{$gene} };
 			my$chr = $NMchr{$NMs[0]};
 			@hashSub = changeRegion2G(\@NMs,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $NM_Ex{"raw"} },\%{ $Bed{$chr} });
-			%{ $Regions{"raw"}{$chr}{$gene} } = %{$hashSub[0]};
-			%{ $NM_Ex{"raw"} } = %{$hashSub[1]};
-			%{ $RegBed{"raw"}{$gene} } = %{$hashSub[2]};	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
+			%{ $RegBed{"raw"}{$gene} } = %{$hashSub[0]};	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
 			}
 		}
 	else {
 		foreach my$NM (keys%NM_Ex) {
 			@hashSub = changeRegion2N(\%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} },\%{ $NM_Ex{"raw"}{$NM} },\%{ $Bed{$NMchr{$NM}} });
-			%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} } = %{$hashSub[0]};
-			%{ $NM_Ex{"raw"}{$NM} } = %{$hashSub[1]};
-			%{ $RegBed{"raw"}{$NM} } = %{$hashSub[2]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
+			%{ $RegBed{"raw"}{$NM} } = %{$hashSub[0]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
 			}
 		}
 	}
 else {
 	print "change bed intervals according to genes\n";
-	%{ $RegBed{"raw"} } = linkBed(\%{ $Regions{"raw"} },\%Bed);
+	@hashSub = linkBed(\%{ $Regions{"raw"} },\%Bed);
+	%{ $RegBed{"raw"} } = %{$hashSub[0]};
 	}
 
 #eliminates $NM with no corresponding cov bed
-if ($All) { @hashSub = notAnalysedG(\%Genes,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
-else  { @hashSub = notAnalysedN(\%Genes,\%NMgene,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
-%Genes = %{$hashSub[0]};
-%{ $Regions{"raw"} } = %{$hashSub[1]};
-%{ $NM_Ex{"raw"} } = %{$hashSub[2]};
-%{ $RegBed{"raw"} } = %{$hashSub[3]};
+if ($All) { notAnalysedG(\%Genes,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
+else  { notAnalysedN(\%Genes,\%NMgene,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
 
 
 #transposition and splicing, for exons of transcripts: 
@@ -1361,10 +1354,12 @@ else {
 
 #make arrays for starts of non coding exons, before and after coding exons
 #and arrays for starts of extragenic regions, before and after exons
-if ($All)
-	{ @hashSub = designExons1($wUTR,\%Genes,\%geneNM,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} }); }
-else
-	{ @hashSub = designExons2($wUTR,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} }); }
+if ($All) {
+	@hashSub = designExons1($wUTR,\%Genes,\%geneNM,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} });
+	}
+else {
+	@hashSub = designExons2($wUTR,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} });
+	}
 #return(\%introns,\%UTR,\%Cod);
 %{ $intron{"coord0"} } = %{$hashSub[0]};	# $intron{"coord0"}{$NM}{$startIntron} = $endIntron (for start of region = 0)
 %{ $UTR{"coord0"} } = %{$hashSub[1]};		# $UTR{"coord0"}{$NM}{$startUTR} = $endUTR (for start of region = 0)
@@ -1446,7 +1441,8 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		#% $Regions{"raw"}{chr}{NM}{exonstart} = exonend
 		#% $allInterval{chr}{start of region} = end of region
 		#print bed corresponding to regions
-		%allInterval = mergeRegions(%{ $Regions{"raw"} });
+		@hashSub = mergeRegions(\%{ $Regions{"raw"} });
+		%allInterval = %{$hashSub[0]};
 		$intervalName = "regions";
 		printBed($intervalName,\%allInterval);
 		if ($bedFile || ($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
@@ -1570,8 +1566,8 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 			foreach my$NM (@NMs) {
 				%{ $NMinterval{$chr}{$NM} } = %{ $Regions{"raw"}{$chr}{$NM} };
 				}
-			my%tmp = mergeRegions(%NMinterval);
-			%{ $Regions{"raw"}{$chr}{$gene} } = %{ $tmp{$chr} };
+			my$tmpRef = mergeRegions(\%NMinterval);
+			%{ $Regions{"raw"}{$chr}{$gene} } = %{ ${$tmpRef}{$chr} };
 			}
 
 		##initialyzes %NMCov: @{ $NMCov{$threshold}{$NM}{$nReg} } = [0 foreach pos of Regions{$NM}{$startReg}]
@@ -1890,8 +1886,8 @@ if ( ($jobs{"geneReport"} || $jobs{"geneSummary"}) && (($UTRinTxt != $wUTR) || (
 			my%NMinterval;
 			foreach my$NM (@NMs)
 				{ %{ $NMinterval{$chr}{$NM} } = %{ $txtRegions{$chr}{$NM} }; }
-			my%tmp = mergeRegions(%NMinterval);
-			%{ $txtRegions{$chr}{$gene} } = %{ $tmp{$chr} };
+			my$tmpRef = mergeRegions(\%NMinterval);
+			%{ $txtRegions{$chr}{$gene} } = %{ ${$tmpRef}{$chr} };
 			}
 
 		foreach my$file (@Files) {
@@ -2672,8 +2668,8 @@ close ($fh);
 
 }
 ####
-sub complete_intervalBed
-{
+sub complete_intervalBed {
+
 my($chr,$bedstart,$bedEnd,$nm,$interval_rf,$RefID_rf) = @_;
 my$i = 0;
 while ( ($i<(scalar@{ ${$RefID_rf}{$nm}{"exonStarts"} }-1)) && ($bedstart > ${$RefID_rf}{$nm}{"exonEnds"}[$i]) ) {
@@ -2707,8 +2703,8 @@ else {
 
 
 ######################
-sub addLength2Bed
-{
+sub addLength2Bed {
+
 my($bedFile,$newBed,$len) = @_;
 open(BED, $bedFile) || die "can't open file $bedFile\n";
 open(OUT, ">$newBed") || die "can't create file $newBed\n";
@@ -2729,6 +2725,7 @@ close BED; close OUT;
 
 ######################
 sub sliceBedIntervals {
+
 my($bedFile,$outFile,$splitBed,$rmOverlapBed,$cutBed,$cutB_optRf,$chromOrderRf) = @_;
 if ($splitBed) {
 	print "splitting overlapping intervals from $bedFile\n";
@@ -2764,8 +2761,8 @@ return($bedFile);
 
 
 ######################
-sub split_Bed_inefficient
-{
+sub split_Bed_inefficient {
+
 #split_Bed($bedFile,$splitBed);
 my($bedFile,$newBed) = @_;
 
@@ -2891,8 +2888,8 @@ close BED;
 
 
 ######################
-sub split_Bed
-{
+sub split_Bed {
+
 #split_Bed($bedFile,$splitBed);
 my($bedFile,$newBed,$chromOrderRf) = @_;
 my@chromOrder = @{$chromOrderRf};
@@ -2998,8 +2995,8 @@ close $fh;
 
 
 ######################
-sub rm_overlap_Bed
-{
+sub rm_overlap_Bed {
+
 #no_overlap_Bed($bedFile,$splitBed);
 my($bedFile,$newBed,$chromOrderRf) = @_;
 my@chromOrder = @{$chromOrderRf};
@@ -3110,8 +3107,8 @@ close BED;
 
 
 ######################
-sub cut_Bed
-{
+sub cut_Bed {
+
 my($bedFile,$newBed,$h1) = @_;
 my%c_opt = %$h1;
 my$cutL = $c_opt{"cutL"};
@@ -3189,8 +3186,9 @@ close($fhOut);
 #################### 
 #extractBed from bedtools output
 #not used anymore
-sub extractBed
-{
+
+sub extractBed {
+
 my($dir,$file) = @_;
 my%covBed;		#$covbed{$chr}{$start} = $end;
 
@@ -3219,8 +3217,9 @@ return(%covBed);
 
 ##############################
 #print lines of RefSeq matching each $id of @IDs
-sub gene2Ref
-{
+
+sub gene2Ref {
+
 my($idFile,$ref,$h1)=@_;
 my@IDs=@$h1;
 my@Ref;
@@ -3249,8 +3248,9 @@ close(IDS);
 
 ##############################
 #print lines of RefSeq matching each $id of @IDs
-sub gene2Ref2
-{
+
+sub gene2Ref2 {
+
 my($idFile,$refFile,$IDrf)=@_;
 my(%allRefs);
 #bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
@@ -3291,8 +3291,8 @@ close($fh);
 
 ##############################
 #old one
-sub geneFromBed
-{
+
+sub geneFromBed {
 print"look for transcripts overlapping bed file\n";
 my($ref,$h1) = @_;	#refseq in 0-based
 my%interval = %$h1;	#$Bed{$chr}{$start} = $end , in 1-based
@@ -3336,8 +3336,9 @@ return(sort@Transcripts);
 
 ######################
 #new one, refseq in ram
-sub geneFromBed2
-{
+
+sub geneFromBed2 {
+
 print"looking for transcripts overlapping bed file\n";
 my($idFile,$refFile,$interval_rf) = @_;	#refseq in 0-based
 #my%interval = %$h1;	#$Bed{$chr}{$start} = $end , in 1-based
@@ -3408,6 +3409,7 @@ return(@Transcripts);
 #0	NM_032291	chr1	+	66999824	67210768	67000041	67208778	25	66999824,67091529,67098752,67101626,67105459,67108492,67109226,67126195,67133212,67136677,67137626,67138963,67142686,67145360,67147551,67154830,67155872,67161116,67184976,67194946,67199430,67205017,67206340,67206954,67208755,	67000051,67091593,67098777,67101698,67105516,67108547,67109402,67126207,67133224,67136702,67137678,67139049,67142779,67145435,67148052,67154958,67155999,67161176,67185088,67195102,67199563,67205220,67206405,67207119,67210768,	0	SGIP1	cmpl	cmpl	0,1,2,0,0,0,1,0,0,0,1,2,1,1,1,1,0,1,1,2,2,0,2,1,1,
 ##@hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed);
 ##Id2Coord($idFile,$lenForTxt,$nonCod,$UTRinTxt)
+
 sub Id2Coord {
 
 my($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,$h1) = @_;
@@ -3711,8 +3713,10 @@ print $fh "$chr\t$start\t$end\t$info\n";
 
 
 #########################
-sub NM2GeneRegion {
 ## @hashSub = NM2GeneRegion(\%Genes,\%geneNM,\%NMchr,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} });
+
+sub NM2GeneRegion {
+
 my($Genes,$geneNM,$NMchr,$RegionR,$NM_ExR)=@_;
 my%RegionG;
 foreach my$gene (keys%{$Genes}) {
@@ -3736,8 +3740,10 @@ foreach my$gene (keys%{$Genes}) {
 
 #########################
 #make 1 common region from all transcripts of 1 gene
-sub changeRegion1 {
 ## changeRegion1($NMs[$i],$gene,$chr,\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ ${$RegionR}{$chr}{$NMs[$i]} },\%{ ${$NM_ExR}{$NMs[$i]} });
+
+sub changeRegion1 {
+
 my($NM,$RegionG1,$geneNM_Ex1,$RegionN,$NM_Ex_r) = @_;
 
 my@StartG = sort{$a<=>$b}(keys%{$RegionG1});
@@ -3897,34 +3903,27 @@ $RegionG3{$startReg} = $endReg;
 
 #########################
 #extract bed from file, and intersect with %Regions (regions of selected genes) 
-#create 1 hash : 
-sub changeRegion2G
-{
-	#@hashSub = changeRegion2G(\@NMs,\%{ $Regions{$chr}{$gene} },\%NM_Ex,\%{ $Bed{$chr} });
-	#%{ $Regions{$chr}{$gene} } = %{$hashSub[0]};
-	#%NM_Ex = %{$hashSub[1]};
-	#%{ $RegBed{$gene} } = %{$hashSub[2]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
-my($h1,$h2,$h3,$h4) = @_;
-my@NMs = @$h1;		# @{ $geneNM{$gene} } = [$NM1,...]
-my%interval = %$h2;		# $Regions{start of region} = end of region
-my%NM_Ex = %$h3;		# %NM_Ex{NM}{start of region}{start of exon} = end of exon
-my%Bed = %$h4;			#$Bed{$startBed} = $endBed;
+#create 1 hash :
+#@hashSub = changeRegion2G(\@NMs,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $NM_Ex{"raw"} },\%{ $Bed{$chr} });
+#%{ $RegBed{"raw"}{$gene} } = %{$hashSub[0]};	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
 
-my%RegBed;			#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
+sub changeRegion2G {
 
-my@Starts = sort{$a<=>$b}(keys%interval);
+my($NM_r,$interval1,$NM_Ex_r,$Bed_r) = @_;
 my(%interval2,%NM_Ex2,%RegBed1);
+
+my@Starts = sort{$a<=>$b}(keys%{$interval1});
 my$c=0;	#$c: count of @StartInterval			
-my@startBed = sort{$a<=>$b}keys%Bed;
-my$endBed = $Bed{$startBed[0]};
+my@startBed = sort{$a<=>$b}keys%{$Bed_r};
+my$endBed = ${$Bed_r}{$startBed[0]};
 for (my$i=0;$i<scalar@startBed;$i++) {
-	if ($startBed[$i] > $interval{$Starts[-1]})	#if bed keep going on after end of region
+	if ($startBed[$i] > ${$interval1}{$Starts[-1]})	#if bed keep going on after end of region
 		{ last; }
-	$endBed = $Bed{$startBed[$i]};	
+	$endBed = ${$Bed_r}{$startBed[$i]};	
 	if ( $endBed < $Starts[0] )
 		{ next; }
 	if ( $endBed < $Starts[$c] ) {
-		if ($startBed[$i] > $interval{$Starts[$c-1]})
+		if ($startBed[$i] > ${$interval1}{$Starts[$c-1]})
 			{ 
 			$interval2{$startBed[$i]} = $endBed; 
 			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
@@ -3932,84 +3931,84 @@ for (my$i=0;$i<scalar@startBed;$i++) {
 			}
 		else { $c--; }
 		}
-	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] > $interval{$Starts[$c]}) ) { 
-		$interval2{$Starts[$c]} = $interval{$Starts[$c]};
-		foreach my$NM (@NMs) {
-			foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
-				{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] > ${$interval1}{$Starts[$c]}) ) { 
+		$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
+		foreach my$NM (@{$NM_r}) {
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
+				{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
 			}
 		$c++; 
 		}
-	if ( $startBed[$i] > $interval{$Starts[$c]} ) { #for current $c
-		$interval2{$Starts[$c]} = $interval{$Starts[$c]};
-		foreach my$NM (@NMs) {
-			foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
-				{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+	if ( $startBed[$i] > ${$interval1}{$Starts[$c]} ) { #for current $c
+		$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
+		foreach my$NM (@{$NM_r}) {
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
+				{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
 			} 
 		}
-	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] <= $interval{$Starts[$c]}) && ($endBed >= $Starts[$c]) ) {
+	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] <= ${$interval1}{$Starts[$c]}) && ($endBed >= $Starts[$c]) ) {
 		if ($startBed[$i] < $Starts[$c]) {
-			if ($endBed > $interval{$Starts[$c]})
+			if ($endBed > ${$interval1}{$Starts[$c]})
 				{ $interval2{$startBed[$i]} = $endBed; }
 			else
-				{ $interval2{$startBed[$i]} = $interval{$Starts[$c]}; }
+				{ $interval2{$startBed[$i]} = ${$interval1}{$Starts[$c]}; }
 			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			foreach my$NM (@NMs) {
-				foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
-					{ $NM_Ex2{$NM}{$startBed[$i]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+			foreach my$NM (@{$NM_r}) {
+				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
+					{ $NM_Ex2{$NM}{$startBed[$i]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
 				}
 			}
 		else {
-			if ($endBed > $interval{$Starts[$c]})
+			if ($endBed > ${$interval1}{$Starts[$c]})
 				{ $interval2{$Starts[$c]} = $endBed; }
 			else
-				{ $interval2{$Starts[$c]} = $interval{$Starts[$c]}; }
+				{ $interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]}; }
 			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
-			foreach my$NM (@NMs) {
-				foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
-					{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+			foreach my$NM (@{$NM_r}) {
+				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
+					{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
 				}
 			}
 		$c++;
 		}
-	if ( ($startBed[$i] <= $interval{$Starts[$c]}) && ($endBed >= $Starts[$c]) ) {	#for current $c
+	if ( ($startBed[$i] <= ${$interval1}{$Starts[$c]}) && ($endBed >= $Starts[$c]) ) {	#for current $c
 		if ($startBed[$i] < $Starts[$c]) {
-			if ($endBed > $interval{$Starts[$c]})
+			if ($endBed > ${$interval1}{$Starts[$c]})
 				{ $interval2{$startBed[$i]} = $endBed; }
 			else
-				{ $interval2{$startBed[$i]} = $interval{$Starts[$c]}; }
+				{ $interval2{$startBed[$i]} = ${$interval1}{$Starts[$c]}; }
 			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			foreach my$NM (@NMs) {
-				foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
-					{ $NM_Ex2{$NM}{$startBed[$i]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+			foreach my$NM (@{$NM_r}) {
+				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
+					{ $NM_Ex2{$NM}{$startBed[$i]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
 				}
 			}
 		else {
-			if ($endBed > $interval{$Starts[$c]})
+			if ($endBed > ${$interval1}{$Starts[$c]})
 				{ $interval2{$Starts[$c]} = $endBed; }
 			else
-				{ $interval2{$Starts[$c]} = $interval{$Starts[$c]}; }
+				{ $interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]}; }
 			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
-			foreach my$NM (@NMs) {
-				foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
-					{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+			foreach my$NM (@{$NM_r}) {
+				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
+					{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
 				}
 			}
 		}
 	}
 #if region keep going on after end of bed
 while ( ($c < scalar@Starts) && ($Starts[$c] > $endBed) ) {
-	$interval2{$Starts[$c]} = $interval{$Starts[$c]};
-	foreach my$NM (@NMs) {
-		foreach my$startEx (keys%{ $NM_Ex{$NM}{$Starts[$c]} })
-			{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = $NM_Ex{$NM}{$Starts[$c]}{$startEx}; }
+	$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
+	foreach my$NM (@{$NM_r}) {
+		foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
+			{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
 		}
 	$c++; 
 	}
 
 #merge intervals
-my@Starts2 = sort{$a<=>$b}(keys%interval2);
 my(%interval3,%NM_Ex3,%RegBed2);
+my@Starts2 = sort{$a<=>$b}(keys%interval2);
 my$startReg = $Starts2[0];
 my$endReg = $interval2{$startReg};
 foreach my$NM (keys%NM_Ex2) {
@@ -4044,44 +4043,40 @@ for (my$i=1;$i<scalar(@Starts2);$i++) {
 	}
 $interval3{$startReg} = $endReg;
 
-foreach my$NM (keys%NM_Ex3)
-	{ %{ $NM_Ex{$NM} } = %{ $NM_Ex3{$NM} };	 }
+%{$interval1} = %interval3;
 
-return(\%interval3,\%NM_Ex,\%RegBed2);
+foreach my$NM (keys%NM_Ex3)
+	{ %{ ${$NM_Ex_r}{$NM} } = %{ $NM_Ex3{$NM} }; }
+
+return(\%RegBed2);
 }
 
 
 #########################
 #extract bed from file, and intersect with %Regions (regions of selected genes) 
-#create 1 hash : 
-sub changeRegion2N
-{
-	#@hashSub = changeRegion2N(\%{ $Regions{$NMchr{$NM}}{$NM} },\%{ $NM_Ex{$NM} },\%{ $Bed{$NMchr{$NM}} });
-	#%{ $Regions{$NMchr{$NM}}{$NM} } = %{$hashSub[0]};
-	#%{ $NM_Ex{$NM} } = %{$hashSub[1]};
-	#%{ $RegBed{$NM} } = %{$hashSub[2]};
-my($h1,$h2,$h3) = @_;
-my%interval = %$h1;		# $Regions{start of region} = end of region
-my%NM_Ex = %$h2;		# %NM_Ex{start of region}{start of exon} = end of exon
-my%Bed = %$h3;			#$Bed{$startBed} = $endBed;
+#create 1 hash :
+#@hashSub = changeRegion2N(\%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} },\%{ $NM_Ex{"raw"}{$NM} },\%{ $Bed{$NMchr{$NM}} });
+#%{ $RegBed{"raw"}{$NM} } = %{$hashSub[0]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
 
-my%RegBed;			#$RegBed{$startReg}{$startBed} = $endBed;
+sub changeRegion2N {
 
-my@Starts = sort{$a<=>$b}(keys%interval);
+my($interval1,$NM_Ex_r,$Bed_r) = @_;
 my(%interval2,%NM_Ex2,%RegBed1);
+
+my@Starts = sort{$a<=>$b}(keys%{$interval1});
 my$c=0;	#$c: count of @StartInterval			
-my@startBed = sort{$a<=>$b}keys%Bed;
-my$endBed = $Bed{$startBed[0]};
+my@startBed = sort{$a<=>$b}keys%{$Bed_r};
+my$endBed = ${$Bed_r}{$startBed[0]};
 for (my$i=0;$i<scalar@startBed;$i++)
 	{
-	if ($startBed[$i] > $interval{$Starts[-1]})	#if bed keep going on after end of region
+	if ($startBed[$i] > ${$interval1}{$Starts[-1]})	#if bed keep going on after end of region
 		{ last; }
-	$endBed = $Bed{$startBed[$i]};	
+	$endBed = ${$Bed_r}{$startBed[$i]};	
 	if ( $endBed < $Starts[0] )
 		{ next; }
 	if ( $endBed < $Starts[$c] )
 		{
-		if ($startBed[$i] > $interval{$Starts[$c-1]})
+		if ($startBed[$i] > ${$interval1}{$Starts[$c-1]})
 			{ 
 			$interval2{$startBed[$i]} = $endBed; 
 			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
@@ -4089,79 +4084,79 @@ for (my$i=0;$i<scalar@startBed;$i++)
 			}
 		else { $c--; }
 		}
-	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] > $interval{$Starts[$c]}) )
+	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] > ${$interval1}{$Starts[$c]}) )
 		{ 
-		$interval2{$Starts[$c]} = $interval{$Starts[$c]};
-		foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
-			{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+		$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
+		foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
+			{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
 		$c++; 
 		}
-	if ( $startBed[$i] > $interval{$Starts[$c]} )	#for current $c
+	if ( $startBed[$i] > ${$interval1}{$Starts[$c]} )	#for current $c
 		{ 
-		$interval2{$Starts[$c]} = $interval{$Starts[$c]};
-		foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
-			{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+		$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
+		foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
+			{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
 		}
-	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] <= $interval{$Starts[$c]}) && ($endBed >= $Starts[$c]) )
+	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] <= ${$interval1}{$Starts[$c]}) && ($endBed >= $Starts[$c]) )
 		{
 		if ($startBed[$i] < $Starts[$c])
 			{
-			if ($endBed > $interval{$Starts[$c]})
+			if ($endBed > ${$interval1}{$Starts[$c]})
 				{ $interval2{$startBed[$i]} = $endBed; }
 			else
-				{ $interval2{$startBed[$i]} = $interval{$Starts[$c]}; }
+				{ $interval2{$startBed[$i]} = ${$interval1}{$Starts[$c]}; }
 			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
-				{ $NM_Ex2{$startBed[$i]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
+				{ $NM_Ex2{$startBed[$i]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
 			}
 		else
 			{
-			if ($endBed > $interval{$Starts[$c]})
+			if ($endBed > ${$interval1}{$Starts[$c]})
 				{ $interval2{$Starts[$c]} = $endBed; }
 			else
-				{ $interval2{$Starts[$c]} = $interval{$Starts[$c]}; }
+				{ $interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]}; }
 			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
-			foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
-				{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
+				{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
 			}
 		$c++;
 		}
-	if ( ($startBed[$i] <= $interval{$Starts[$c]}) && ($endBed >= $Starts[$c]) )	#for current $c
+	if ( ($startBed[$i] <= ${$interval1}{$Starts[$c]}) && ($endBed >= $Starts[$c]) )	#for current $c
 		{
 		if ($startBed[$i] < $Starts[$c])
 			{
-			if ($endBed > $interval{$Starts[$c]})
+			if ($endBed > ${$interval1}{$Starts[$c]})
 				{ $interval2{$startBed[$i]} = $endBed; }
 			else
-				{ $interval2{$startBed[$i]} = $interval{$Starts[$c]}; }
+				{ $interval2{$startBed[$i]} = ${$interval1}{$Starts[$c]}; }
 			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
-				{ $NM_Ex2{$startBed[$i]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
+				{ $NM_Ex2{$startBed[$i]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
 			}
 		else
 			{
-			if ($endBed > $interval{$Starts[$c]})
+			if ($endBed > ${$interval1}{$Starts[$c]})
 				{ $interval2{$Starts[$c]} = $endBed; }
 			else
-				{ $interval2{$Starts[$c]} = $interval{$Starts[$c]}; }
+				{ $interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]}; }
 			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
-			foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
-				{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
+				{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
 			}
 		}
 	}
 #if region keep going on after end of bed
 while ( ($c < scalar@Starts) && ($Starts[$c] > $endBed) )
 	{
-	$interval2{$Starts[$c]} = $interval{$Starts[$c]};
-	foreach my$startEx (keys%{ $NM_Ex{$Starts[$c]} })
-		{ $NM_Ex2{$Starts[$c]}{$startEx} = $NM_Ex{$Starts[$c]}{$startEx}; }
+	$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
+	foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
+		{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
 	$c++; 
 	}
 
 #merge intervals
-my@Starts2 = sort{$a<=>$b}(keys%interval2);
 my(%interval3,%NM_Ex3,%RegBed2);
+my@Starts2 = sort{$a<=>$b}(keys%interval2);
 my$startReg = $Starts2[0];
 my$endReg = $interval2{$startReg};
 foreach my$startEx (keys%{ $NM_Ex2{$startReg} })
@@ -4190,65 +4185,59 @@ for (my$i=1;$i<scalar(@Starts2);$i++)
 			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
 		}
 	}
-$interval3{$startReg} = $endReg;	
+$interval3{$startReg} = $endReg;
 
-return(\%interval3,\%NM_Ex3,\%RegBed2);
+%{$interval1} = %interval3;
+
+%{$NM_Ex_r} = %NM_Ex3;
+
+return(\%RegBed2);
 }
 
 
 #########################
 #extract bed from file, and intersect with %Regions (regions of selected genes) 
 #no -L option: shorten bed eventually
-#create 1 hash : 
-sub linkBed
-{
-my($h1,$h2) = @_;
-my%NM_interval = %$h1;		# $Regions{chr}{gene}{start of region} = end of region
-my%Bed = %$h2;			#$Bed{$chr}{$startBed} = $endBed;
+#create 1 hash :
+#%{ $RegBed{"raw"} } = linkBed(\%{ $Regions{"raw"} },\%Bed);
+
+sub linkBed {
+
+my($interval,$Bed_r) = @_;
 
 #my%covBed2;			
 my%RegBed;			#$RegBed{$NM}{$startRegion}{$startBed} = $endBed;
-my$c=0;				#idx of $startByChr = sort{$a<=>$b}(keys%{ $allInterval{$chr} });
-foreach my$chr (keys%NM_interval)
-	{
-	foreach my$NM (keys%{ $NM_interval{$chr} })
-		{
-		my%interval = %{ $NM_interval{$chr}{$NM} };
-		my@Starts = sort{$a<=>$b}(keys%interval);
+my$c=0;			#idx of $startByChr = sort{$a<=>$b}(keys%{ $allInterval{$chr} });
+foreach my$chr (keys%{$interval}) {
+	foreach my$NM (keys%{ ${$interval}{$chr} }) {
+		my@Starts = sort{$a<=>$b}(keys%{ ${$interval}{$chr}{$NM} });
 		my$c=0;
-		foreach my$start (sort{$a<=>$b}keys%{ $Bed{$chr} })
-			{
-			my$end = $Bed{$chr}{$start};
+		foreach my$start (sort{$a<=>$b}keys%{ ${$Bed_r}{$chr} }) {
+			my$end = ${$Bed_r}{$chr}{$start};
 			if ( $end < $Starts[$c] )
 				{ next; }
-			while ( ($c < (scalar(@Starts)-1)) && ($start > $interval{$Starts[$c]}) )
+			while ( ($c < (scalar(@Starts)-1)) && ($start > ${$interval}{$chr}{$NM}{$Starts[$c]}) )
 				{ $c++; }
 			my$c2=$c;
-			while ( ($c2 < scalar@Starts) && ($start <= $interval{$Starts[$c2]}) && ($end >= $Starts[$c2]) )
-				{ 
+			while ( ($c2 < scalar@Starts) && ($start <= ${$interval}{$chr}{$NM}{$Starts[$c2]}) && ($end >= $Starts[$c2]) ) { 
 				#eventually restrict %Bed
-				if ($start < $Starts[$c2])
-					{
-					if ($end > $interval{$Starts[$c2]})
-						{ 
-						#$covBed2{$chr}{$Starts[$c2]} = $interval{$Starts[$c2]};
-						$RegBed{$NM}{$Starts[$c2]}{$Starts[$c2]} = $interval{$Starts[$c2]};
+				if ($start < $Starts[$c2]) {
+					if ($end > ${$interval}{$chr}{$NM}{$Starts[$c2]}) { 
+						#$covBed2{$chr}{$Starts[$c2]} = ${$interval}{$chr}{$NM}{$Starts[$c2]};
+						$RegBed{$NM}{$Starts[$c2]}{$Starts[$c2]} = ${$interval}{$chr}{$NM}{$Starts[$c2]};
 						}
-					else
-						{ 
+					else { 
 						#$covBed2{$chr}{$Starts[$c2]} = $end;
 						$RegBed{$NM}{$Starts[$c2]}{$Starts[$c2]} = $end;
 						}
 					}
 				else
 					{
-					if ($end > $interval{$Starts[$c2]})
-						{ 
-						#$covBed2{$chr}{$start} = $interval{$Starts[$c2]}; 
-						$RegBed{$NM}{$Starts[$c2]}{$start} = $interval{$Starts[$c2]};
+					if ($end > ${$interval}{$chr}{$NM}{$Starts[$c2]}) { 
+						#$covBed2{$chr}{$start} = ${$interval}{$chr}{$NM}{$Starts[$c2]}; 
+						$RegBed{$NM}{$Starts[$c2]}{$start} = ${$interval}{$chr}{$NM}{$Starts[$c2]};
 						}
-					else
-						{
+					else {
 						#$covBed2{$chr}{$start} = $end; 
 						$RegBed{$NM}{$Starts[$c2]}{$start} = $end;
 						}
@@ -4259,29 +4248,28 @@ foreach my$chr (keys%NM_interval)
 		}
 	}
 #return(\%covBed2,\%RegBed);
-return(%RegBed);
+return(\%RegBed);
 }
 
 
 #########################
 #eliminates $NM with no corresponding cov bed
-sub notAnalysedG
-{
-my($h0,$h1,$h2,$h3)=@_;
-my%Genes = %$h0;
-my%Regions = %$h1;
-my%NM_Ex = %$h2;
-my%RegBed = %$h3;
+#if ($All) { notAnalysedG(\%Genes,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
+
+sub notAnalysedG {
+
+my($Gene_r,$Region_r,$NM_Ex_r,$RegBed_r) = @_;
 my(@Not,%Genes2,%Regions2,%NM_Ex2,%RegBed2);
-foreach my$gene (keys%Genes) {
-	my@startBed = keys%{ $RegBed{$gene} };
+
+foreach my$gene (keys%{$Gene_r}) {
+	my@startBed = keys%{ ${$RegBed_r}{$gene} };
 	unless (@startBed) {
 		print "$gene not in analysed bed\n";
 		push(@Not ,$gene);
 		}
 	}
-foreach my$chr (sort(keys%Regions)) {
-	foreach my$gene (sort(keys%{ $Regions{$chr} })) {
+foreach my$chr (sort(keys%{$Region_r})) {
+	foreach my$gene (sort(keys%{ ${$Region_r}{$chr} })) {
 		my$ok=1;
 		foreach my$not(@Not) {
 			if ($gene eq $not)
@@ -4289,49 +4277,58 @@ foreach my$chr (sort(keys%Regions)) {
 			}
 		if ($ok) {
 			$Genes2{$gene} = 1;
-			%{ $Regions2{$chr}{$gene} } = %{ $Regions{$chr}{$gene} };
+			%{ $Regions2{$chr}{$gene} } = %{ ${$Region_r}{$chr}{$gene} };
 			foreach (@{ $geneNM{$gene}})
-				{ %{ $NM_Ex2{$_} } = %{ $NM_Ex{$_} }; }
-			%{ $RegBed2{$gene} } = %{ $RegBed{$gene} };
+				{ %{ $NM_Ex2{$_} } = %{ ${$NM_Ex_r}{$_} }; }
+			%{ $RegBed2{$gene} } = %{ ${$RegBed_r}{$gene} };
 			}	
 		}
 	}
-return(\%Genes2,\%Regions2,\%NM_Ex2,\%RegBed2);
+
+%{$Gene_r} = %Genes2;
+%{$Region_r} = %Regions2;
+%{$NM_Ex_r} = %NM_Ex2;
+%{$RegBed_r} = %RegBed2;
+
 }
+
 #############
 #eliminates $NM with no corresponding cov bed
-sub notAnalysedN
-{
-my($h0,$h1,$h2,$h3,$h4)=@_;
-my%Genes = %$h0;
-my%NMgene = %$h1;
-my%Regions = %$h2;
-my%NM_Ex = %$h3;
-my%RegBed = %$h4;
+#else  { notAnalysedN(\%Genes,\%NMgene,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
+
+sub notAnalysedN {
+
+my($Gene_r,$NMgene_r,$Region_r,$NM_Ex_r,$RegBed_r) = @_;
 my(@Not,%Genes2,%Regions2,%NM_Ex2,%RegBed2);
-foreach my$NM (keys%NM_Ex) {
-	my@startBed = keys%{ $RegBed{$NM} };
+
+foreach my$NM (keys%{$NM_Ex_r}) {
+	my@startBed = keys%{ ${$RegBed_r}{$NM} };
 	unless (@startBed) {
 		print "$NM not in analysed bed\n";
 		push(@Not ,$NM);
 		}
 	}
-foreach my$chr (sort(keys%Regions)) {
-	foreach my$NM (sort(keys%{ $Regions{$chr} })) {
+foreach my$chr (sort(keys%{$Region_r})) {
+	foreach my$NM (sort(keys%{ ${$Region_r}{$chr} })) {
 		my$ok=1;
 		foreach my$not(@Not) {
 			if ($NM eq $not)
 				{ $ok=0; last; }
 			}
 		if ($ok) {
-			$Genes2{$NMgene{$NM}} = 1;
-			%{ $Regions2{$chr}{$NM} } = %{ $Regions{$chr}{$NM} };
-			%{ $NM_Ex2{$NM} } = %{ $NM_Ex{$NM} };
-			%{ $RegBed2{$NM} } = %{ $RegBed{$NM} };
+			$Genes2{${$NMgene_r}{$NM}} = 1;
+			%{ $Regions2{$chr}{$NM} } = %{ ${$Region_r}{$chr}{$NM} };
+			%{ $NM_Ex2{$NM} } = %{ ${$NM_Ex_r}{$NM} };
+			%{ $RegBed2{$NM} } = %{ ${$RegBed_r}{$NM} };
 			}	
 		}
 	}
-return(\%Genes2,\%Regions2,\%NM_Ex2,\%RegBed2);
+
+%{$Gene_r} = %Genes2;
+%{$Region_r} = %Regions2;
+%{$NM_Ex_r} = %NM_Ex2;
+%{$RegBed_r} = %RegBed2;
+
 }
 
 
@@ -4511,35 +4508,37 @@ return(%tmpFile)
 #transposition and splicing, for exons of transcripts: 
 #1st position of 1st exon = 0, 
 #if end of exon = x, start of next exon = x
-sub transposeReg
-{
-my($spacer,$h1) = @_;
-my%Regions=%$h1;		# $Regions{chr}{NM}{start of region} = end of region	
 
-my(%Reg_00,%NMlength);	
+#@hashSub = transposeReg($spacer,\%{ $Regions{"raw"} });
+#$spacer = $hashSub[0];
+#%NMlength = %{$hashSub[1]};			#$NMlength{$NM} = $end of region (for start of region = 0)
+#%{ $Regions{"coord0"} } = %{$hashSub[2]};	#$Regions{"coord0"}{$NM}{start of region} = $end of region (for start of region = 0)
+
+sub transposeReg {
+
+my($spacer,$Region_r) = @_;
+my(%Reg_00,%NMlength);
+
 #$Reg_00{$NM}{$startReg} = endReg (for start of region = 0)
-foreach my$chr (keys%Regions)
-	{
-	foreach my$gene ( keys%{ $Regions{$chr} } )	#$gene or $NM
-		{
+foreach my$chr (keys%Regions) {
+	#$gene or $NM
+	foreach my$gene ( keys%{ ${$Region_r}{$chr} } ) {
 		print "transpose and splice $gene\n";
-		my@Starts = sort{$a<=>$b}(keys%{ $Regions{$chr}{$gene} });
+		my@Starts = sort{$a<=>$b}(keys%{ ${$Region_r}{$chr}{$gene} });
 		#find $spacer as $NMlength/100
-		#unless((exists $opts{S}) && ($opts{S} eq "N"))
-		#	{
+		#unless((exists $opts{S}) && ($opts{S} eq "N")) {
 			$NMlength{$gene}=0;
 			for (my$reg=0;$reg<scalar@Starts;$reg++)
-				{ $NMlength{$gene} += ($Regions{$chr}{$gene}{$Starts[$reg]} - $Starts[$reg] +1); }
+				{ $NMlength{$gene} += (${$Region_r}{$chr}{$gene}{$Starts[$reg]} - $Starts[$reg] +1); }
 			$spacer = int($NMlength{$gene}/100);
 		#	}
 		#transpose $Regions{$chr}{$gene}
 		my$start00 = 0;
-		my$end00 =  $Regions{$chr}{$gene}{$Starts[0]} - $Starts[0] + $start00 +1;
+		my$end00 =  ${$Region_r}{$chr}{$gene}{$Starts[0]} - $Starts[0] + $start00 +1;
 		$Reg_00{$gene}{$start00} = $end00;
-		for (my$reg=1;$reg<scalar@Starts;$reg++)
-			{
+		for (my$reg=1;$reg<scalar@Starts;$reg++) {
 			$start00 = $end00 + $spacer;
-			$end00 = $Regions{$chr}{$gene}{$Starts[$reg]} - $Starts[$reg] + $start00 +1;
+			$end00 = ${$Region_r}{$chr}{$gene}{$Starts[$reg]} - $Starts[$reg] + $start00 +1;
 			$Reg_00{$gene}{$start00} = $end00;
 			}
 		#re-calculates $NMlength
@@ -4547,59 +4546,64 @@ foreach my$chr (keys%Regions)
 		$NMlength{$gene} = $Reg_00{$gene}{$Starts00[-1]};
 		}
 	}
+
 return($spacer,\%NMlength,\%Reg_00);
+
 }
 
 #########################
 #transposition and splicing, for exons of transcripts: 
 #1st position of 1st exon = 0, 
 #if end of exon = x, start of next exon = x
-sub transposeNM
-{
-my($wUTR,$NMstartCod,$NMendCod,$h1,$h2,$h3) = @_;
-my%Reg=%$h1;			# $Regions{start of region} = end of region
-my%Reg_00=%$h2;			#$Reg_00{$startReg} = endReg (for start of region = 0)	
-my%NM_Ex=%$h3;			# %NM_Ex{start of region}{start of exon} = end of exon
+
+#@hashSub = transposeNM($wUTR,$NMstartCod{"raw"}{$NM},$NMendCod{"raw"}{$NM},\%{ $Regions{"raw"}{$NMchr{$NM}}{$gene} },\%{ $Regions{"coord0"}{$gene} },\%{ $NM_Ex{"raw"}{$NM} }); 
+#$NMstartCod{"coord0"}{$NM} = $hashSub[0];
+#$NMendCod{"coord0"}{$NM} = $hashSub[1];
+#%{ $NM_Ex{"coord0"}{$NM} } = %{$hashSub[2]};
+
+sub transposeNM {
+
+my($wUTR,$NMstartCod,$NMendCod,$Reg_raw,$Reg_00,$NM_Ex_r) = @_;
 
 my(%NM_Ex00,$NMstartCod00,$NMendCod00);	
 #NM_Ex00{$startReg}{$startExon} = endExon (for start of region = 0)
-my@Starts = sort{$a<=>$b}(keys%Reg);
-my@Starts00 = sort{$a<=>$b}(keys%Reg_00);
+my@Starts = sort{$a<=>$b}(keys%{$Reg_raw});
+my@Starts00 = sort{$a<=>$b}(keys%{$Reg_00});
 
 my$r=0;
 if ($wUTR) {
 	#transpose $NMstartCod and $NMendCod
 	if (($NMstartCod-1)!=$NMendCod) { 
-		while ($NMstartCod>$Reg{$Starts[$r]}) { $r++; }
+		while ($NMstartCod > ${$Reg_raw}{$Starts[$r]}) { $r++; }
 		$NMstartCod00 = $NMstartCod - $Starts[$r] + $Starts00[$r];
-		while ( ($NMendCod>$Reg{$Starts[$r]}) ) { $r++; }
+		while ( ($NMendCod > ${$Reg_raw}{$Starts[$r]}) ) { $r++; }
 		$NMendCod00 = $NMendCod - $Starts[$r] + $Starts00[$r] +1;
 		}
 	else { $NMstartCod00=0; $NMendCod00=0; }
 	#transpose %NM_Ex
 	for ($r=0;$r<scalar@Starts;$r++) {
-		foreach my$startEx (keys%{ $NM_Ex{$Starts[$r]} }) {
-			$NM_Ex00{$Starts00[$r]}{($startEx-$Starts[$r]+$Starts00[$r])} = $NM_Ex{$Starts[$r]}{$startEx}-$Starts[$r]+$Starts00[$r]+1;
+		foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$r]} }) {
+			$NM_Ex00{$Starts00[$r]}{($startEx-$Starts[$r]+$Starts00[$r])} = ${$NM_Ex_r}{$Starts[$r]}{$startEx}-$Starts[$r]+$Starts00[$r]+1;
 			}
 		}
 	}
 else {
 	my($rIni,$rFin);
-	my@startsNM = sort{$a<=>$b}keys%NM_Ex;
+	my@startsNM = sort{$a<=>$b}keys%{$NM_Ex_r};
 	while ($r <= $#Starts && $Starts[$r] != $startsNM[0]) { $r++; }
 	$rIni = $r;
 	#transpose $NMstartCod and $NMendCod
-	my@StartsEx1 = sort{$a<=>$b}keys%{ $NM_Ex{$startsNM[0]} };
+	my@StartsEx1 = sort{$a<=>$b}keys%{ ${$NM_Ex_r}{$startsNM[0]} };
 	$NMstartCod00 = $StartsEx1[0]-$startsNM[0] + $Starts00[$r];
 	$r = $#Starts;
 	while ($r > 0 && $Starts[$r] != $startsNM[-1]) { $r--; }
 	$rFin = $r;
-	my@StartsExf = sort{$a<=>$b}(keys%{ $NM_Ex{$startsNM[-1]} });	
-	$NMendCod00 = $Reg{$startsNM[-1]}-$NM_Ex{$startsNM[-1]}{$StartsExf[-1]} + $Starts00[$r] +1;
+	my@StartsExf = sort{$a<=>$b}(keys%{ ${$NM_Ex_r}{$startsNM[-1]} });	
+	$NMendCod00 = ${$Reg_raw}{$startsNM[-1]}-${$NM_Ex_r}{$startsNM[-1]}{$StartsExf[-1]} + $Starts00[$r] +1;
 	#transpose %NM_Ex
 	for ($r=$rIni;$r<=$rFin;$r++) {
-		foreach my$startEx (keys%{ $NM_Ex{$Starts[$r]} }) {
-			$NM_Ex00{$Starts00[$r]}{($startEx-$Starts[$r]+$Starts00[$r])} = $NM_Ex{$Starts[$r]}{$startEx}-$Starts[$r]+$Starts00[$r]+1;
+		foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$r]} }) {
+			$NM_Ex00{$Starts00[$r]}{($startEx-$Starts[$r]+$Starts00[$r])} = ${$NM_Ex_r}{$Starts[$r]}{$startEx}-$Starts[$r]+$Starts00[$r]+1;
 			}
 		}
 	}
@@ -4611,47 +4615,42 @@ return($NMstartCod00,$NMendCod00,\%NM_Ex00);
 #########################
 #if ($All):
 #make arrays for starts of non coding exons, before and after coding exons
-#and arrays for starts of extragenic regions, before and after exons 
-sub designExons1
-{
-#@hashSub = designExons(\%Reg_00,\%NM_00,\%NMstartCod00,\%NMendCod00);
-my($wUTR,$h1,$h2,$h3,$h4,$h5,$h6) = @_;
-my%Genes=%$h1;
-my%geneNM=%$h2;
-my%Reg_00=%$h3;			#$Reg_00{NM}{start of region} = end of region (for start of region = 0)
-my%NM_Ex00=%$h4;		#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
-my%NMstartCod00=%$h5;		#$NMstartCod00{$NM} = $start of coding sequence (for start of region = 0)
-my%NMendCod00=%$h6;		#$NMendCod00{$NM} = $end of coding sequence (for start of region = 0)
+#and arrays for starts of extragenic regions, before and after exons
+#@hashSub = designExons1($wUTR,\%Genes,\%geneNM,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} });
 
+sub designExons1 {
+
+my($wUTR,$Gene_r,$geneNM_r,$Reg_00,$NM_Ex_00,$NMstartCod00,$NMendCod00) = @_;
 my(%intron,%UTR,%Cod);
 #$intron{$NM}{$startInt} = $endInt;
 #$UTR{$NM}{$startUTR} = $endUTR;
 #$Cod{$NM}{$startCod} = $endCod;
-foreach my$gene (keys%Genes) {
+
+foreach my$gene (keys%{$Gene_r}) {
 	print "design exons of $gene\n";
-	my@startReg = sort{$a<=>$b}keys%{ $Reg_00{$gene} } ; 
-	foreach my$NM (@{ $geneNM{$gene} }) {
+	my@startReg = sort{$a<=>$b}keys%{ ${$Reg_00}{$gene} } ; 
+	foreach my$NM (@{ ${$geneNM_r}{$gene} }) {
 		print "\tfor $NM\n";
 		my(%Exons,@startEx);
 		#introns:
 		foreach my$startR (@startReg) {
-			my@Starts = sort{$a<=>$b}(keys%{ $NM_Ex00{$NM}{$startR} });
+			my@Starts = sort{$a<=>$b}(keys%{ ${$NM_Ex_00}{$NM}{$startR} });
 			if (@Starts) {
 				$intron{$NM}{$startR} = $Starts[0];
 				for (my$ex=0;$ex<(scalar@Starts-1);$ex++)
-					{ $intron{$NM}{ $NM_Ex00{$NM}{$startR}{$Starts[$ex]} } = $Starts[$ex+1]; }
-				$intron{$NM}{ $NM_Ex00{$NM}{$startR}{$Starts[-1]} } = $Reg_00{$gene}{$startR};
+					{ $intron{$NM}{ ${$NM_Ex_00}{$NM}{$startR}{$Starts[$ex]} } = $Starts[$ex+1]; }
+				$intron{$NM}{ ${$NM_Ex_00}{$NM}{$startR}{$Starts[-1]} } = ${$Reg_00}{$gene}{$startR};
 				push (@startEx , @Starts); 
 				for (my$ex=0;$ex<scalar@Starts;$ex++)
-					{ $Exons{$Starts[$ex]} = $NM_Ex00{$NM}{$startR}{$Starts[$ex]}; }
+					{ $Exons{$Starts[$ex]} = ${$NM_Ex_00}{$NM}{$startR}{$Starts[$ex]}; }
 				}
 			else
-				{ $intron{$NM}{$startR} = $Reg_00{$gene}{$startR}; }
+				{ $intron{$NM}{$startR} = ${$Reg_00}{$gene}{$startR}; }
 			}
 		#exons:
 		my$i=0;
 		if ($wUTR) {
-			if ($NMstartCod00{$NM}==$NMendCod00{$NM}) {
+			if (${$NMstartCod00}{$NM} == ${$NMendCod00}{$NM}) {
 				while ($i<scalar@startEx) {
 					$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
 					$i++;
@@ -4659,28 +4658,28 @@ foreach my$gene (keys%Genes) {
 				}
 			else {
 					#UTRpreCod
-				while ( $Exons{$startEx[$i]}<$NMstartCod00{$NM} && $i<(scalar@startEx-1) ) {
+				while ( $Exons{$startEx[$i]} < ${$NMstartCod00}{$NM} && $i<(scalar@startEx-1) ) {
 					$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
 					$i++;						
 					}
-				if ( $startEx[$i] < $NMstartCod00{$NM} ) 
-					{ $UTR{$NM}{$startEx[$i]} = $NMstartCod00{$NM}; }
+				if ( $startEx[$i] < ${$NMstartCod00}{$NM} ) 
+					{ $UTR{$NM}{$startEx[$i]} = ${$NMstartCod00}{$NM}; }
 					#Cod
-				if( $Exons{$startEx[$i]} >= $NMendCod00{$NM} )
-					{ $Cod{$NM}{$NMstartCod00{$NM}} = $NMendCod00{$NM}; }
+				if( $Exons{$startEx[$i]} >= ${$NMendCod00}{$NM} )
+					{ $Cod{$NM}{${$NMstartCod00}{$NM}} = ${$NMendCod00}{$NM}; }
 				else {
-					$Cod{$NM}{$NMstartCod00{$NM}} = $Exons{$startEx[$i]}; 
+					$Cod{$NM}{${$NMstartCod00}{$NM}} = $Exons{$startEx[$i]}; 
 					$i++;
-					while ( $Exons{$startEx[$i]}<$NMendCod00{$NM} && $i<(scalar@startEx-1) ) {
+					while ( $Exons{$startEx[$i]} < ${$NMendCod00}{$NM} && $i<(scalar@startEx-1) ) {
 						$Cod{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
 						$i++;	
 						}
-					if ( $Exons{$startEx[$i]} >= $NMendCod00{$NM} ) 
-						{ $Cod{$NM}{$startEx[$i]} = $NMendCod00{$NM}; }
+					if ( $Exons{$startEx[$i]} >= ${$NMendCod00}{$NM} ) 
+						{ $Cod{$NM}{$startEx[$i]} = ${$NMendCod00}{$NM}; }
 					}
 					#UTRpostCod
-				if ( $Exons{$startEx[$i]} > $NMendCod00{$NM} ) 
-					{ $UTR{$NM}{$NMendCod00{$NM}} = $Exons{$startEx[$i]}; }
+				if ( $Exons{$startEx[$i]} > ${$NMendCod00}{$NM} ) 
+					{ $UTR{$NM}{${$NMendCod00}{$NM}} = $Exons{$startEx[$i]}; }
 				while ($i<(scalar@startEx-1)) {
 					$i++;
 					$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
@@ -4699,44 +4698,41 @@ return(\%intron,\%UTR,\%Cod);
 #########################
 #foreach $NM
 #make arrays for starts of non coding exons, before and after coding exons
-#and arrays for starts of extragenic regions, before and after exons 
-sub designExons2
-{
-#@hashSub = designExons(\%Reg_00,\%NM_00,\%NMstartCod00,\%NMendCod00);
-my($wUTR,$h1,$h2,$h3,$h4) = @_;
-my%Reg_00=%$h1;			#$Reg_00{NM}{start of region} = end of region (for start of region = 0)
-my%NM_Ex00=%$h2;		#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
-my%NMstartCod00=%$h3;		#$NMstartCod00{$NM} = $start of coding sequence (for start of region = 0)
-my%NMendCod00=%$h4;		#$NMendCod00{$NM} = $end of coding sequence (for start of region = 0)
+#and arrays for starts of extragenic regions, before and after exons
+#@hashSub = designExons2($wUTR,\%{ $Regions{"coord0"} },\%{ $NM_Ex{"coord0"} },\%{ $NMstartCod{"coord0"} },\%{ $NMendCod{"coord0"} });
 
+sub designExons2 {
+
+my($wUTR,$Reg_00,$NM_Ex00,$NMstartCod00,$NMendCod00) = @_;
 my(%intron,%UTR,%Cod);
 #$intron{$NM}{$startInt} = $endInt;
 #$UTR{$NM}{$startUTR} = $endUTR;
 #$Cod{$NM}{$startCod} = $endCod;
-foreach my$NM (keys%Reg_00) {
+
+foreach my$NM (keys%{$Reg_00}) {
 	print "design exons of $NM\n";
-	my@startReg = sort{$a<=>$b}keys%{ $Reg_00{$NM} } ;
+	my@startReg = sort{$a<=>$b}keys%{ ${$Reg_00}{$NM} } ;
 	my(%Exons,@startEx);
 	#introns:
 	foreach my$startR (@startReg) {
-		my@Starts = sort{$a<=>$b}(keys%{ $NM_Ex00{$NM}{$startR} });
+		my@Starts = sort{$a<=>$b}(keys%{ ${$NM_Ex00}{$NM}{$startR} });
 		if (@Starts)
 			{
 			$intron{$NM}{$startR} = $Starts[0];
 			for (my$ex=0;$ex<(scalar@Starts-1);$ex++)
-				{ $intron{$NM}{ $NM_Ex00{$NM}{$startR}{$Starts[$ex]} } = $Starts[$ex+1]; }
-			$intron{$NM}{ $NM_Ex00{$NM}{$startR}{$Starts[-1]} } = $Reg_00{$NM}{$startR};
+				{ $intron{$NM}{ ${$NM_Ex00}{$NM}{$startR}{$Starts[$ex]} } = $Starts[$ex+1]; }
+			$intron{$NM}{ ${$NM_Ex00}{$NM}{$startR}{$Starts[-1]} } = ${$Reg_00}{$NM}{$startR};
 			push (@startEx , @Starts);
 			for (my$ex=0;$ex<scalar@Starts;$ex++)
-				{ $Exons{$Starts[$ex]} = $NM_Ex00{$NM}{$startR}{$Starts[$ex]}; }
+				{ $Exons{$Starts[$ex]} = ${$NM_Ex00}{$NM}{$startR}{$Starts[$ex]}; }
 			}
 		else
-			{ $intron{$NM}{$startR} = $Reg_00{$NM}{$startR}; }
+			{ $intron{$NM}{$startR} = ${$Reg_00}{$NM}{$startR}; }
 		}
 	#exons:
 	my$i=0;
 	if ($wUTR) {
-		if ($NMstartCod00{$NM}==$NMendCod00{$NM}) {
+		if (${$NMstartCod00}{$NM}==${$NMendCod00}{$NM}) {
 			while ($i<scalar@startEx) {
 				$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
 				$i++;
@@ -4744,28 +4740,28 @@ foreach my$NM (keys%Reg_00) {
 			}
 		else {
 				#UTRpreCod
-			while ( $Exons{$startEx[$i]}<$NMstartCod00{$NM} && $i<(scalar@startEx-1) ) {
+			while ( $Exons{$startEx[$i]}<${$NMstartCod00}{$NM} && $i<(scalar@startEx-1) ) {
 				$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
 				$i++;						
 				}
-			if ( $startEx[$i] < $NMstartCod00{$NM} ) 
-				{ $UTR{$NM}{$startEx[$i]} = $NMstartCod00{$NM}; }
+			if ( $startEx[$i] < ${$NMstartCod00}{$NM} ) 
+				{ $UTR{$NM}{$startEx[$i]} = ${$NMstartCod00}{$NM}; }
 				#Cod
-			if( $Exons{$startEx[$i]} >= $NMendCod00{$NM} )
-				{ $Cod{$NM}{$NMstartCod00{$NM}} = $NMendCod00{$NM}; }
+			if( $Exons{$startEx[$i]} >= ${$NMendCod00}{$NM} )
+				{ $Cod{$NM}{${$NMstartCod00}{$NM}} = ${$NMendCod00}{$NM}; }
 			else {
-				$Cod{$NM}{$NMstartCod00{$NM}} = $Exons{$startEx[$i]}; 
+				$Cod{$NM}{${$NMstartCod00}{$NM}} = $Exons{$startEx[$i]}; 
 				$i++;
-				while ( $Exons{$startEx[$i]}<$NMendCod00{$NM} && $i<(scalar@startEx-1) ) {
+				while ( $Exons{$startEx[$i]}<${$NMendCod00}{$NM} && $i<(scalar@startEx-1) ) {
 					$Cod{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
 					$i++;	
 					}
-				if ( $Exons{$startEx[$i]} >= $NMendCod00{$NM} ) 
-					{ $Cod{$NM}{$startEx[$i]} = $NMendCod00{$NM}; }
+				if ( $Exons{$startEx[$i]} >= ${$NMendCod00}{$NM} ) 
+					{ $Cod{$NM}{$startEx[$i]} = ${$NMendCod00}{$NM}; }
 				}
 				#UTRpostCod
-			if ( $Exons{$startEx[$i]} > $NMendCod00{$NM} ) 
-				{ $UTR{$NM}{$NMendCod00{$NM}} = $Exons{$startEx[$i]}; }
+			if ( $Exons{$startEx[$i]} > ${$NMendCod00}{$NM} ) 
+				{ $UTR{$NM}{${$NMendCod00}{$NM}} = $Exons{$startEx[$i]}; }
 			while ($i<(scalar@startEx-1)) {
 				$i++;
 				$UTR{$NM}{$startEx[$i]} = $Exons{$startEx[$i]};
@@ -4782,200 +4778,220 @@ return(\%intron,\%UTR,\%Cod);
 
 
 #########################
-
 #transposition and splicing of RegBed and RegMut
-sub transposeBed
-{
-my($h1,$h2,$h3,$h4) = @_;
-my%Regions = %$h1;		# $Regions{chr}{NM}{start of region} = end of region
-my%Reg_00 = %$h2;		# #$Reg_00{$NM}{$startReg} = endReg (start of Region =0)
-my%RegBed = %$h3;		#$RegBed{$NM}{$startRegion}{$startBed} = $endBed;
-my%RegMut = %$h4;		#$RegMut{$NM}{$startRegion}{$startMut} = $MutInfo;
+#@hashSub = transposeBed(\%{ $Regions{"raw"} },\%{ $Regions{"coord0"} },\%{ $RegBed{"raw"} },\%{ $RegMut{"raw"} });
+#%{ $RegBed{"coord0"} } = %{$hashSub[0]};
+#%{ $RegMut{"coord0"} } = %{$hashSub[1]};
+
+sub transposeBed {
+
+my($Reg_raw,$Reg_00,$RegBed_raw,$RegMut_raw) = @_;
 
 my(%NMbed00,%NMmut00);		#$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
-				#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
-foreach my$chr (keys%Regions) {
-	foreach my$NM ( keys%{ $Regions{$chr} } )	#$gene or $NM
+					#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+foreach my$chr (keys%{$Reg_raw}) {
+	foreach my$NM ( keys%{ ${$Reg_raw}{$chr} } )	#$gene or $NM
 		{
-		my@startReg = sort{$a<=>$b}(keys%{ $Regions{$chr}{$NM} });
-		my@start00 = sort{$a<=>$b}(keys%{ $Reg_00{$NM} });
+		my@startReg = sort{$a<=>$b}(keys%{ ${$Reg_raw}{$chr}{$NM} });
+		my@start00 = sort{$a<=>$b}(keys%{ ${$Reg_00}{$NM} });
 		for (my$i=0;$i<scalar@startReg;$i++)
 			{
 			my$sub = $startReg[$i] - $start00[$i];
-			foreach my$startBed ( keys%{ $RegBed{$NM}{$startReg[$i]} } )
-				{ $NMbed00{$NM}{($startBed-$sub)} = $RegBed{$NM}{$startReg[$i]}{$startBed}-$sub+1; }
-			foreach my$mut ( keys%{ $RegMut{$NM}{$startReg[$i]} } )
-				{ $NMmut00{$NM}{($mut-$sub)} = $RegMut{$NM}{$startReg[$i]}{$mut}; }
+			foreach my$startBed ( keys%{ ${$RegBed_raw}{$NM}{$startReg[$i]} } )
+				{ $NMbed00{$NM}{($startBed-$sub)} = ${$RegBed_raw}{$NM}{$startReg[$i]}{$startBed}-$sub+1; }
+			foreach my$mut ( keys%{ ${$RegMut_raw}{$NM}{$startReg[$i]} } )
+				{ $NMmut00{$NM}{($mut-$sub)} = ${$RegMut_raw}{$NM}{$startReg[$i]}{$mut}; }
 			}
 		}
 	}
+
 return(\%NMbed00,\%NMmut00);
+
 }
 
 
 ##########################
-sub ReverseGene1
-{
 #@hashSub = ReverseGene1($gene,$NMlength{$gene},\%{ $Regions{"coord0"}{$gene} },\%{ $RegBed{"coord0"}{$gene} },\%{ $RegMut{"coord0"}{$gene} });
-my($gene,$length,$h1,$h2,$h3)=@_;
-my%Reg_00 = %$h1;
-my%NMbed00 = %$h2;
-my%NMmut00 = %$h3;
+#%{ $Regions{"rev"}{$gene} } = %{$hashSub[0]};
+#%{ $RegBed{"rev"}{$gene} } = %{$hashSub[1]};
+#%{ $RegMut{"rev"}{$gene} } = %{$hashSub[2]};
+
+sub ReverseGene1 {
+
+my($gene,$length,$Reg_00,$RegBed_00,$RegMut_00) = @_;
 
 print "reverse $gene\n";
-my%RegR;
-foreach my$startReg (keys%Reg_00)
-	{ $RegR{($length-$Reg_00{$startReg})} = $length-$startReg; }
+my(%Reg_rev,%NMbed_rev,%NMmut_rev);
 
-my%NMbedR = reverseEx($length,\%NMbed00);
+foreach my$startReg (keys%{$Reg_00}) {
+	$Reg_rev{($length - ${$Reg_00}{$startReg})} = $length - $startReg;
+	}
+
+%NMbed_rev = reverseEx($length,$RegBed_00);
 
 #$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
-my%NMmutR; 
-foreach (keys%NMmut00)
-	{ $NMmutR{($length-$_)} = $NMmut00{$_}; }
+foreach (keys%{$RegMut_00}) {
+	$NMmut_rev{($length - $_)} = ${$RegMut_00}{$_};
+	}
 
-return(\%RegR,\%NMbedR,\%NMmutR);
+return(\%Reg_rev,\%NMbed_rev,\%NMmut_rev);
+
 }
 
 ##########################
-sub ReverseGene2
-{
 #@hashSub = ReverseGene2($NM,$NMlength{$gene},\%{ $Regions{"coord0"}{$gene} },\%{ $NM_Ex{"coord0"}{$NM} },\%{ $intron{"coord0"}{$NM} },\%{ $UTR{"coord0"}{$NM} },\%{ $Cod{"coord0"}{$NM} });
-my($NM,$length,$h1,$h2,$h3,$h4,$h5)=@_;
-my%Reg_00 = %$h1;
-my%NM_Ex00 = %$h2;
-my%intron = %$h3;
-my%UTR = %$h4;
-my%Cod = %$h5;
+#%{ $NM_Ex{"rev"}{$NM} } = %{$hashSub[0]};
+#%{ $intron{"rev"}{$NM} } = %{$hashSub[1]};
+#%{ $UTR{"rev"}{$NM} } = %{$hashSub[2]};
+#%{ $Cod{"rev"}{$NM} } = %{$hashSub[3]};
+
+sub ReverseGene2 {
+
+my($NM,$length,$Reg_00,$NM_Ex_00,$intron_00,$UTR_00,$CDS_00) = @_;
 
 print "reverse $NM\n";
-my%NM_ExR;
-foreach my$startReg (keys%Reg_00)
-	{ %{ $NM_ExR{($length-$Reg_00{$startReg})} } = reverseEx( $length,\%{ $NM_Ex00{$startReg} } ); }
+my(%NM_Ex_rev,%intron_rev,%UTR_rev,%CDS_rev);
+
+foreach my$startReg (keys%{$Reg_00}) {
+	%{ $NM_Ex_rev{($length-${$Reg_00}{$startReg})} } = reverseEx( $length,\%{ ${$NM_Ex_00}{$startReg} } );
+	}
 	
 # $intron{$NM}{$startIntron} = $endIntron (for start of region = 0)
-%intron = reverseEx($length,\%intron);
+%intron_rev = reverseEx($length,$intron_00);
 # $UTR{$NM}{$startUTR} = $endUTR (for start of region = 0)
-%UTR = reverseEx($length,\%UTR);
+%UTR_rev = reverseEx($length,$UTR_00);
 # $Cod{$NM}{$startCod} = $endCod (for start of region = 0)}
-%Cod = reverseEx($length,\%Cod);
+%CDS_rev = reverseEx($length,$CDS_00);
 
-return(\%NM_ExR,\%intron,\%UTR,\%Cod);
+return(\%NM_Ex_rev,\%intron_rev,\%UTR_rev,\%CDS_rev);
+
 }
 
 ##########################
-sub ReverseNMs
-{
 #@hashSub = ReverseNMs($NM,$NMlength{$NM},\%{ $Regions{"coord0"}{$NM} },\%{ $NM_Ex{"coord0"}{$NM} },\%{ $intron{"coord0"}{$NM} },\%{ $UTR{"coord0"}{$NM} },\%{ $Cod{"coord0"}{$NM} },\%{ $RegBed{"coord0"}{$NM} },\%{ $RegMut{"coord0"}{$NM} });
-my($NM,$length,$h1,$h2,$h3,$h4,$h5,$h6,$h7)=@_;
-my%Reg_00 = %$h1;
-my%NM_Ex00 = %$h2;
-my%intron = %$h3;
-my%UTR = %$h4;
-my%Cod = %$h5;
-my%NMbed00 = %$h6;
-my%NMmut00 = %$h7;
+#%{ $Regions{"rev"}{$NM} } = %{$hashSub[0]};
+#%{ $NM_Ex{"rev"}{$NM} } = %{$hashSub[1]};
+#%{ $intron{"rev"}{$NM} } = %{$hashSub[2]};
+#%{ $UTR{"rev"}{$NM} } = %{$hashSub[3]};
+#%{ $Cod{"rev"}{$NM} }= %{$hashSub[4]};
+#%{ $RegBed{"rev"}{$NM} } = %{$hashSub[5]};
+#%{ $RegMut{"rev"}{$NM} } = %{$hashSub[6]};
+
+sub ReverseNMs {
+
+my($NM,$length,$Reg_00,$NM_Ex_00,$intron_00,$UTR_00,$CDS_00,$RegBed_00,$RegMut_00) = @_;
 
 print "reverse $NM\n";
-my(%RegR,%NM_ExR);
-foreach my$startReg (keys%Reg_00) {
-	$RegR{($length-$Reg_00{$startReg})} = $length-$startReg;
-	%{ $NM_ExR{($length-$Reg_00{$startReg})} } = reverseEx( $length,\%{ $NM_Ex00{$startReg} } );
+my(%Reg_rev,%NM_Ex_rev,%intron_rev,%UTR_rev,%CDS_rev,%RegBed_rev,%RegMut_rev);
+
+foreach my$startReg (keys%{$Reg_00}) {
+	$Reg_rev{($length - ${$Reg_00}{$startReg})} = $length-$startReg;
+	%{ $NM_Ex_rev{($length - ${$Reg_00}{$startReg})} } = reverseEx( $length,\%{ ${$NM_Ex_00}{$startReg} } );
 	}
 
 # $intron{$NM}{$startIntron} = $endIntron (for start of region = 0)
-%intron = reverseEx($length,\%intron);
+%intron_rev = reverseEx($length,$intron_00);
 # $UTR{$NM}{$startUTR} = $endUTR (for start of region = 0)
-%UTR = reverseEx($length,\%UTR);
+%UTR_rev = reverseEx($length,$UTR_00);
 # $Cod{$NM}{$startCod} = $endCod (for start of region = 0)}
-%Cod = reverseEx($length,\%Cod);
+%CDS_rev = reverseEx($length,$CDS_00);
 
 #$NMbed00{$NM}{$startBed00} = $endBed00 (start of Region=0 )
-my%NMbedR = reverseEx($length,\%NMbed00);
-#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
-my%NMmutR; 
-foreach (keys%NMmut00)
-	{ $NMmutR{($length-$_)} = $NMmut00{$_}; }
+%RegBed_rev = reverseEx($length,$RegBed_00);
 
-return(\%RegR,\%NM_ExR,\%intron,\%UTR,\%Cod,\%NMbedR,\%NMmutR);
+#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+foreach (keys%{$RegMut_00}) {
+	$RegMut_rev{($length-$_)} = ${$RegMut_00}{$_};
+	}
+
+return(\%Reg_rev,\%NM_Ex_rev,\%intron_rev,\%UTR_rev,\%CDS_rev,\%RegBed_rev,\%RegMut_rev);
+
 }
 
 
 ###########################
 #merge intervals from %Regions: 
 #$Regions{chr}{NM}{start of region} = end of region
-#my%allInterval = mergeRegions(%Regions);
-sub mergeRegions
-{
+#@hashSub = mergeRegions(\%{ $Regions{"raw"} });
+#%allInterval = %{$hashSub[0]};
+
+sub mergeRegions {
+
+my($interval1) = @_;
+
 print "merge overlapping intervals from RefSeq selected transcripts\n";
-# %allExon : key1 = chr, value1 = %( key2 = NM, value2 = %(key3 = exonstart, value3 = exonend) ) 
+#$interval1{$chr}{$NM}{$start} = $end;
 #$interval2{$chr}{$start} = $end;
-my(%allExon) = @_;
 
 #for each same starts, keep longer intervals
-my(%interval,%chrom);
-foreach my$chr (keys%allExon) {
-	foreach my$NM (keys%{ $allExon{$chr} }) {
+my(%interval2,%chrom);
+foreach my$chr (keys%{$interval1}) {
+	foreach my$NM (keys%{ ${$interval1}{$chr} }) {
 		$chrom{$chr} = 1;
-		foreach my$start ( sort{$a<=>$b}(keys%{ $allExon{$chr}{$NM} }) ) {
-			if ( exists $interval{$chr}{$start} ) {
-				if ( $allExon{$chr}{$NM}{$start} > $interval{$chr}{$start} )
-					{  $interval{$chr}{$start} = $allExon{$chr}{$NM}{$start}; }	
+		foreach my$start ( sort{$a<=>$b}(keys%{ ${$interval1}{$chr}{$NM} }) ) {
+			if ( exists $interval2{$chr}{$start} ) {
+				if ( ${$interval1}{$chr}{$NM}{$start} > $interval2{$chr}{$start} )
+					{  $interval2{$chr}{$start} = ${$interval1}{$chr}{$NM}{$start}; }	
 				else { next; }
 				}
 			else
-				{ $interval{$chr}{$start} = $allExon{$chr}{$NM}{$start}; }
+				{ $interval2{$chr}{$start} = ${$interval1}{$chr}{$NM}{$start}; }
 			}
 		}
 	}
 my@chrom = sort(keys%chrom);
 
 #merge overlapping intervals
-my(%interval2);
+my(%interval3);
 foreach my$chr (@chrom) { 
-	my@Starts = sort{$a<=>$b}(keys%{ $interval{$chr} }); 	#hash{chr}=@sortedStart
+	my@Starts = sort{$a<=>$b}(keys%{ $interval2{$chr} }); 	#hash{chr}=@sortedStart
 	my$start = $Starts[0];
-	my$end = $interval{$chr}{$start};
-	$interval2{$chr}{$start} = $end;
+	my$end = $interval2{$chr}{$start};
+	$interval3{$chr}{$start} = $end;
 	for (my$i=1;$i<scalar(@Starts);$i++) {
 		if ($Starts[$i] <= $end) {
-			if ($interval{$chr}{$Starts[$i]} > $end)
-				{ $end = $interval{$chr}{$Starts[$i]}; }
+			if ($interval2{$chr}{$Starts[$i]} > $end)
+				{ $end = $interval2{$chr}{$Starts[$i]}; }
 			else { next; }
 			}
 		else {
-			$interval2{$chr}{$start} = $end;
+			$interval3{$chr}{$start} = $end;
 			$start = $Starts[$i];
-			$end = $interval{$chr}{$start};
+			$end = $interval2{$chr}{$start};
 			}
 		}
-	$interval2{$chr}{$start} = $end;
+	$interval3{$chr}{$start} = $end;
 	}
-return (%interval2)	#$interval2{$chr}{$start} = $end;
+
+return (\%interval3)	#$interval3{$chr}{$start} = $end;
+
 }
 
 
 #####################
-sub printBed
-{
-my($bedFile,$intervalRef) = @_;
+#printBed("original",\%Bed);
+
+sub printBed {
+
+my($bedFile,$interval) = @_;
 open (OUT0, ">$outdir/$bedFile\_0Chr.bed")  || die "cannot create $outdir/$bedFile\_0Chr.bed\n";
 open (OUTw, ">$outdir/$bedFile\_wChr.bed")  || die "cannot create $outdir/$bedFile\_wChr.bed\n";
-foreach my$chr (sort(keys%{$intervalRef})) {
-	foreach my$start (sort{$a<=>$b}keys%{ ${$intervalRef}{$chr} }) {
-		print OUT0 $chr."\t".($start-1)."\t".${$intervalRef}{$chr}{$start}."\n";
-		print OUTw "chr".$chr."\t".($start-1)."\t".${$intervalRef}{$chr}{$start}."\n";
+foreach my$chr (sort(keys%{$interval})) {
+	foreach my$start (sort{$a<=>$b}keys%{ ${$interval}{$chr} }) {
+		print OUT0 $chr."\t".($start-1)."\t".${$interval}{$chr}{$start}."\n";
+		print OUTw "chr".$chr."\t".($start-1)."\t".${$interval}{$chr}{$start}."\n";
 		}
 	}
 close OUT0;
 close OUTw;
+
 }
 
 
 ####################
 #no longer used
-sub withChr
-{
+
+sub withChr {
 my($bedName,$h1,$extenS,$h2,$h3,$outdir) = @_;
 my%path = %$h1;
 my@Files = @$h2;
@@ -4992,7 +5008,9 @@ foreach (@Files) {
 		}
 	unlink "$outdir/$fName{$_}\_inter.bed";
 	}
+
 return(%withChr);
+
 }
 
 
