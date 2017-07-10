@@ -768,7 +768,7 @@ if (exists $opt{max_nonCNVrate}) { $CNV_opt{"max_Non_CNV_rate"} = $opt{max_nonCN
 $CNV_opt{"min_DP"} = 0;
 if (exists $opt{min_DP}) { $CNV_opt{"min_DP"} = $opt{min_DP}; }
 $CNV_opt{"geneGraph"} = 1;
-if (exists $opt{noCNV_byGene} || $bed_cov_file) { $CNV_opt{"geneGraph"} = ""; }
+if (exists $opt{noCNV_byGene} || ($bed_cov_file && !@raw_cov_file)) { $CNV_opt{"geneGraph"} = ""; }
 $CNV_opt{"chromGraph"} = 1;
 if (exists $opt{noCNV_byChr}) { $CNV_opt{"chromGraph"} = ""; }
 @{ $CNV_opt{"fields"} } = ();
@@ -1275,20 +1275,21 @@ if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 %txtRegions = %{$hashSub[6]};		# as %Regions, but for summary txt file
 %txt_NM_Ex = %{$hashSub[7]};		# as %NM_Ex, but for summary txt file
 %coordBed = %{$hashSub[9]};		# as %Bed, but for coordPlot and cov_Bed if no bedfile
-foreach my$chr (keys%coordBed)
-	{ %{ $coordBed{$chr} } = mergeIntervals(\%{ $coordBed{$chr} }); }
-$id2Bed = sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
+foreach my$chr (keys%coordBed) {
+	%{ $coordBed{$chr} } = mergeIntervals(\%{ $coordBed{$chr} });
+	}
+if ($id2Bed) {
+	$id2Bed = sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
+	}
 unlink "$idFile" or warn "Could not unlink: $!";
 
 #changes Regions{gene} according to each NM (without -A N)
 if ($All) {
-	@hashSub = NM2GeneRegion(\%Genes,\%geneNM,\%NMchr,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} });
-	%{ $Regions{"raw"} } = %{$hashSub[0]};
-	%{ $NM_Ex{"raw"} } = %{$hashSub[1]};
 
-	@hashSub = NM2GeneRegion(\%Genes,\%geneNM,\%NMchr,\%txtRegions,\%txt_NM_Ex);
-	%txtRegions = %{$hashSub[0]};
-	%txt_NM_Ex = %{$hashSub[1]};
+	NM2GeneRegion(\%Genes,\%geneNM,\%NMchr,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} });
+
+	NM2GeneRegion(\%Genes,\%geneNM,\%NMchr,\%txtRegions,\%txt_NM_Ex);
+
 	}
 
 #links bed intervals to Regions, eventually changes Regions according to bed (with -L Y)
@@ -3407,8 +3408,8 @@ return(@Transcripts);
 #0	NM_032291	chr1	+	66999824	67210768	67000041	67208778	25	66999824,67091529,67098752,67101626,67105459,67108492,67109226,67126195,67133212,67136677,67137626,67138963,67142686,67145360,67147551,67154830,67155872,67161116,67184976,67194946,67199430,67205017,67206340,67206954,67208755,	67000051,67091593,67098777,67101698,67105516,67108547,67109402,67126207,67133224,67136702,67137678,67139049,67142779,67145435,67148052,67154958,67155999,67161176,67185088,67195102,67199563,67205220,67206405,67207119,67210768,	0	SGIP1	cmpl	cmpl	0,1,2,0,0,0,1,0,0,0,1,2,1,1,1,1,0,1,1,2,2,0,2,1,1,
 ##@hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed);
 ##Id2Coord($idFile,$lenForTxt,$nonCod,$UTRinTxt)
-sub Id2Coord
-{
+sub Id2Coord {
+
 my($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,$h1) = @_;
 my@ChromOrder = @$h1;
 my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%hashBed,%printBed);
@@ -3711,160 +3712,148 @@ print $fh "$chr\t$start\t$end\t$info\n";
 
 #########################
 sub NM2GeneRegion {
-my($h1,$h2,$h3,$h4,$h5)=@_;
-my%Genes = %$h1;
-my%geneNM = %$h2;
-my%NMchr = %$h3;
-my%Regions = %$h4;
-my%NM_Ex = %$h5;
+## @hashSub = NM2GeneRegion(\%Genes,\%geneNM,\%NMchr,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} });
+my($Genes,$geneNM,$NMchr,$RegionR,$NM_ExR)=@_;
 my%RegionG;
-foreach my$gene (keys%Genes) {
-	my@NMs =  @{ $geneNM{$gene} };
-	my$chr = $NMchr{$NMs[0]};
+foreach my$gene (keys%{$Genes}) {
+	my@NMs =  @{ ${$geneNM}{$gene} };
+	my$chr = ${NMchr}{$NMs[0]};
 	print "change intervals for ".$gene." according to:\n\t".$NMs[0];
-	%{ $RegionG{$chr}{$gene} } = %{ $Regions{$chr}{$NMs[0]} };
+	%{ $RegionG{$chr}{$gene} } = %{ ${$RegionR}{$chr}{$NMs[0]} };
 	my%geneNM_Ex;
-	%{ $geneNM_Ex{$NMs[0]} } = %{ $NM_Ex{$NMs[0]} };
+	%{ $geneNM_Ex{$NMs[0]} } = %{ ${$NM_ExR}{$NMs[0]} };
 	for(my$i=1;$i<scalar@NMs;$i++) {
 		print "\t".$NMs[$i];
-		@hashSub = changeRegion1($NMs[$i],\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ $Regions{$chr}{$NMs[$i]} },\%{ $NM_Ex{$NMs[$i]} });
-		%{ $RegionG{$chr}{$gene} } = %{$hashSub[0]};
-		%geneNM_Ex = %{$hashSub[1]};
+		changeRegion1($NMs[$i],\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ ${$RegionR}{$chr}{$NMs[$i]} },\%{ ${$NM_ExR}{$NMs[$i]} });
 		}
 	print "\n";
 	foreach (@NMs)
-		{ %{ $NM_Ex{$_} } = %{ $geneNM_Ex{$_} }; }
+		{ %{ ${$NM_ExR}{$_} } = %{ $geneNM_Ex{$_} }; }
 	}
-%Regions = %RegionG;
-return(\%Regions,\%NM_Ex);
+%{$RegionR} = %RegionG;
 }
 
 
 #########################
 #make 1 common region from all transcripts of 1 gene
-sub changeRegion1
-{
-#@hashSub = changeRegion1($NMs[$i],\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ $Regions{$chr}{$NMs[$i]} },\%{ $NM_Ex{$NMs[$i]} });
-my($NM,$h1,$h2,$h3,$h4) = @_;
-my%RegionG = %$h1;	#for gene: $Regions{start of region} = end of region
-my%geneNM_Ex = %$h2;	#foreach $nm of gene already processed: $geneNM_Ex{$nm}{start of region}{start of exon} = end of exon
-my%RegionN = %$h3;	#for current NM: $Regions{start of region} = end of region
-my%NM_Ex = %$h4;	#for current NM: $NM_Ex{start of region}{start of exon} = end of exon
+sub changeRegion1 {
+## changeRegion1($NMs[$i],$gene,$chr,\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ ${$RegionR}{$chr}{$NMs[$i]} },\%{ ${$NM_ExR}{$NMs[$i]} });
+my($NM,$RegionG1,$geneNM_Ex1,$RegionN,$NM_Ex_r) = @_;
 
-my@StartG = sort{$a<=>$b}(keys%RegionG);
-my@StartN = sort{$a<=>$b}(keys%RegionN);
+my@StartG = sort{$a<=>$b}(keys%{$RegionG1});
+my@StartN = sort{$a<=>$b}(keys%{$RegionN});
 my(%RegionG2,%geneNM_Ex2);
 my$c=0;	#$c: count of @StartG
 my$i=0;	#$i: count of @StartN
-my$endN = $RegionN{$StartN[$i]};
+my$endN = ${$RegionN}{$StartN[$i]};
 
 while ( ($i < scalar@StartN) && ($endN < $StartG[0]) ) {
 	$RegionG2{$StartN[$i]} = $endN;
-	foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
-		{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+	foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
+		{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 	$i++;
-	$endN = $RegionN{$StartN[$i]};
+	$endN = ${$RegionN}{$StartN[$i]};
 	}
 while ( $i < scalar@StartN ) {
-	$endN = $RegionN{$StartN[$i]};				
+	$endN = ${$RegionN}{$StartN[$i]};				
 	if ( $endN < $StartG[$c] ) {
 		$RegionG2{$StartN[$i]} = $endN;
-		foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
-			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+		foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
+			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 		}
-	while ( ($c < (scalar@StartG -1)) && ($StartN[$i] > $RegionG{$StartG[$c]}) ) {
-		$RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]};
-		foreach my$nm (keys%geneNM_Ex) {
-			foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
-				{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+	while ( ($c < (scalar@StartG -1)) && ($StartN[$i] > ${$RegionG1}{$StartG[$c]}) ) {
+		$RegionG2{$StartG[$c]} = ${$RegionG1}{$StartG[$c]};
+		foreach my$nm (keys%{$geneNM_Ex1}) {
+			foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
+				{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = ${$geneNM_Ex1}{$nm}{$StartG[$c]}{$startEx}; }
 			}
 		$c++; 
 		}
-	while ( ($c < (scalar@StartG -1)) && ($StartN[$i] <= $RegionG{$StartG[$c]}) && ($endN >= $StartG[$c]) ) {
+	while ( ($c < (scalar@StartG -1)) && ($StartN[$i] <= ${$RegionG1}{$StartG[$c]}) && ($endN >= $StartG[$c]) ) {
 		if ($StartN[$i] < $StartG[$c]) {
-			if ($endN > $RegionG{$StartG[$c]})
+			if ($endN > ${$RegionG1}{$StartG[$c]})
 				{ $RegionG2{$StartN[$i]} = $endN; }
 			else
-				{ $RegionG2{$StartN[$i]} = $RegionG{$StartG[$c]}; }
-			foreach my$nm (keys%geneNM_Ex) { 
-				foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
-					{ $geneNM_Ex2{$nm}{$StartN[$i]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+				{ $RegionG2{$StartN[$i]} = ${$RegionG1}{$StartG[$c]}; }
+			foreach my$nm (keys%{$geneNM_Ex1}) { 
+				foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
+					{ $geneNM_Ex2{$nm}{$StartN[$i]}{$startEx} = ${$geneNM_Ex1}{$nm}{$StartG[$c]}{$startEx}; }
 				}
 			foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
-				{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+				{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 			}
 		else	{
-			if ($endN > $RegionG{$StartG[$c]})
+			if ($endN > ${$RegionG1}{$StartG[$c]})
 				{ $RegionG2{$StartG[$c]} = $endN; }
 			else
-				{ $RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]}; }
-			foreach my$nm (keys%geneNM_Ex) { 
-				foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
-					{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+				{ $RegionG2{$StartG[$c]} = ${$RegionG1}{$StartG[$c]}; }
+			foreach my$nm (keys%{$geneNM_Ex1}) { 
+				foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
+					{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = ${$geneNM_Ex1}{$nm}{$StartG[$c]}{$startEx}; }
 				}
-			foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
-				{ $geneNM_Ex2{$NM}{$StartG[$c]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
+				{ $geneNM_Ex2{$NM}{$StartG[$c]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 			}
 		$c++;
 		}
 	#current $c
-	if ( ($endN < $StartG[$c]) && ($StartN[$i]>$RegionG{$StartG[$c-1]}) ) {
+	if ( ($endN < $StartG[$c]) && ($StartN[$i]>${$RegionG1}{$StartG[$c-1]}) ) {
 		$RegionG2{$StartN[$i]} = $endN;			
-		foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
-			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+		foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
+			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 		}
-	if ( $StartN[$i] > $RegionG{$StartG[$c]} ) {
-		$RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]};
-		foreach my$nm (keys%geneNM_Ex)
+	if ( $StartN[$i] > ${$RegionG1}{$StartG[$c]} ) {
+		$RegionG2{$StartG[$c]} = ${$RegionG1}{$StartG[$c]};
+		foreach my$nm (keys%{$geneNM_Ex1})
 			{
-			foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
-				{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+			foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
+				{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = ${$geneNM_Ex1}{$nm}{$StartG[$c]}{$startEx}; }
 			} 
 		}
-	if ( ($StartN[$i] <= $RegionG{$StartG[$c]}) && ($endN >= $StartG[$c]) ) {
+	if ( ($StartN[$i] <= ${$RegionG1}{$StartG[$c]}) && ($endN >= $StartG[$c]) ) {
 		if ($StartN[$i] < $StartG[$c])
 			{
-			if ($endN > $RegionG{$StartG[$c]})
+			if ($endN > ${$RegionG1}{$StartG[$c]})
 				{ $RegionG2{$StartN[$i]} = $endN; }
 			else
-				{ $RegionG2{$StartN[$i]} = $RegionG{$StartG[$c]}; }
-			foreach my$nm (keys%geneNM_Ex)
+				{ $RegionG2{$StartN[$i]} = ${$RegionG1}{$StartG[$c]}; }
+			foreach my$nm (keys%{$geneNM_Ex1})
 				{ 
-				foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
-					{ $geneNM_Ex2{$nm}{$StartN[$i]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+				foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
+					{ $geneNM_Ex2{$nm}{$StartN[$i]}{$startEx} = ${$geneNM_Ex1}{$nm}{$StartG[$c]}{$startEx}; }
 				}
-			foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
-				{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
+				{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 			}
 		else {
-			if ($endN > $RegionG{$StartG[$c]})
+			if ($endN > ${$RegionG1}{$StartG[$c]})
 				{ $RegionG2{$StartG[$c]} = $endN; }
 			else
-				{ $RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]}; }
-			foreach my$nm (keys%geneNM_Ex)
+				{ $RegionG2{$StartG[$c]} = ${$RegionG1}{$StartG[$c]}; }
+			foreach my$nm (keys%{$geneNM_Ex1})
 				{ 
-				foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
-					{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+				foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
+					{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = ${$geneNM_Ex1}{$nm}{$StartG[$c]}{$startEx}; }
 				}
-			foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
-				{ $geneNM_Ex2{$NM}{$StartG[$c]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
+				{ $geneNM_Ex2{$NM}{$StartG[$c]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 			}
 		}
-	if ( $StartN[$i] > $RegionG{$StartG[-1]} )	#if regionN keep going on after end of regionG
+	if ( $StartN[$i] > ${$RegionG1}{$StartG[-1]} )	#if regionN keep going on after end of regionG
 		{
 		$RegionG2{$StartN[$i]} = $endN;		
-		foreach my$startEx (keys%{ $NM_Ex{$StartN[$i]} })
-			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = $NM_Ex{$StartN[$i]}{$startEx}; }
+		foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
+			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 		}
 	$i++;
 	}
 #if regionG keep going on after end of regionN
 while ( ($c < scalar@StartG) && ($StartG[$c] > $endN) )
 	{
-	$RegionG2{$StartG[$c]} = $RegionG{$StartG[$c]};
-	foreach my$nm (keys%geneNM_Ex) { 
-		foreach my$startEx (keys%{ $geneNM_Ex{$nm}{$StartG[$c]} })
-			{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = $geneNM_Ex{$nm}{$StartG[$c]}{$startEx}; }
+	$RegionG2{$StartG[$c]} = ${$RegionG1}{$StartG[$c]};
+	foreach my$nm (keys%{$geneNM_Ex1}) { 
+		foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
+			{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = ${$geneNM_Ex1}{$nm}{$StartG[$c]}{$startEx}; }
 		}
 	$c++; 
 	}
@@ -3900,7 +3889,9 @@ for (my$i=1;$i<scalar(@StartG);$i++) {
 	}
 $RegionG3{$startReg} = $endReg;
 
-return(\%RegionG3,\%geneNM_Ex3);
+#return(\%RegionG3,\%geneNM_Ex3);
+%{$RegionG1} = %RegionG3;
+%{$geneNM_Ex1} = %geneNM_Ex3;
 }
 
 
