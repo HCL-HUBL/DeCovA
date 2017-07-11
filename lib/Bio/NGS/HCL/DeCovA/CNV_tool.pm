@@ -30,7 +30,7 @@ my$minCNV = ${$CNV_optRef}{"min_following_CNV"};
 my$minDP = ${$CNV_optRef}{"min_DP"} ;
 my$maxNonCNV = ${$CNV_optRef}{"max_Non_CNV"};
 my$maxNonCNVrate = ${$CNV_optRef}{"max_Non_CNV_rate"};
-my$CNVgraph = ${$CNV_optRef}{"chromGraph"};
+my$graphByChr = ${$CNV_optRef}{"chromGraph"};
 my@cnvFields = @{ ${$CNV_optRef}{"fields"} };
 my$ok = 0;
 foreach my$i (0..$#cnvFields) {
@@ -45,8 +45,6 @@ unless ($ok) {
 	if ($norm eq "std") { push(@cnvVal, ("moy","std")); }
 	else { push(@cnvVal, $norm); }
 	}
-
-my$maxDepthGraph = 10;
 
 my$nCol = scalar(split(/\t/,${$RegionsRef}[0]{"allLine"}));
 
@@ -817,7 +815,8 @@ foreach my$file (keys%Results) {
 				if ($cnvOK >= ($minCNV-1)) {
 					if ($cnvOK == 0) {
 						$Result2{$file}{$nextReg[0]} = $Results{$file}{$nextReg[0]};
-						$Result3{$file}{$nextReg[0]} = $Results{$file}{$nextReg[0]};
+						$Result3{$file}{$nextReg[0]}{"type"} = $Results{$file}{$nextReg[0]};
+						$Result3{$file}{$nextReg[0]}{"end"} = $nextReg[0];
 						$Result4{$file}{$Chrom}{${$RegionsRef}[$nextReg[0]]{"Start"}}{${$RegionsRef}[$nextReg[0]]{"End"}} = $Results{$file}{$nextReg[0]};
 						if (exists $regionIndice{$nextReg[0]}) {
 							print CNV1 $Chromosome.":".${$RegionsRef}[$nextReg[0]]{"Start"}."-".${$RegionsRef}[$nextReg[0]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t1\t".sprintf("%.3f",${$RegionsRef}[$nextReg[0]]{$file}{"depth_ratio"}{$norm})."\t.\t.\t$overlapCNT\n";
@@ -874,7 +873,8 @@ foreach my$file (keys%Results) {
 						foreach (@dirtyCNV) { $dirtyAverage += $_; }
 						$dirtyAverage /= scalar@dirtyCNV;
 						print CNV1 $Chromosome.":".${$RegionsRef}[$nextReg[0]]{"Start"}."-".${$RegionsRef}[$nextReg[$cnvOK]]{"End"}."\t".$Results{$file}{$nextReg[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage)."\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage)."\t$overlapCNT\n";
-						$Result3{$file}{$nextReg[0]} = $Results{$file}{$nextReg[0]};
+						$Result3{$file}{$nextReg[0]}{"type"} = $Results{$file}{$nextReg[0]};
+						$Result3{$file}{$nextReg[0]}{"end"} = $nextReg[$cnvOK];
 						}
 					}
 				if ($i >= 1) { $r += $i; }
@@ -887,12 +887,28 @@ foreach my$file (keys%Results) {
 	}
 
 
-##print graph foreach Chrom
-if ($CNVgraph) {
-	for my$file (@{$FilesRef}) {
-		graphByChr1($nGraf,"$outdir/${$sampleNameRef}{$file}",$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,\%regionOrder,\%Patients,\%Result2);
+##print graph foreach Chrom/CNV
+if ($graphByChr) {
+	##graph by Chrom/CNV ?
+	my$Nbr_Reg_max = 0;
+	foreach my$Chrom (keys%regionOrder) {
+		if (scalar@{ $regionOrder{$Chrom} } > $Nbr_Reg_max) {
+			$Nbr_Reg_max = scalar@{ $regionOrder{$Chrom} };
+			}
+		}
+
+	if ($Nbr_Reg_max > ${$CNV_optRef}{"switch2graphByCNV"}) {
+		for my$file (@{$FilesRef}) {
+			graphByCNV1("$outdir/".${$sampleNameRef}{$file},$CNV_optRef,$file,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,\%regionOrder,\%Patients,\%Result2,\%Result3);
+			}
+		}
+	else {
+		for my$file (@{$FilesRef}) {
+			graphByChr1($nGraf,"$outdir/".${$sampleNameRef}{$file},$CNV_optRef,$file,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,\%regionOrder,\%Patients,\%Result2);
+			}
 		}
 	}
+
 
 
 ##summary
@@ -945,8 +961,8 @@ foreach my$file (@{$FilesRef}) {
 	unless($Patients{$file}{"ecarte"}) {
 		my$N_dup=0; my$N_del=0;
 		foreach (keys%{ $Result3{$file} }) {
-			if ($Result3{$file}{$_} eq "DUP") { $N_dup++; }
-			elsif ($Result3{$file}{$_} eq "DEL") { $N_del++; }
+			if ($Result3{$file}{$_}{"type"} eq "DUP") { $N_dup++; }
+			elsif ($Result3{$file}{$_}{"type"} eq "DEL") { $N_del++; }
 			}
 		print OUT "\n${$sampleNameRef}{$file}: 
 		DUP: $N_dup
@@ -1832,24 +1848,24 @@ foreach my$patient (keys%Results) {
 	}
 
 
-##print graph foreach Chrom
+##print graph foreach Chrom/CNV
 if ($graphByChr) {
-
+	##graph by Chrom/CNV ?
 	my$Nbr_Reg_max = 0;
-	my$switch2graphByCNV = 250;
 	foreach my$Chrom (@ChrOrder) {
 		if (scalar@{ $regionOrder{$Chrom} } > $Nbr_Reg_max) {
 			$Nbr_Reg_max = scalar@{ $regionOrder{$Chrom} };
 			}
 		}
-	if ($Nbr_Reg_max > $switch2graphByCNV) {
+
+	if ($Nbr_Reg_max > ${$CNV_optRef}{"switch2graphByCNV"}) {
 		foreach my$patient (keys%Patients) {
-			graphByCNV2($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2,\%Result3);
+			graphByCNV2($outdir,$CNV_optRef,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2,\%Result3);
 			}
 		}
 	else {
 		foreach my$patient (keys%Patients) {
-			graphByChr2($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2);
+			graphByChr2($outdir,$CNV_optRef,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2);
 			}
 		}
 	}
@@ -2019,41 +2035,50 @@ return($i,$cnvOK,$nonCNVtot,\@nextReg);
 
 sub graphByChr1 {
 
-my($nGraf,$outdir,$norm,$seuil_deletion,$seuil_duplication,$file,$maxDepthGraph,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,$regionOrderRef,$PatientsRef,$ResultsRef)= @_;
-#my@Files = @$h1;
-#my%sampleName = %$h2;
-#my@Regions = @$h3;
-#my@ChromOrder = @$h4;
-#my%regionOrder = %$h5;
-#my%Patients = %$h6;
-#my%Results = %$h7;
+my($nGraf,$outdir,$CNV_optRef,$file,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,$regionOrderRef,$PatientsRef,$ResultsRef)= @_;
 
 print "cmdR, for sample ${$sampleNameRef}{$file}\n";
 
+my$norm = ${$CNV_optRef}{"norm"};
 my$normGraf = $norm;
 if ($norm eq "std") { $normGraf = "moy"; }
 
-my$Nbr_Chr= scalar(keys%{$regionOrderRef});
-if ($nGraf eq "max") { $nGraf = $Nbr_Chr; }
+my$maxDepthGraph = ${$CNV_optRef}{"maxDepthGraph"};
+my$seuil_deletion = ${$CNV_optRef}{"seuil_deletion"};
+my$seuil_duplication = ${$CNV_optRef}{"seuil_duplication"};
 
-my$maxX=0;
-foreach my$Chrom (keys%{$regionOrderRef}) {	
-	if (scalar@{ ${$regionOrderRef}{$Chrom} } > $maxX) { $maxX = scalar@{ ${$regionOrderRef}{$Chrom} }; }
-	}
+##all in 1 sheet:
+#my$Nbr_Chr= scalar(keys%{$regionOrderRef});
+#if ($nGraf eq "max") { $nGraf = $Nbr_Chr; }
 
-my$cmdR = "";
-my$c=1; #chr iteration
-my$n=1; #chr iteration, stepped back to 0 each time a graph is done
-my$N=1; #graph iteration
-my$maxGeneLab=200;
-my$maxGeneSep=500;
-#my$maxLabLen=25;
+##all in 1 sheet:
+#my$maxX=0;
+#foreach my$Chrom (keys%{$regionOrderRef}) {	
+#	if (scalar@{ ${$regionOrderRef}{$Chrom} } > $maxX) { $maxX = scalar@{ ${$regionOrderRef}{$Chrom} }; }
+#	}
 
-foreach my$Chrom (@{$ChromOrderRef}) { 
-	
+##all in 1 sheet:
+#my$cmdR = "";
+#my$c=1; #chr iteration
+#my$n=1; #chr iteration, stepped back to 0 each time a graph is done
+#my$N=1; #graph iteration
+
+##1 sheet / chr :
+open (CMDR, ">$outdir/${$sampleNameRef}{$file}\_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+print CMDR "pdf(\"$outdir/CNV_".${$sampleNameRef}{$file}.".pdf\", width=11.69, height=4,135)\n";
+
+foreach my$Chrom (@{$ChromOrderRef}) {
+
 	$Chrom =~ s/^chr//i;
 	
 	if (exists ${$regionOrderRef}{$Chrom}) {
+
+		my$cmdR = "";
+
+		my$Nbr_Reg = scalar@{ ${$regionOrderRef}{$Chrom} };
+		##1 sheet / chr :
+		my$maxX = $Nbr_Reg;
 
 		my$maxYsup=$seuil_duplication; my$maxYinf=$seuil_deletion;	
 		foreach my$region (@{ ${$regionOrderRef}{$Chrom} }) {
@@ -2073,12 +2098,20 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 			if ($maxDepthGraph && $maxYinf < (-$maxDepthGraph)) { $maxYinf = (-$maxDepthGraph); }
 			}
 
-		if ($normGraf eq "std") { $cmdR .= "par(fig=c(0,1,".(1-(($n-0.05)/$nGraf)).",".(1-(($n-0.95)/$nGraf))."), new=TRUE)
-	plot (c(0,0), xlim=c(0,$maxX), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
-		else { $cmdR .= "par(fig=c(0,1,".(1-(($n-0.05)/$nGraf)).",".(1-(($n-0.95)/$nGraf))."), new=TRUE)
-	plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n"; }
-
-		my$Nbr_Reg = scalar@{ ${$regionOrderRef}{$Chrom} };
+		if ($normGraf eq "std") {
+			##all in 1 sheet:
+			#$cmdR .= "par(fig=c(0,1,".(1-(($n-0.05)/$nGraf)).",".(1-(($n-0.95)/$nGraf))."), new=TRUE)
+#plot (c(0,0), xlim=c(0,$maxX), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
+			##1 sheet / chr :
+			$cmdR .= "plot (c(0,0), xlim=c(0,$maxX), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
+			}
+		else {
+			##all in 1 sheet:
+			#$cmdR .= "par(fig=c(0,1,".(1-(($n-0.05)/$nGraf)).",".(1-(($n-0.95)/$nGraf))."), new=TRUE)
+#plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
+			##1 sheet / chr :
+			$cmdR .= "plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $Chrom\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
+			}
 
 		##gene separations
 		my$currentGene=""; my$tmpTxt=""; my$Nbr_gene=0;
@@ -2091,7 +2124,7 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 					}
 				}
 			}
-		if ($Nbr_gene < $maxGeneSep) { $cmdR .= $tmpTxt; }
+		if ($Nbr_gene < ${$CNV_optRef}{"maxGeneSep"}) { $cmdR .= $tmpTxt; }
 
 		my$Nbr_CNV=0;
 		for (my$r=0;$r<$Nbr_Reg;$r++) {
@@ -2101,7 +2134,7 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 
 		##region labels
 		my@printReg=();
-		if ($maxX < $maxGeneLab) {
+		if ($maxX < ${$CNV_optRef}{"maxGeneLab"}) {
 			##in grey if invalid
 			for (my$r=0;$r<$Nbr_Reg;$r++) { 
 				if (defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
@@ -2139,7 +2172,7 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 			for (my$r=0;$r<$Nbr_Reg;$r++) { 
 				if (defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
 				}
-			if (@printReg && scalar@printReg<$maxGeneSep) {
+			if (@printReg && scalar@printReg < ${$CNV_optRef}{"maxGeneSep"}) {
 				$cmdR .= "axis(1, at=c(";
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
@@ -2147,7 +2180,7 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 				}
 			##in black if valid
 			@printReg=();
-			if ($Nbr_gene < $maxGeneLab) { #&& ($Nbr_gene+$Nbr_CNV)>=$maxGeneLab) {
+			if ($Nbr_gene < ${$CNV_optRef}{"maxGeneLab"}) { #&& ($Nbr_gene+$Nbr_CNV)>=${$CNV_optRef}{"maxGeneLab"}) {
 				$currentGene="";
 				for (my$r=0;$r<$Nbr_Reg;$r++) {
 					if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"}) {
@@ -2158,7 +2191,7 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 						}
 					}
 				}
-			#elsif ($Nbr_gene<$maxGeneLab && ($Nbr_gene+$Nbr_CNV)<$maxGeneLab) {
+			#elsif ($Nbr_gene<${$CNV_optRef}{"maxGeneLab"} && ($Nbr_gene+$Nbr_CNV)<${$CNV_optRef}{"maxGeneLab"}) {
 			#	for (my$r=0;$r<$Nbr_Reg;$r++) {
 			#		if ( (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne $currentGene) || (exists ${$ResultsRef}{$file}{${$regionOrderRef}{$Chrom}[$r]}) ) {
 			#			push(@printReg,$r);
@@ -2182,7 +2215,7 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 			for (my$r=0;$r<$Nbr_Reg;$r++) {
 				if (exists ${$ResultsRef}{$file}{${$regionOrderRef}{$Chrom}[$r]}) { push(@printReg,$r) ; }
 				}
-			if (@printReg && scalar@printReg<$maxGeneSep) {
+			if (@printReg && scalar@printReg < ${$CNV_optRef}{"maxGeneSep"}) {
 				$cmdR .= "axis(1, at=c(";
 				foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 				chop $cmdR;
@@ -2304,52 +2337,75 @@ foreach my$Chrom (@{$ChromOrderRef}) {
 		#else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n"; }
 		$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
 
+		##all in 1 sheet:
+		#if ($c==$Nbr_Chr || $n==$nGraf) {
+		#	open (CMDR, ">$outdir/${$sampleNameRef}{$file}\_temp.R") || die;
+		#	print CMDR "#!/usr/bin/env Rscript\n\n" ;
+		#	if ($nGraf==$Nbr_Chr) { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
+		#	else {
+		#		if ($N>1) { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}\_$N.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
+		#		else { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}\_$N.pdf\", width=11.69, height=".($n*3).")\npar(mfrow=c($n,1))\n"; }
+		#		}
+		#	print CMDR "$cmdR";
+		#	print CMDR "title(main=\"sample: ${$sampleNameRef}{$file}";
+		#	if (${$PatientsRef}{$file}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
+		#	else { print CMDR "\""; }
+		#	print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
+		#	print CMDR "dev.off()\nquit(save=\"no\")\n";
+		#	close CMDR;
+		#	system "Rscript $outdir/${$sampleNameRef}{$file}\_temp.R";
+		#	unlink "$outdir/${$sampleNameRef}{$file}\_temp.R";
+		#	$cmdR="";
+		#	$n=0;
+		#	$N++;
+		#	}
+		#$c++;$n++;
 
-		if ($c==$Nbr_Chr || $n==$nGraf) {
-			open (CMDR, ">$outdir/${$sampleNameRef}{$file}\_temp.R") || die;
-			print CMDR "#!/usr/bin/env Rscript\n\n" ;
-			if ($nGraf==$Nbr_Chr) { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
-			else {
-				if ($N>1) { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}\_$N.pdf\", width=11.69, height=".($nGraf*3).")\npar(mfrow=c($nGraf,1))\n"; }
-				else { print CMDR "pdf(\"".$outdir."/CNV_${$sampleNameRef}{$file}\_$N.pdf\", width=11.69, height=".($n*3).")\npar(mfrow=c($n,1))\n"; }
-				}
-			print CMDR "$cmdR";
-			print CMDR "title(main=\"sample: ${$sampleNameRef}{$file}";
-			if (${$PatientsRef}{$file}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
-			else { print CMDR "\""; }
-			print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
-			print CMDR "dev.off()\nquit(save=\"no\")\n";
-			close CMDR;
-			system "Rscript $outdir/${$sampleNameRef}{$file}\_temp.R";
-			unlink "$outdir/${$sampleNameRef}{$file}\_temp.R";
-			$cmdR="";
-			$n=0;
-			$N++;
-			}
-
-		$c++;$n++;
+		##1 sheet / chr :
+		print CMDR "$cmdR";
 
 		}	
 	}
+##1 sheet / chr :
+#print CMDR "title(main=\"sample: ${$sampleNameRef}{$file}";
+#if (${$PatientsRef}{$file}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
+#else { print CMDR "\""; }
+#print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
+print CMDR "dev.off()\nquit(save=\"no\")\n";
+close CMDR;
+system "Rscript $outdir/${$sampleNameRef}{$file}\_temp.R";
+unlink "$outdir/${$sampleNameRef}{$file}\_temp.R";
+
 }
+
+
+
 
 
 ####################
 sub graphByChr2 {
 
-my($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,$PatientsRef,$RegionsRef,$ChrOrderRef,$regionOrderRef,$ResultsRef)= @_;
+my($outdir,$CNV_optRef,$patient,$PatientsRef,$RegionsRef,$ChrOrderRef,$regionOrderRef,$ResultsRef)= @_;
 
+print "cmdR, for ${$PatientsRef}{$patient}{ID}\n";
+
+my$norm = ${$CNV_optRef}{"norm"};
 my$normGraf = $norm;
 if ($norm eq "std") { $normGraf = "moy"; }
 
+my$maxDepthGraph = ${$CNV_optRef}{"maxDepthGraph"};
+my$seuil_deletion = ${$CNV_optRef}{"seuil_deletion"};
+my$seuil_duplication = ${$CNV_optRef}{"seuil_duplication"};
+
 ##all in 1 sheet:
-my$maxX=0;
+#my$maxX=0;
 #foreach my$Chrom (keys%{$regionOrderRef}) {	
 #	if (scalar@{ $regionOrderRef->{$Chrom} } > $maxX) { $maxX = scalar@{ $regionOrderRef->{$Chrom} }; }		#or @{ ${$regionOrderRef}{$Chrom} }?
 #	}
 
-my$Nbr_Chr= scalar(keys%{$regionOrderRef});
-print "cmdR, for ${$PatientsRef}{$patient}{ID}\n";
+##all in 1 sheet:
+#my$Nbr_Chr= scalar(keys%{$regionOrderRef});
+
 open (CMDR, ">$outdir/${$PatientsRef}{$patient}{ID}\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
 ##all in 1 sheet:
@@ -2359,16 +2415,13 @@ print CMDR "#!/usr/bin/env Rscript\n\n" ;
 ##1 sheet / chr
 print CMDR "pdf(\"".$outdir."/CNV_".${$PatientsRef}{$patient}{"ID"}.".pdf\", width=11.69, height=4,135)\n";
 
-my$cmdR = "";
-my$c=0; #chr iteration
-my$maxGeneLab=200;
-my$maxGeneSep=500;
-#my$maxLabLen=25;
 
 for my$Chrom (@{$ChrOrderRef}) {	
 
-	##1 sheet / chr
-	$maxX = scalar@{ $regionOrderRef->{$Chrom} };
+	my$cmdR = "";
+	my$Nbr_Reg = scalar@{ $regionOrderRef->{$Chrom} };
+	##1 sheet / chr :
+	my$maxX = $Nbr_Reg;
 
 	my$maxYsup=$seuil_duplication; my$maxYinf=$seuil_deletion;	
 	foreach my$region (@{ $regionOrderRef->{$Chrom} }) {
@@ -2404,9 +2457,6 @@ for my$Chrom (@{$ChrOrderRef}) {
 		$cmdR .= "plot (c(0,0), xlim=c(0,$maxX), ylim=c(0,$maxYsup), type =\"n\", main=\"chrom: $ChrName\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
 		}
 
-	##all in 1 sheet:
-	my$Nbr_Reg = scalar@{ $regionOrderRef->{$Chrom} };
-
 	#gene vertical separations
 	my$currentGene=""; my$tmpTxt=""; my$Nbr_gene=0;
 	for (my$r=0;$r<$Nbr_Reg;$r++) {
@@ -2416,7 +2466,7 @@ for my$Chrom (@{$ChrOrderRef}) {
 			$Nbr_gene++;
 			}
 		}
-	if ($Nbr_gene < $maxGeneSep) { $cmdR .= $tmpTxt; }
+	if ($Nbr_gene < ${$CNV_optRef}{"maxGeneSep"}) { $cmdR .= $tmpTxt; }
 
 	my$Nbr_CNV=0;
 	for (my$r=0;$r<$Nbr_Reg;$r++) {
@@ -2426,7 +2476,7 @@ for my$Chrom (@{$ChrOrderRef}) {
 
 	#x labels
 	my@printReg=();
-	if ($maxX < $maxGeneLab) {
+	if ($maxX < ${$CNV_optRef}{"maxGeneLab"}) {
 		##in grey if invalid
 		for (my$r=0;$r<$Nbr_Reg;$r++) { 
 			if (defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
@@ -2464,7 +2514,7 @@ for my$Chrom (@{$ChrOrderRef}) {
 		for (my$r=0;$r<$Nbr_Reg;$r++) { 
 			if (defined ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Appel"}) { push(@printReg,$r) ; }
 			}
-		if (@printReg && scalar@printReg<$maxGeneSep) {
+		if (@printReg && scalar@printReg < ${$CNV_optRef}{"maxGeneSep"}) {
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
@@ -2472,7 +2522,7 @@ for my$Chrom (@{$ChrOrderRef}) {
 			}
 		##in black if valid
 		@printReg=();
-		if ($Nbr_gene < $maxGeneLab) {	# && ($Nbr_gene+$Nbr_CNV)>=$maxGeneLab) {
+		if ($Nbr_gene < ${$CNV_optRef}{"maxGeneLab"}) {	# && ($Nbr_gene+$Nbr_CNV)>=${$CNV_optRef}{"maxGeneLab"}) {
 			$currentGene="";
 			for (my$r=0;$r<$Nbr_Reg;$r++) {
 				if (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"} ne $currentGene) {
@@ -2481,7 +2531,7 @@ for my$Chrom (@{$ChrOrderRef}) {
 					}
 				}
 			}
-		#elsif ($Nbr_gene<$maxGeneLab && ($Nbr_gene+$Nbr_CNV)<$maxGeneLab) {
+		#elsif ($Nbr_gene<${$CNV_optRef}{"maxGeneLab"} && ($Nbr_gene+$Nbr_CNV)<${$CNV_optRef}{"maxGeneLab"}) {
 		#	for (my$r=0;$r<$Nbr_Reg;$r++) {
 		#		if ( (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"} ne $currentGene) || (exists ${$ResultsRef}{$patient}{${$regionOrderRef}{$Chrom}[$r]}) ) {
 		#			push(@printReg,$r);
@@ -2505,7 +2555,7 @@ for my$Chrom (@{$ChrOrderRef}) {
 		for (my$r=0;$r<$Nbr_Reg;$r++) {
 			if (exists ${$ResultsRef}{$patient}{${$regionOrderRef}{$Chrom}[$r]}) { push(@printReg,$r) ; }
 			}
-		if (@printReg && scalar@printReg<$maxGeneSep) {
+		if (@printReg && scalar@printReg < ${$CNV_optRef}{"maxGeneSep"}) {
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r+1).","; }
 			chop $cmdR;
@@ -2628,12 +2678,10 @@ for my$Chrom (@{$ChrOrderRef}) {
 	#else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n"; }
 	$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
 
+	print CMDR "$cmdR";
 
-	$c++;
 	}
 
-#print "$cmdR\n";
-print CMDR "$cmdR";
 #print CMDR "title(main=\"sample: ${$PatientsRef}{$patient}{ID}";
 #if (${$PatientsRef}{$patient}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
 #else { print CMDR "\""; }
@@ -2643,6 +2691,300 @@ close CMDR;
 system "Rscript $outdir/${$PatientsRef}{$patient}{ID}\_temp.R";
 unlink "$outdir/${$PatientsRef}{$patient}{ID}\_temp.R";
 
+}
+
+
+
+####################
+
+sub graphByCNV1 {
+
+my($outdir,$CNV_optRef,$file,$FilesRef,$sampleNameRef,$RegionsRef,$ChromOrderRef,$regionOrderRef,$PatientsRef,$Result2Ref,$Result3Ref)= @_;
+
+print "cmdR, for sample ${$sampleNameRef}{$file}\n";
+
+my$norm = ${$CNV_optRef}{"norm"};
+my$normGraf = $norm;
+if ($norm eq "std") { $normGraf = "moy"; }
+
+my$ext = ${$CNV_optRef}{"graphCNVpadding"};
+my$maxDepthGraph = ${$CNV_optRef}{"maxDepthGraph"};
+my$seuil_deletion = ${$CNV_optRef}{"seuil_deletion"};
+my$seuil_duplication = ${$CNV_optRef}{"seuil_duplication"};
+
+open (CMDR, ">$outdir/${$sampleNameRef}{$file}\_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+print CMDR "pdf(\"$outdir/CNV_".${$sampleNameRef}{$file}.".pdf\", width=11.69, height=4,135)\n";
+
+foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$file} }) {
+
+	my$cmdR = "";
+
+	my$Chrom = ${$RegionsRef}[$CNV]{"Chrom"};
+	$Chrom =~ s/^chr//i;
+
+	my$CNVend = ${$Result3Ref}{$file}{$CNV}{"end"};
+	my$firstR = $CNV;
+	for (my$r=($CNV - $ext);$r<$CNV;$r++) {
+		if (exists ${$RegionsRef}[$r]) {
+			$firstR = $r; last;
+			}
+		}
+	my$lastR = $CNVend;
+	for (my$r=$CNVend;$r<=($CNVend + $ext);$r++) {
+		if (exists ${$RegionsRef}[$r]) {
+			$lastR = $r;
+			}
+		else { last; }
+		}
+	my$Nbr_Reg = $lastR - $firstR + 1;
+
+	my$maxYsup=$seuil_duplication; my$maxYinf=$seuil_deletion;	
+	foreach my$region (@{ ${$regionOrderRef}{$Chrom} }) {
+		foreach my$f (@{$FilesRef}) {
+			if (exists ${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf}) {
+				if (${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf} > $maxYsup)
+					{ $maxYsup = ${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf}; }
+				if ($normGraf eq "std") {
+					if (${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf} < $maxYinf)
+						{ $maxYinf = ${$RegionsRef}[$region]{$f}{"depth_ratio"}{$normGraf}; }
+					}
+				}
+			}
+		}
+	if ($maxDepthGraph && $maxYsup > $maxDepthGraph) { $maxYsup = $maxDepthGraph; }
+	if ($normGraf eq "std") {
+		if ($maxDepthGraph && $maxYinf < (-$maxDepthGraph)) { $maxYinf = (-$maxDepthGraph); }
+		}
+
+	$cmdR .= "plot (c(0,0), xlim=c(0,$Nbr_Reg), ylim=c(";
+	if ($normGraf eq "std") { $cmdR .= "$maxYinf,$maxYsup"; }
+	else { $cmdR .= "0,$maxYsup"; }
+	$cmdR .= "), type =\"n\", main=\"$Chrom:".${$RegionsRef}[$CNV]{"start"}."-".${$RegionsRef}[$CNVend]{"end"}."\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
+
+	##gene separations
+	my$currentGene=""; my$tmpTxt=""; my$Nbr_gene=0;
+	for my$r ($firstR..$lastR) {
+		if (${$RegionsRef}[$r]{"Gene"}) {
+			if (${$RegionsRef}[$r]{"Gene"} ne "NA" && ${$RegionsRef}[$r]{"Gene"} ne $currentGene)  {
+				$tmpTxt .= "abline(v=".($r-$firstR+0.5).", col=\"blue\", lty = \"dotted\", lwd=1)\n";
+				$currentGene = ${$RegionsRef}[$r]{"Gene"};
+				$Nbr_gene++;
+				}
+			}
+		}
+	if ($Nbr_gene < ${$CNV_optRef}{"maxGeneSep"}) { $cmdR .= $tmpTxt; }
+
+	##region labels
+	my@printReg=();
+	if ($Nbr_Reg < ${$CNV_optRef}{"maxGeneLab"}) {
+		##in grey if invalid
+		for my$r ($firstR..$lastR){ 
+			if (defined ${$RegionsRef}[$r]{"Appel"}) { push(@printReg,$r) ; }
+			}
+		if (@printReg) {
+			$cmdR .= "axis(1, at=c(";
+			foreach my$r (@printReg) { $cmdR .= ($r-$firstR+1).","; }
+			chop $cmdR;
+			$cmdR .="), labels=c(";
+			foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[$r]{"label"}."\","; }
+			chop $cmdR;
+			$cmdR .= "), col.axis=\"darkgrey\", las=2";
+			if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
+			else  { $cmdR .= ", cex.axis=".(log(5)/log($Nbr_Reg))." )\n"; }
+			}
+		##in black if valid
+		@printReg=();
+		for my$r ($firstR..$lastR) { 
+			if(!defined ${$RegionsRef}[$r]{"Appel"}) { push(@printReg,$r) ; }
+			}
+		if (@printReg) {
+			$cmdR .= "axis(1, at=c(";
+			foreach my$r (@printReg) { $cmdR .= ($r-$firstR+1).","; }
+			chop $cmdR;
+			$cmdR .="), labels=c(";
+			foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[$r]{"label"}."\","; }
+			chop $cmdR;
+			$cmdR .= "), col.axis=\"black\", las=2";
+			if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
+			else  { $cmdR .= ", cex.axis=".(log(5)/log($Nbr_Reg))." )\n"; }
+			}
+		}
+	else {
+		##in grey if invalid; only ticks
+		for my$r ($firstR..$lastR) { 
+			if (defined ${$RegionsRef}[$r]{"Appel"}) { push(@printReg,$r) ; }
+			}
+		if (@printReg && scalar@printReg < ${$CNV_optRef}{"maxGeneSep"}) {
+			$cmdR .= "axis(1, at=c(";
+			foreach my$r (@printReg) { $cmdR .= ($r-$firstR+1).","; }
+			chop $cmdR;
+			$cmdR .= "), labels = FALSE, col.ticks=\"darkgrey\")\n";
+			}
+		##in black if valid
+		@printReg=();
+		if ($Nbr_gene < ${$CNV_optRef}{"maxGeneLab"}) {
+			$currentGene="";
+			for my$r ($firstR..$lastR) {
+				if (${$RegionsRef}[$r]{"Gene"}) {
+					if (${$RegionsRef}[$r]{"Gene"} ne "NA" && ${$RegionsRef}[$r]{"Gene"} ne $currentGene)  { 
+						push(@printReg,$r); 
+						$currentGene = ${$RegionsRef}[$r]{"Gene"};
+						}
+					}
+				}
+			}
+		if (@printReg) {
+			$cmdR .= "axis(1, at=c(";
+			foreach my$r (@printReg) { $cmdR .= ($r-$firstR+1).","; }
+			chop $cmdR;
+			$cmdR .="), labels=c(";
+			foreach my$r (@printReg) { $cmdR .= "\"".${$RegionsRef}[$r]{"Gene"}."\","; }
+			chop $cmdR;
+			$cmdR .= "), col.axis=\"black\", las=2";
+			if ($Nbr_gene<=5) { $cmdR .= ", cex.axis=1 )\n"; }
+			else  { $cmdR .= ", cex.axis=".(log(5)/log($Nbr_gene))." )\n"; }
+			}
+		##in red if CNV; only ticks
+		@printReg=();
+		for (my$r=0;$r<$Nbr_Reg;$r++) {
+			if (exists ${$Result2Ref}{$file}{$r}) { push(@printReg,$r) ; }
+			}
+		if (@printReg && scalar@printReg < ${$CNV_optRef}{"maxGeneSep"}) {
+			$cmdR .= "axis(1, at=c(";
+			foreach my$r (@printReg) { $cmdR .= ($r-$firstR+1).","; }
+			chop $cmdR;
+			$cmdR .= "), labels = FALSE, col.ticks=\"red\")\n";
+			}
+
+
+		}
+
+	##all not target sample lines (grey):
+	for (my$f=0;$f<scalar@{$FilesRef};$f++) {
+		unless (${$FilesRef}[$f] eq $file) {
+			my$r1 = $firstR;
+			while ($r1 <= $lastR) {
+				my$r2=$r1;
+				while ($r2 <= $lastR) {
+					if (exists ${$RegionsRef}[$r2]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}) { $r2++; }
+					else { last; }
+					}
+				if (($r2-1) > $r1) {
+					$cmdR .= "lines( c(";
+					for (my$r=$r1;$r<$r2;$r++)
+						{ $cmdR .= ($r-$firstR+1).","; }
+					chop $cmdR;
+					$cmdR .= "), c(";
+					for (my$r=$r1;$r<$r2;$r++)
+						{ $cmdR .= ${$RegionsRef}[$r]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}.","; }
+					chop $cmdR;
+					$cmdR .= "), type =\"l\", lwd=1, col=\"darkgrey\")\n";
+					}
+				elsif (($r2-1) == $r1) {
+					$cmdR .= "lines( c(".($r1-$firstR+1)."), c(".${$RegionsRef}[$r1]{${$FilesRef}[$f]}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"darkgrey\")\n";
+					}
+				$r1 = ($r2+1);
+				}
+			}
+		}
+
+	##threshold lines (black):
+	if ($norm eq "std" && $normGraf eq "moy") {
+		foreach my$gender ("normByR_depth","normByR_depth_fem","normByR_depth_males") {
+			my$r1 = $firstR;
+			while ($r1 <= $lastR) {
+				my$r2=$r1;
+				while ($r2 <= $lastR) {
+					if (${$RegionsRef}[$r2]{$gender}{"moy"}) { $r2++;}
+					else { last; }
+					}
+				if (($r2-1) > $r1) {
+					foreach my$fold ($seuil_duplication,$seuil_deletion) {
+						$cmdR .= "lines( c(";
+						for (my$r=$r1;$r<$r2;$r++)
+							{ $cmdR .= ($r-$firstR+1).","; }
+						chop $cmdR;
+						$cmdR .= "), c(";
+						for (my$r=$r1;$r<$r2;$r++) {
+							if ( ${$RegionsRef}[$r]{$gender}{"moy"} ) {
+								$cmdR .= (1+$fold*(${$RegionsRef}[$r]{$gender}{"std"} / ${$RegionsRef}[$r]{$gender}{"moy"})).",";
+								}
+							else 	{ $cmdR .= "1,"; }
+							}
+						chop $cmdR;
+						$cmdR .= "), type =\"l\", lwd=1, col=\"black\")\n";
+						}
+					}
+				elsif (($r2-1) == $r1) {
+					$cmdR .= "lines( c(".($r1-$firstR+1)."), c(".(1+(${$RegionsRef}[$r1]{$gender}{"std"} / ${$RegionsRef}[$r1]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"black\")\n";
+					$cmdR .= "lines( c(".($r1-$firstR+1)."), c(".(1-(${$RegionsRef}[$r1]{$gender}{"std"} / ${$RegionsRef}[$r1]{$gender}{"moy"}))."), type =\"p\", lwd=1, col=\"black\")\n";
+					}
+				$r1 = ($r2+1);
+				}
+			}
+		}
+	else {
+		$cmdR .= "abline(h=$seuil_deletion, col=\"black\", lty = \"dashed\", lwd=1)\n";
+		$cmdR .= "abline(h=$seuil_duplication, col=\"black\", lty = \"dashed\", lwd=1)\n";
+		}
+
+	##target sample line (green)
+	my$r1 = $firstR;
+	while ($r1 <= $lastR) {
+		my$r2=$r1;
+		while ($r2 <= $lastR) {
+			if (exists ${$RegionsRef}[$r2]{$file}{"depth_ratio"}{$normGraf}) { $r2++;}
+			else { last; }
+			}
+		if (($r2-1) > $r1) {
+			$cmdR .= "lines( c(";
+			for (my$r=$r1;$r<$r2;$r++)
+				{ $cmdR .= ($r-$firstR+1).","; }
+			chop $cmdR;
+			$cmdR .= "), c(";
+			for (my$r=$r1;$r<$r2;$r++)
+				{ $cmdR .= ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$normGraf}.","; }
+			chop $cmdR;
+			$cmdR .= "), type =\"l\", lwd=1, col=\"green\")\n";
+			}
+		elsif (($r2-1) == $r1) {
+			$cmdR .= "lines( c(".($r1-$firstR+1)."), c(".${$RegionsRef}[$r1]{$file}{"depth_ratio"}{$normGraf}."), type =\"p\", lwd=1, col=\"green\")\n";
+			}
+		$r1 = ($r2+1);
+		}
+
+	##points for CNVs
+	my$points .= "points( c(";
+	for my$r ($firstR..$lastR) {
+		if (exists ${$Result2Ref}{$file}{$r} && exists ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$normGraf})
+			{ $points .= ($r-$firstR+1).","; }
+		}
+	chop $points;
+	$points .= "), c(";
+	for my$r ($firstR..$lastR){
+		if (exists ${$Result2Ref}{$file}{$r} && exists ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$normGraf})
+			{ $points .= ${$RegionsRef}[$r]{$file}{"depth_ratio"}{$normGraf}.","; }
+		}
+	chop $points;
+	$points .= "), type =\"p\", pch = 16, lwd=2, col=\"red\")\n";
+	$cmdR .= $points;
+
+	$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
+
+	print CMDR "$cmdR";
+	
+	}
+
+##1 sheet / chr :
+#print CMDR "title(main=\"sample: ${$sampleNameRef}{$file}";
+#if (${$PatientsRef}{$file}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
+#else { print CMDR "\""; }
+#print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
+print CMDR "dev.off()\nquit(save=\"no\")\n";
+close CMDR;
+system "Rscript $outdir/${$sampleNameRef}{$file}\_temp.R";
+unlink "$outdir/${$sampleNameRef}{$file}\_temp.R";
 
 }
 
@@ -2650,41 +2992,43 @@ unlink "$outdir/${$PatientsRef}{$patient}{ID}\_temp.R";
 ####################
 sub graphByCNV2 {
 
-my($outdir,$norm,$seuil_deletion,$seuil_duplication,$patient,$maxDepthGraph,$PatientsRef,$RegionsRef,$ChrOrderRef,$regionOrderRef,$Result2Ref,$Result3Ref)= @_;
+my($outdir,$CNV_optRef,$patient,$PatientsRef,$RegionsRef,$ChrOrderRef,$regionOrderRef,$Result2Ref,$Result3Ref)= @_;
 
+my$norm = ${$CNV_optRef}{"norm"};
 my$normGraf = $norm;
 if ($norm eq "std") { $normGraf = "moy"; }
+
+my$ext = ${$CNV_optRef}{"graphCNVpadding"};
+my$maxDepthGraph = ${$CNV_optRef}{"maxDepthGraph"};
+my$seuil_deletion = ${$CNV_optRef}{"seuil_deletion"};
+my$seuil_duplication = ${$CNV_optRef}{"seuil_duplication"};
 
 print "cmdR, for ${$PatientsRef}{$patient}{ID}\n";
 open (CMDR, ">$outdir/${$PatientsRef}{$patient}{ID}\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
 print CMDR "pdf(\"".$outdir."/CNV_".${$PatientsRef}{$patient}{"ID"}.".pdf\", width=11.69, height=4.135)\n";
 
-my$maxGeneLab=200;
-my$maxGeneSep=500;
-my$ext = 2;
-
 foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 
 	my$cmdR = "";
 
+	my$Chrom = ${$RegionsRef}[$CNV]{"Chrom"};
+	my$ChrName = $Chrom; $ChrName =~ s/^chr//;
+
 	my$CNVend = ${$Result3Ref}{$patient}{$CNV}{"end"};
-	my$firstR=$CNV;
+	my$firstR = $CNV;
 	for (my$r=($CNV - $ext);$r<$CNV;$r++) {
 		if (exists ${$RegionsRef}[$r]) {
 			$firstR = $r; last;
 			}
 		}
-	my$lastR=$CNVend;
+	my$lastR = $CNVend;
 	for (my$r=$CNVend;$r<=($CNVend + $ext);$r++) {
 		if (exists ${$RegionsRef}[$r]) {
 			$lastR = $r;
 			}
 		else { last; }
 		}
-
-	my$Chrom = ${$RegionsRef}[$CNV]{"Chrom"};
-
 	my$Nbr_Reg = $lastR - $firstR + 1;
 
 	my$maxYsup=$seuil_duplication; my$maxYinf=$seuil_deletion;	
@@ -2705,8 +3049,6 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 		if ($maxDepthGraph && $maxYinf < (-$maxDepthGraph)) { $maxYinf = (-$maxDepthGraph); }
 		}
 
-	my$ChrName = $Chrom; $ChrName =~ s/^chr//;
-
 	if ($normGraf eq "std") {
 		$cmdR .= "plot (c(0,0), xlim=c(0,$Nbr_Reg), ylim=c($maxYinf,$maxYsup), type =\"n\", main=\"$Chrom:".${$RegionsRef}[$CNV]{"start"}."-".${$RegionsRef}[$CNVend]{"end"}."\", xlab=\"\", ylab=\"depth_ratio_to_$normGraf\", cex.lab=1.5, cex.axis=1.2, cex.main=1.5, xaxt=\"n\")\n";
 		}
@@ -2724,12 +3066,12 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 			$Nbr_gene++;
 			}
 		}
-	if ($Nbr_gene < $maxGeneSep) { $cmdR .= $tmpTxt; }
+	if ($Nbr_gene < ${$CNV_optRef}{"maxGeneSep"}) { $cmdR .= $tmpTxt; }
 
 
 	#x labels
 	my@printReg=();
-	if ($Nbr_Reg < $maxGeneLab) {
+	if ($Nbr_Reg < ${$CNV_optRef}{"maxGeneLab"}) {
 		##in grey if invalid
 		for my$r ($firstR..$lastR) { 
 			if (defined ${$RegionsRef}[$r]{"Appel"}) { push(@printReg,$r) ; }
@@ -2767,7 +3109,7 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 		for my$r ($firstR..$lastR) { 
 			if (defined ${$RegionsRef}[$r]{"Appel"}) { push(@printReg,$r) ; }
 			}
-		if (@printReg && scalar@printReg<$maxGeneSep) {
+		if (@printReg && scalar@printReg < ${$CNV_optRef}{"maxGeneSep"}) {
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r-$firstR+1).","; }
 			chop $cmdR;
@@ -2775,7 +3117,7 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 			}
 		##in black if valid
 		@printReg=();
-		if ($Nbr_gene < $maxGeneLab) {	# && ($Nbr_gene+$Nbr_CNV)>=$maxGeneLab) {
+		if ($Nbr_gene < ${$CNV_optRef}{"maxGeneLab"}) {	# && ($Nbr_gene+$Nbr_CNV)>=${$CNV_optRef}{"maxGeneLab"}) {
 			$currentGene="";
 			for my$r ($firstR..$lastR) {
 				if (${$RegionsRef}[$r]{"Gene"} ne "NA" && ${$RegionsRef}[$r]{"geneID"} ne $currentGene) {
@@ -2784,14 +3126,6 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 					}
 				}
 			}
-		#elsif ($Nbr_gene<$maxGeneLab && ($Nbr_gene+$Nbr_CNV)<$maxGeneLab) {
-		#	for (my$r=0;$r<$Nbr_Reg;$r++) {
-		#		if ( (${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"Gene"} ne "NA" && ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"} ne $currentGene) || (exists ${$Result2Ref}{$patient}{${$regionOrderRef}{$Chrom}[$r]}) ) {
-		#			push(@printReg,$r);
-		#			$currentGene = ${$RegionsRef}[${$regionOrderRef}{$Chrom}[$r]]{"geneID"};
-		#			}
-		#		}
-		#	}
 		if (@printReg) {
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r-$firstR+1).","; }
@@ -2808,7 +3142,7 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 		for my$r ($firstR..$lastR)  {
 			if (exists ${$Result2Ref}{$patient}{$r}) { push(@printReg,$r) ; }
 			}
-		if (@printReg && scalar@printReg<$maxGeneSep) {
+		if (@printReg && scalar@printReg < ${$CNV_optRef}{"maxGeneSep"}) {
 			$cmdR .= "axis(1, at=c(";
 			foreach my$r (@printReg) { $cmdR .= ($r-$firstR+1).","; }
 			chop $cmdR;
@@ -2819,7 +3153,6 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 	#all not-target sample lines (grey):
 	for (my$p=0;$p<scalar(keys%{$PatientsRef});$p++) {
 		unless ($p == $patient) {
-
 			my$r1 = $firstR;
 			while ($r1 <= $lastR) {
 				my$r2=$r1;
@@ -2857,7 +3190,6 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 					else { last; }
 					}
 				if (($r2-1) > $r1) {
-					#foreach my$fold (1,$seuil_duplication,(-1),$seuil_deletion) {
 					foreach my$fold ($seuil_duplication,$seuil_deletion) {
 						$cmdR .= "lines( c(";
 						for (my$r=$r1;$r<$r2;$r++)
@@ -2927,15 +3259,11 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3Ref}{$patient} }) {
 	$points .= "), type =\"p\", pch = 16, lwd=2, col=\"red\")\n";
 	$cmdR .= $points;
 
-	#if ($normGraf eq "std") { $cmdR .= "abline(h=0, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n"; }
-	#else { $cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n"; }
 	$cmdR .= "abline(h=1, col=\"darkgrey\", lty = \"dashed\", lwd=1)\n";
-
 
 	print CMDR "$cmdR";
 
 	}
-
 
 #print CMDR "title(main=\"sample: ${$PatientsRef}{$patient}{ID}";
 #if (${$PatientsRef}{$patient}{"ecarte"}) { print CMDR " (invalid)\", col.main=\"red\""; }
@@ -2945,7 +3273,6 @@ print CMDR "dev.off()\nquit(save=\"no\")\n";
 close CMDR;
 system "Rscript $outdir/${$PatientsRef}{$patient}{ID}\_temp.R";
 unlink "$outdir/${$PatientsRef}{$patient}{ID}\_temp.R";
-
 
 }
 

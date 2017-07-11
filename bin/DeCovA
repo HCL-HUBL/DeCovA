@@ -781,6 +781,14 @@ if (exists $opt{CNV_fields}) {
 		#$CNV_opt{"fields"}{$_} = 1;
 		}
 	}
+$CNV_opt{"switch2graphByCNV"} = 250;
+$CNV_opt{"maxGeneLab"} = 200;
+$CNV_opt{"maxGeneSep"} = 500;
+$CNV_opt{"graphCNVpadding"} = 4;
+$CNV_opt{"maxDepthGraph"} = 10;
+
+
+
 
 ##opt warnings according to actions 
 
@@ -1318,6 +1326,7 @@ else {
 	}
 
 #eliminates $NM with no corresponding cov bed
+print "eliminates transcripts with no corresponding bed intervals\n";
 if ($All) { notAnalysedG(\%Genes,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
 else  { notAnalysedN(\%Genes,\%NMgene,\%{ $Regions{"raw"} },\%{ $NM_Ex{"raw"} },\%{ $RegBed{"raw"} }); }
 
@@ -3731,8 +3740,9 @@ foreach my$gene (keys%{$Genes}) {
 		changeRegion1($NMs[$i],\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ ${$RegionR}{$chr}{$NMs[$i]} },\%{ ${$NM_ExR}{$NMs[$i]} });
 		}
 	print "\n";
-	foreach (@NMs)
-		{ %{ ${$NM_ExR}{$_} } = %{ $geneNM_Ex{$_} }; }
+	foreach (@NMs) {
+		%{ ${$NM_ExR}{$_} } = %{ $geneNM_Ex{$_} };
+		}
 	}
 %{$RegionR} = %RegionG;
 }
@@ -3898,6 +3908,7 @@ $RegionG3{$startReg} = $endReg;
 #return(\%RegionG3,\%geneNM_Ex3);
 %{$RegionG1} = %RegionG3;
 %{$geneNM_Ex1} = %geneNM_Ex3;
+
 }
 
 
@@ -4520,7 +4531,7 @@ my($spacer,$Region_r) = @_;
 my(%Reg_00,%NMlength);
 
 #$Reg_00{$NM}{$startReg} = endReg (for start of region = 0)
-foreach my$chr (keys%Regions) {
+foreach my$chr (keys%{$Region_r}) {
 	#$gene or $NM
 	foreach my$gene ( keys%{ ${$Region_r}{$chr} } ) {
 		print "transpose and splice $gene\n";
@@ -4609,6 +4620,7 @@ else {
 	}
 
 return($NMstartCod00,$NMendCod00,\%NM_Ex00);
+
 }
 
 
@@ -4692,7 +4704,9 @@ foreach my$gene (keys%{$Gene_r}) {
 			}
 		}
 	}
+
 return(\%intron,\%UTR,\%Cod);
+
 }
 
 #########################
@@ -4773,7 +4787,9 @@ foreach my$NM (keys%{$Reg_00}) {
 			{ $Cod{$NM}{$_} = $Exons{$_}; }
 		}
 	}
+
 return(\%intron,\%UTR,\%Cod);
+
 }
 
 
