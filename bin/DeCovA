@@ -227,7 +227,7 @@ parameters:
 	--ex_region : float [0-1] : region excluded from analysis if CNVs/N_samples >value (def: 1)
 	--ex_sample : float [0-1] : sample excluded from analysis if CNVs/N_regions >value (def: 1)
 	--ex_cov : float [0-1] : region excluded from analysis if none of the samples have cov >=value (def: 0)
-	--ex_DP : int : region excluded from analysis if none of the samples have depth >=value (def: 0)
+	--ex_DP : int : region excluded from analysis if avg/med depth <value (def: 0)
 	--min_CNV : min nber consecutive CNV (def: 1)
 	--max_nonCNVcons : max nber of non-CNV consecutive intervals tolerated within a CNV (def: 0)
 	--max_nonCNVrate : max rate of non-CNV intervals tolerated within a CNV (def: 0)
