@@ -93,19 +93,23 @@ GetOptions (\%opt,
 	"no_overlap_bed",
 	"cut_bed:s",
 	"reAnnot_bed",
-	"seuil_region=f",
-	"seuil_patient=f",
-	"seuil_cov=f",
-	"seuil_del=f",
-	"seuil_dup=f",
+	"level2=s",
+	"spread2=s",
+	"level_del=f",
+	"level_dup=f",
+	"spread_del=f",
+	"spread_dup=f",
+	"range=f",
+	"ex_region=f",
+	"ex_sample=f",
+	"ex_cov=f",
+	"ex_DP=i",
 	"min_CNV=i",
 	"max_nonCNVcons=i",
 	"max_nonCNVrate=f",
-	"normStat=s",
-	"min_DP=i",
-	"normByGender=s",
-	"totalBases",
-	"totalAllChr",
+	"ratioByGender=s",
+	"normAllChr",
+	"normDepth=s",
 	"noCNV_byGene",
 	"noCNV_byChr",
 	"CNV_fields=s@",
@@ -213,24 +217,28 @@ parameters:
 	--reAnnot_bed : removes and replaces 4th column of bed file with gene info
 
   *CNV_detect param:
-	--seuil_del : float ( [0-1] for normStat=mean/mediane (def: 0.8) ; <0 for normStat=std (def: -2) )
-	--seuil_dup : float ( >1 for normStat=mean/mediane (def: 1.2) ; >0 for normStat=std (def: 2) )
-	--seuil_region : float [0-1] : region discarded if CNVs/N_samples >value (def: 1)
-	--seuil_patient : float [0-1] : patient discarded if CNVs/N_regions >value (def: 1)
-	--seuil_cov : float [0-1] : region discarded if none of the samples have cov >value (def: 0)
-	--min_DP : min average depth for a region to be kept (def: 0)
+	--level2 : \"avg\"/\"med\" : use average/median as center of depths of a region (def: med)(if spread2 is set, level2 is unset, unless explicitedly)
+	--spread2 : \"std\"/\"qtile\" : use standard deviation/deviation from quartile as dispersion of depths of a region (def: none)(std forces avg, qtile forces med)
+	--level_del : float , [0-1] (def: 0.8)
+	--level_dup : float , >1 (def: 1.2)
+	--spread_del : float , <0 (def: none)
+	--spread_dup : float , >0  (def: none)
+	--range : samples kept for avg-std calculation if within mediane+/-range*quartile (def: none, ie all samples used)
+	--ex_region : float [0-1] : region excluded from analysis if CNVs/N_samples >value (def: 1)
+	--ex_sample : float [0-1] : sample excluded from analysis if CNVs/N_regions >value (def: 1)
+	--ex_cov : float [0-1] : region excluded from analysis if none of the samples have cov >=value (def: 0)
+	--ex_DP : int : region excluded from analysis if none of the samples have depth >=value (def: 0)
 	--min_CNV : min nber consecutive CNV (def: 1)
 	--max_nonCNVcons : max nber of non-CNV consecutive intervals tolerated within a CNV (def: 0)
 	--max_nonCNVrate : max rate of non-CNV intervals tolerated within a CNV (def: 0)
-	--normStat : MOY/STD/MED , ie average, standard deviation, median (def: MED)
-	--normByGender :	enter \"a\" : foreach region of all chrom, normalize separately for F and M ; 
-				enter \"g\" : foreach region on gonosomes only, normalize separately for F and M
-				def: no (normalize F and M together)
-	--totalBases : sample depths normalized by sum of sequenced bp (def: by mean of all region average depths)
-	--totalAllChr : norm by sum on all chr, whatever the sex (def: double the totalDepth for chrX if male, and skip chrY in the sum)
+	--ratioByGender :	enter \"a\" : foreach region from all chrom, depth ratio computed separately for F and M ; 
+				enter \"g\" : foreach region from gonosomes only, depth ratio computed separately for F and M
+				def: no (depth ratio for F and M together)
+	--normAllChr : total depth used to norm sample depths = sum on all chr, whatever the sex (def: double the depth for chrX if male, and skip chrY in the sum)
+	--normDepth : \"mean\"/\"tot\" : total depth used to norm sample depths = sum of total depths of each region or sum of mean depths of each region (def)
 	--noCNV_byGene : to disable graph for gene affected by a CNV
 	--noCNV_byChr : to disable graph by chr
-	--CNV_fields : fields foreach intervals (comma separated), among: min, max, norm (default: none)
+	--CNV_fields : fields foreach region (comma separated), among: min,max,med,avg,std,Q1,Q3 (default: none)
 
   *external tools path:
 	--bedtools : enter path to executable, if not installed as root or not in path
@@ -729,44 +737,56 @@ if (exists $opt{cov_fields}) {
 
 ## CNV param
 my%CNV_opt;
-$CNV_opt{"norm"} = "med";
-if (exists $opt{normStat}) {
-	if ($opt{normStat} =~ /^moy/i) { $CNV_opt{"norm"} = "moy"; }
-	elsif ($opt{normStat} =~ /^std/i) { $CNV_opt{"norm"} = "std"; }
-	elsif ($opt{normStat} =~ /^med/i) { $CNV_opt{"norm"} = "med"; }
-	else { die "opt --normStat not recognized (MOY/STD/MED)\n"; }
+$CNV_opt{"center"} = "med";
+if (exists $opt{spread2}) { $CNV_opt{"center_test"} = 0; }
+else { $CNV_opt{"center_test"} = 1; }
+if (exists $opt{level2}) {
+	if ($opt{level2} =~ /^avg/i) { $CNV_opt{"center"} = "avg"; }
+	elsif ($opt{level2} =~ /^med/i) { $CNV_opt{"center"} = "med"; }
+	else { die "opt --level2 not recognized (avg/med)\n"; }
+	$CNV_opt{"center_test"} = 1;
 	}
-$CNV_opt{"normByGender"} = "";
-if (exists $opt{normByGender}) {
-	if ($opt{normByGender}=~/a/i) { $CNV_opt{"normByGender"} = "all"; }
-	elsif ($opt{normByGender}=~/g/i) { $CNV_opt{"normByGender"} = "gono"; }
-	elsif ($opt{normByGender}=~/n/i) { $CNV_opt{"normByGender"} = ""; }
-	else { die "opt --normByGender not recognized (a/g)\n"; }
+if (exists $opt{spread2}) {
+	if ($opt{spread2} =~ /^std/i) { $CNV_opt{"spread"} = "std"; $CNV_opt{"center"} = "avg"; }
+	elsif ($opt{spread2} =~ /^q/i) { $CNV_opt{"spread"} = "Qtile"; $CNV_opt{"center"} = "med"; }
+	else { die "opt --spread2 not recognized (std/qtile)\n"; }
+	$CNV_opt{"spread_test"} = 1;
 	}
-$CNV_opt{"RefDepth"} = "mean";
-if (exists $opt{totalBases}) { $CNV_opt{"RefDepth"} = "tot"; }
-$CNV_opt{"RefByGender"} = 1;
-if (exists $opt{totalAllChr}) { $CNV_opt{"RefByGender"} = ""; }
+$CNV_opt{"seuil_del"} = 0.8;
+if (exists $opt{level_del}) { $CNV_opt{"seuil_del"} = $opt{level_del}; }
+$CNV_opt{"seuil_dup"} = 1.2;
+if (exists $opt{level_dup}) { $CNV_opt{"seuil_dup"} = $opt{level_dup}; }
+if (exists $opt{spread_del}) { $CNV_opt{"spread_del"} = $opt{spread_del}; }
+if (exists $opt{spread_dup}) { $CNV_opt{"spread_dup"} = $opt{spread_dup}; }
+if (exists $opt{range}) { $CNV_opt{"range"} = $opt{range}; }
 $CNV_opt{"seuil_region"} = 1;
-if (exists $opt{seuil_region}) { $CNV_opt{"seuil_region"} = $opt{seuil_region}; }
+if (exists $opt{ex_region}) { $CNV_opt{"seuil_region"} = $opt{ex_region}; }
 $CNV_opt{"seuil_patient"} = 1;
-if (exists $opt{seuil_patient}) { $CNV_opt{"seuil_patient"} = $opt{seuil_patient}; }
-$CNV_opt{"seuil_cov"} = "";
-if (exists $opt{seuil_cov}) { $CNV_opt{"seuil_cov"} = $opt{seuil_cov}; }
-$CNV_opt{"seuil_deletion"} = 0.8;
-if ($CNV_opt{"norm"} eq "std") { $CNV_opt{"seuil_deletion"} = -2; }
-if (exists $opt{seuil_del}) { $CNV_opt{"seuil_deletion"} = $opt{seuil_del}; }
-$CNV_opt{"seuil_duplication"} = 1.2;
-if ($CNV_opt{"norm"} eq "std") { $CNV_opt{"seuil_duplication"} = 2; }
-if (exists $opt{seuil_dup}) { $CNV_opt{"seuil_duplication"} = $opt{seuil_dup}; }
+if (exists $opt{ex_sample}) { $CNV_opt{"seuil_patient"} = $opt{ex_sample}; }
+if (exists $opt{ex_cov}) { $CNV_opt{"seuil_cov"} = $opt{ex_cov}; }
+$CNV_opt{"min_DP"} = 0;
+if (exists $opt{ex_DP}) { $CNV_opt{"min_DP"} = $opt{ex_DP}; }
 $CNV_opt{"min_following_CNV"} = "";
 if (exists $opt{min_CNV}) { $CNV_opt{"min_following_CNV"} = $opt{min_CNV}; }
 $CNV_opt{"max_Non_CNV"} = "";
 if (exists $opt{max_nonCNVcons}) { $CNV_opt{"max_Non_CNV"} = $opt{max_nonCNVcons}; }
 $CNV_opt{"max_Non_CNV_rate"} = "";
 if (exists $opt{max_nonCNVrate}) { $CNV_opt{"max_Non_CNV_rate"} = $opt{max_nonCNVrate}; }
-$CNV_opt{"min_DP"} = 0;
-if (exists $opt{min_DP}) { $CNV_opt{"min_DP"} = $opt{min_DP}; }
+$CNV_opt{"ratioByGender"} = "";
+if (exists $opt{ratioByGender}) {
+	if ($opt{ratioByGender}=~/^a/i) { $CNV_opt{"ratioByGender"} = "all"; }
+	elsif ($opt{ratioByGender}=~/^g/i) { $CNV_opt{"ratioByGender"} = "gono"; }
+	elsif ($opt{ratioByGender}=~/^n/i) { $CNV_opt{"ratioByGender"} = ""; }
+	else { die "opt --ratioByGender not recognized (a/g/n)\n"; }
+	}
+$CNV_opt{"RefDepth"} = "mean";
+if (exists $opt{normDepth}) {
+	if ($opt{normDepth}=~/^m/i) { $CNV_opt{"RefDepth"} = "mean"; }
+	elsif ($opt{normDepth}=~/^t/i) { $CNV_opt{"RefDepth"} = "tot"; }
+	else { die "opt --normDepth not recognized (mean/tot)\n"; }
+	}
+$CNV_opt{"RefNoChrY"} = 1;
+if (exists $opt{normAllChr}) { $CNV_opt{"RefNoChrY"} = ""; }
 $CNV_opt{"geneGraph"} = 1;
 if (exists $opt{noCNV_byGene} || ($bed_cov_file && !@raw_cov_file)) { $CNV_opt{"geneGraph"} = ""; }
 $CNV_opt{"chromGraph"} = 1;
@@ -774,11 +794,9 @@ if (exists $opt{noCNV_byChr}) { $CNV_opt{"chromGraph"} = ""; }
 @{ $CNV_opt{"fields"} } = ();
 if (exists $opt{CNV_fields}) {
 	@{ $CNV_opt{"fields"} } = split(/,/, join(',',@{$opt{CNV_fields}}));
-	my%CNVfieldList = ("min"=>1,"max"=>1,"norm"=>1);
-	for (my$i=0;$i<scalar@{ $CNV_opt{"fields"} };$i++) {
-		unless (exists $CNVfieldList{$CNV_opt{"fields"}[$i]}) { die $CNV_opt{"fields"}[$i]."CNV field not recognized (min,max,norm)\n"; }
-		if ($CNV_opt{"fields"}[$i] eq "norm") { $CNV_opt{"fields"}[$i] = $CNV_opt{"norm"} ; }
-		#$CNV_opt{"fields"}{$_} = 1;
+	my%CNVfieldList = ("min"=>1,"max"=>1,"med"=>1,"avg"=>1,"std"=>1,"Q1"=>1,"Q3"=>1);
+	foreach (@{ $CNV_opt{"fields"} }) {
+		unless (exists $CNVfieldList{$_}) { die "$_ CNV field not recognized (min,max,norm)\n"; }
 		}
 	}
 $CNV_opt{"switch2graphByCNV"} = 250;
@@ -1971,14 +1989,14 @@ if ($jobs{"interSplot"}) {
 ###################
 #Job 5: cov of each bed interval
 
-my($refBedLines);
+my($bedLines_r);
 if ($jobs{"covBed"}) {
 	if ($bedFile) {
-		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
+		$bedLines_r = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
 		#%bedLines = %{$hashSub[0]};		
 		}
 	else {
-		$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
+		$bedLines_r = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,$gatk,\%gatkIdx);
 		#%bedLines = %{$hashSub[0]};		
 
 		}
@@ -1996,7 +2014,7 @@ if ($jobs{"CNV"}) {
 	
 		mkdir "$outdir/CNV_analysis";
 
-		@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$mbq,$mmq,$refBedLines,\@ChromOrder,\%faIdx);
+		@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$bedLines_r,\@ChromOrder);
 		%cnv_Patients = %{$hashSub[0]};
 		%cnv_Results = %{$hashSub[1]};
 
@@ -7600,18 +7618,12 @@ unlink "$outdir/hist_temp.R";
 
 ################################
 
-##$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$toReseq,\@covFields,$gatk,\%gatkIdx);
-##$refBedLines = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$toReseq,\@covFields,$gatk,\%gatkIdx);
+##$bedLines_r = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,\%Bed,$pThreshold,$toReseq,\@covFields,$gatk,\%gatkIdx);
+##$bedLines_r = Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,\%coordBed,$pThreshold,$toReseq,\@covFields,$gatk,\%gatkIdx);
 
-sub Bed_Cov
-{
-my($h1,$h2,$h3,$outdir,$bedFile,$bedName,$h4,$threshold,$toReseq,$bedReport,$h5,$gatk,$h6) = @_;
-my@Files = @$h1;
-my%fName = %$h2;
-my%sName2 = %$h3;
-my%mergeBed = %$h4;
-my@covFields = @$h5;
-my%gatkIdx = %$h6;
+sub Bed_Cov {
+
+my($Files_r,$fName_r,$sName_r,$outdir,$bedFile,$bedName,$mergeBed_r,$threshold,$toReseq,$bedReport,$covFields_r,$gatk,$gatkIdx_r) = @_;
 
 print "perform bed coverage by interval";
 if ($threshold) { print " ($threshold X)\n"; }
@@ -7634,9 +7646,9 @@ while (my$line=<BED>) {
 	$i++;
 	}
 close BED;
-foreach my$chr (keys%mergeBed) {
-	foreach my$start (keys%{ $mergeBed{$chr} })
-		{ $Intervals{$chr}{$start}{$mergeBed{$chr}{$start}} = 1; }
+foreach my$chr (keys%{$mergeBed_r}) {
+	foreach my$start (keys%{ ${$mergeBed_r}{$chr} })
+		{ $Intervals{$chr}{$start}{${$mergeBed_r}{$chr}{$start}} = 1; }
 	}
 foreach my$chr (keys%Intervals) {
 	foreach my$start (keys%{ $Intervals{$chr} })
@@ -7644,8 +7656,8 @@ foreach my$chr (keys%Intervals) {
 	}
 
 my(%min,%max,%sum,%mean,%median,%cov,%notCov,%TotBases,%TotByCov);
-foreach my$file (@Files) {
-	print "\tfile $fName{$file}\n";
+foreach my$file (@{$Files_r}) {
+	print "\tfile ${$fName_r}{$file}\n";
 	my(%vals);
 	foreach my$chr (keys%Intervals) {
 		foreach my$start (keys%{ $Intervals{$chr} }) {
@@ -7690,14 +7702,14 @@ foreach my$file (@Files) {
 			my$c2 = $c;			##@Starts iteration within while loop
 			if ($pos == $Starts[$c2]) {
 				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
-					$min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}];
-					$max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}];
+					$min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[${$gatkIdx_r}{$file}];
+					$max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[${$gatkIdx_r}{$file}];
 					}
 				}
 			while ( ($pos >= $Starts[$c2]) && ($c2 < (scalar@Starts-1)) ) {
 				foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
 					if ($pos <= $end) {
-						if ($threshold && $tab[$gatkIdx{$file}] >= $threshold)
+						if ($threshold && $tab[${$gatkIdx_r}{$file}] >= $threshold)
 							{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
 						else {
 							if ( $pos == ($noCovEnd{$Starts[$c2]}{$end} + 1) ) { 
@@ -7710,18 +7722,18 @@ foreach my$file (@Files) {
 								$noCovEnd{$Starts[$c2]}{$end} = $pos;
 								}
 							}
-						if ($tab[$gatkIdx{$file}] < $min{$file}{$chr}{$Starts[$c2]}{$end})
-							{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
-						if ($tab[$gatkIdx{$file}] > $max{$file}{$chr}{$Starts[$c2]}{$end})
-							{ $max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
-						push(@{ $vals{$chr}{$Starts[$c2]}{$end} },$tab[$gatkIdx{$file}]);
+						if ($tab[${$gatkIdx_r}{$file}] < $min{$file}{$chr}{$Starts[$c2]}{$end})
+							{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[${$gatkIdx_r}{$file}]; }
+						if ($tab[${$gatkIdx_r}{$file}] > $max{$file}{$chr}{$Starts[$c2]}{$end})
+							{ $max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[${$gatkIdx_r}{$file}]; }
+						push(@{ $vals{$chr}{$Starts[$c2]}{$end} },$tab[${$gatkIdx_r}{$file}]);
 						}
 				 	}
 				$c2++;
 				}
 			foreach my$end (@{ $Intervals2{$chr}{$Starts[$c2]} }) {
 				if (($pos >= $Starts[$c2]) && ($pos <= $end)) {
-					if ($threshold && $tab[$gatkIdx{$file}] >= $threshold)
+					if ($threshold && $tab[${$gatkIdx_r}{$file}] >= $threshold)
 						{ $cov{$file}{$chr}{$Starts[$c2]}{$end}++; }
 					else {
 						if ( $pos == ($noCovEnd{$Starts[$c2]}{$end} + 1) ) { 
@@ -7734,11 +7746,11 @@ foreach my$file (@Files) {
 							$noCovEnd{$Starts[$c2]}{$end} = $pos; 
 							}
 						}
-					if ($tab[$gatkIdx{$file}] < $min{$file}{$chr}{$Starts[$c2]}{$end})
-						{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
-					if ($tab[$gatkIdx{$file}] > $max{$file}{$chr}{$Starts[$c2]}{$end})
-						{ $max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[$gatkIdx{$file}]; }
-					push(@{ $vals{$chr}{$Starts[$c2]}{$end} },$tab[$gatkIdx{$file}]);
+					if ($tab[${$gatkIdx_r}{$file}] < $min{$file}{$chr}{$Starts[$c2]}{$end})
+						{ $min{$file}{$chr}{$Starts[$c2]}{$end} = $tab[${$gatkIdx_r}{$file}]; }
+					if ($tab[${$gatkIdx_r}{$file}] > $max{$file}{$chr}{$Starts[$c2]}{$end})
+						{ $max{$file}{$chr}{$Starts[$c2]}{$end} = $tab[${$gatkIdx_r}{$file}]; }
+					push(@{ $vals{$chr}{$Starts[$c2]}{$end} },$tab[${$gatkIdx_r}{$file}]);
 					}
 				}
 			if ( $pos > $Intervals2{$chr}{$Starts[-1]}[-1] ) {
@@ -7753,8 +7765,8 @@ foreach my$file (@Files) {
 		}
 
 	else {
-		unless ( -s "$outdir/$fName{$file}.cov" ) { die "$outdir/$fName{$file}.cov not found or empty\n"; }
-		open(COV, "$outdir/$fName{$file}.cov") || die "can't open file $outdir/$fName{$file}.cov\n";
+		unless ( -s "$outdir/${$fName_r}{$file}.cov" ) { die "$outdir/${$fName_r}{$file}.cov not found or empty\n"; }
+		open(COV, "$outdir/${$fName_r}{$file}.cov") || die "can't open file $outdir/${$fName_r}{$file}.cov\n";
 		while (my$line=<COV>) {
 			chomp $line;
 			my@tab = split(/\t/,$line);
@@ -7866,9 +7878,9 @@ foreach my$file (@Files) {
 				}
 			}
 		}
-	foreach my$chr (keys%mergeBed) {
-		foreach my$start (keys%{ $mergeBed{$chr} }) {
-			foreach (@{ $vals{$chr}{$start}{$mergeBed{$chr}{$start}} }) {
+	foreach my$chr (keys%{$mergeBed_r}) {
+		foreach my$start (keys%{ ${$mergeBed_r}{$chr} }) {
+			foreach (@{ $vals{$chr}{$start}{${$mergeBed_r}{$chr}{$start}} }) {
 				$TotBases{$file} += $_;
 				if ($threshold && $_ >= $threshold)
 					{ $TotByCov{$file} ++; }
@@ -7878,15 +7890,15 @@ foreach my$file (@Files) {
 	}
 
 my$meanTotBases=0;
-foreach (@Files) { $meanTotBases += $TotBases{$_}; }
+foreach (@{$Files_r}) { $meanTotBases += $TotBases{$_}; }
 if ($meanTotBases)
-	{ $meanTotBases /= scalar@Files; }
+	{ $meanTotBases /= scalar@{$Files_r}; }
 else { print "no bases sequenced within bed in all samples!\n"; }
 
 my$TotLength = 0;
-foreach my$chr (keys%mergeBed) {
-	foreach my$start (keys%{ $mergeBed{$chr} })
-		{ $TotLength += ($mergeBed{$chr}{$start} - $start + 1); }
+foreach my$chr (keys%{$mergeBed_r}) {
+	foreach my$start (keys%{ ${$mergeBed_r}{$chr} })
+		{ $TotLength += (${$mergeBed_r}{$chr}{$start} - $start + 1); }
 	}
 
 
@@ -7900,14 +7912,14 @@ foreach (@allLines) {
 open(OUT1, ">$outdir/$bedName.cov.txt") || die "can't create file $outdir/$bedName.cov.bed\n";
 print OUT1 "##samples:";
 for (my$i=0;$i<($nCol-1);$i++) { print OUT1 "\t"; }
-foreach (@Files) { 
-	print OUT1 "\t$sName2{$_}";
-	for (my$i=1;$i<scalar@covFields;$i++) { print OUT1 "\t"; }
+foreach (@{$Files_r}) { 
+	print OUT1 "\t${$sName_r}{$_}";
+	for (my$i=1;$i<scalar@{$covFields_r};$i++) { print OUT1 "\t"; }
 	}
 print OUT1 "\n##bed col.";
 for (my$i=0;$i<($nCol-1);$i++) { print OUT1 "\t"; }
-foreach (@Files) {
-	foreach(@covFields) {
+foreach (@{$Files_r}) {
+	foreach(@{$covFields_r}) {
 		if ($_ eq "cov") { print OUT1 "\t%>=$threshold"."X"; }
 		else { print OUT1 "\t$_"; }
 		}
@@ -7920,10 +7932,11 @@ $j=0;
 for (my$i=0;$i<scalar@allLines;$i++) {
 	print OUT1 $allLines[$i];
 	if (exists $Chr{$i}) {
-		foreach my$file (@Files) { 
-			$bedLines[$j]{$file}{"Cov"} = $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}};
-			$bedLines[$j]{$file}{"Mean"} = $mean{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}};
-			foreach(@covFields) {
+		foreach my$file (@{$Files_r}) { 
+			$bedLines[$j]{$file}{"cov"} = $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}};
+			$bedLines[$j]{$file}{"mean"} = $mean{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}};
+			$bedLines[$j]{$file}{"tot"} = $sum{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}};
+			foreach(@{$covFields_r}) {
 				if ($_ eq "min") { print OUT1 "\t".$min{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}; }
 				elsif ($_ eq "max") { print OUT1 "\t".$max{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}; }
 				elsif ($_ eq "tot") { print OUT1 "\t".$sum{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}; }
@@ -7932,7 +7945,7 @@ for (my$i=0;$i<scalar@allLines;$i++) {
 				elsif ($_ eq "cov") { print OUT1 "\t".100*(sprintf("%.3f", $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}))."%"; }
 				}
 			if ($toReseq && $bedLines[$j]{$file}{"Cov"} < $toReseq) 
-				{ push(@{ $reseq{$i} },"$sName2{$file} (".100*(sprintf("%.3f", $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}))."%)"); }
+				{ push(@{ $reseq{$i} },"${$sName_r}{$file} (".100*(sprintf("%.3f", $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}))."%)"); }
 			}
 		$j++;
 		}
@@ -7948,9 +7961,9 @@ close OUT1;
 if ($toReseq) { close OUT2; }
 
 if ($bedReport && $threshold) {
-	foreach my$file (@Files) {
-		open(OUT, ">$outdir/cov\_$sName2{$file}/$bedName.$sName2{$file}.notCov.txt") || die "can't create file $outdir/cov\_$sName2{$file}/$bedName.$sName2{$file}.notCov.bed\n";
-		print OUT "depthAnd Coverage report on $bedName.bed for $sName2{$file} sample\n\n";
+	foreach my$file (@{$Files_r}) {
+		open(OUT, ">$outdir/cov\_${$sName_r}{$file}/$bedName.${$sName_r}{$file}.notCov.txt") || die "can't create file $outdir/cov\_${$sName_r}{$file}/$bedName.${$sName_r}{$file}.notCov.bed\n";
+		print OUT "depthAnd Coverage report on $bedName.bed for ${$sName_r}{$file} sample\n\n";
 		print OUT "total length of bed : $TotLength bp\n\n";
 		print OUT "total cov >=$threshold"."x : ".100*(sprintf("%.3f", ($TotByCov{$file}/$TotLength)))." %\n\n";
 		print OUT "mean depth : ".sprintf("%.1f", ($TotBases{$file}/$TotLength))." x\n\n";
