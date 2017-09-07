@@ -2056,7 +2056,7 @@ my$maxDepthGraph = ${$CNV_opt_r}{"maxDepthGraph"};
 ##1 sheet / chr :
 open (CMDR, ">$outdir/${$sampleName_r}{$file}\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "pdf(\"$outdir/CNV_".${$sampleName_r}{$file}.".pdf\", width=11.69, height=4,135)\n";
+print CMDR "pdf(\"$outdir/CNV_".${$sampleName_r}{$file}.".pdf\", width=11.69, height=4.135)\n";
 
 foreach my$Chrom (@{$ChromOrder_r}) {
 
@@ -2403,7 +2403,7 @@ print CMDR "#!/usr/bin/env Rscript\n\n" ;
 #par(mfrow=c($Nbr_Chr,1))\n";		#A4 size print measures 21.0 x 29.7cm, 8.27 x 11.69 inches
 
 ##1 sheet / chr
-print CMDR "pdf(\"".$outdir."/CNV_".${$PatientsRef}{$patient}{"ID"}.".pdf\", width=11.69, height=4,135)\n";
+print CMDR "pdf(\"".$outdir."/CNV_".${$PatientsRef}{$patient}{"ID"}.".pdf\", width=11.69, height=4.135)\n";
 
 
 for my$Chrom (@{$ChrOrderRef}) {	
@@ -2687,7 +2687,7 @@ my$ploidy = ${$CNV_opt_r}{"ploidy"};
 
 open (CMDR, ">$outdir/${$sampleName_r}{$file}\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "pdf(\"$outdir/CNV_".${$sampleName_r}{$file}.".pdf\", width=11.69, height=4,135)\n";
+print CMDR "pdf(\"$outdir/CNV_".${$sampleName_r}{$file}.".pdf\", width=11.69, height=4.135)\n";
 
 foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3_r}{$file} }) {
 

@@ -607,11 +607,11 @@ my$spacer = 0;
 
 my$Rev = 1;
 if (exists $opt{noReverse})
-	{ $Rev=0; }
+	{ $Rev = 0; }
 
 my$All = 1;		##all transcripts on same graph; no longer disable possibility
 if (exists $opt{noEachTranscript}) 
-	{ $All=0; }
+	{ $All = 0; }
 
 my$gThreshold = 1;
 if (exists $opt{noGraphThreshold})
@@ -5927,7 +5927,7 @@ return(\%NMCovEnd,\%NMCovVal);
 #for $All $NM on same graph
 # graphAllSampleG($nGraf,$suff,$outdir,$gene,$sens,$maxGr,$Rev,$chr,$maxCovA{$gene},$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,$Regions{"raw"},$Regions{"rev"},$NM_Ex{"rev"},$RegBed{"rev"},$intron{"rev"},$UTR{"rev"},$Cod{"rev"},$NMdepth{$gene},$covStart01{$gene},$covEnd01{$gene},$RegMut{"rev"},\%sName2);
 
-sub graphAllSampleG {
+sub graphAllSampleG_old {	# = all in 1 sheet, in png
 my($nGraf,$suff,$outdir,$gene,$sens,$maxD,$Rev,$chr,$maxY,$NMlength,$NMs_r,$Files_r,$colors_r,$Thresholds_r,$Regions_r,$Reg_00_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMdepth_r,$covStart01_r,$covEnd01_r,$NMmut00_r,$sampleName_r)= @_;
 
 print "print CMDR graphAllSampleG: $gene\n";
@@ -5974,7 +5974,7 @@ foreach my$file (@{$Files_r}) {
 	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
 	my$line4a="";
 	for(my$i=0;$i<$nNMs;$i++) {
-		if (scalar(keys%{ $UTR_r->{${$NMs_r}[$i]} })!=0) {
+		if (scalar(keys%{ $UTR_r->{${$NMs_r}[$i]} }) != 0) {
 			$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
 			$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR_r->{${$NMs_r}[$i]} });
 			}
@@ -5983,7 +5983,7 @@ foreach my$file (@{$Files_r}) {
 	#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
 	my$line4b="";
 	for(my$i=0;$i<$nNMs;$i++) {
-		if (scalar(keys%{ $Cod_r->{${$NMs_r}[$i]} })) {
+		if (scalar(keys%{ $Cod_r->{${$NMs_r}[$i]} }) != 0) {
 			$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
 			$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod_r->{${$NMs_r}[$i]} });
 			}
@@ -6076,10 +6076,148 @@ par(mfrow=c($n,1))\n"; }
 }
 
 ########################
+#for $All $NM on same graph
+# graphAllSampleG($nGraf,$suff,$outdir,$gene,$sens,$maxGr,$Rev,$chr,$maxCovA{$gene},$NMlength{$gene},\@NMs,\@Files,\@colors,\@Thresholds,$Regions{"raw"},$Regions{"rev"},$NM_Ex{"rev"},$RegBed{"rev"},$intron{"rev"},$UTR{"rev"},$Cod{"rev"},$NMdepth{$gene},$covStart01{$gene},$covEnd01{$gene},$RegMut{"rev"},\%sName2);
+
+sub graphAllSampleG {		#1sample by sheet, 1 doc in pdf
+
+my($nGraf,$suff,$outdir,$gene,$sens,$maxD,$Rev,$chr,$maxY,$NMlength,$NMs_r,$Files_r,$colors_r,$Thresholds_r,$Regions_r,$Reg_00_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMdepth_r,$covStart01_r,$covEnd01_r,$NMmut00_r,$sampleName_r) = @_;
+
+print "print CMDR graphAllSampleG: $gene\n";
+
+unless ($maxD) {
+	if ($maxY<10) { $maxY = 10; }
+	}
+
+my$nNMs = scalar@{$NMs_r};
+my@Starts = sort{$a<=>$b}(keys%{ $Regions_r->{$chr}{$gene} });
+my$startReg = $Starts[0];
+my$endReg = $Regions_r->{$chr}{$gene}{$Starts[-1]};
+
+open (CMDR, ">$outdir/$gene\_temp.R") || die;
+print CMDR "#!/usr/bin/env Rscript\n\n" ;
+print CMDR "pdf(\"".$outdir."/cov_All/".$gene."_bySample.pdf\", width=11.69, height=".(4.135*(0.75+0.875+(0.125*$nNMs))/1.75).")\n";
+
+foreach my$file (@{$Files_r}) {
+
+	my$cmdR = "";
+
+	my($Y,$Y1,$Y2);
+
+	#$line1: cmdR for plot cov line
+	#@{ $NMdepth{$file}{$ex} } = [ cov foreach ordered bp of exon ]
+	$Y1=(0.5+0.25*$nNMs);$Y2=1.25;
+	my($line1a,$line1b) = line1($maxY,$NMlength,$Y1,$Y2,\%{ $Reg_00_r->{$gene} },\%{ $NMdepth_r->{$file} });
+	
+	#$line2: cmdR for cmdR for lines(intron)	#$intron{$startInt} = $endInt;
+	my$line2="";
+	for(my$i=0;$i<$nNMs;$i++) { 
+		$Y=(0.425+0.25*$i);
+		$line2 .= line2($maxY,$Y,\%{ $intron_r->{${$NMs_r}[$i]} });
+		}
+
+	#$line3a: cmdR for rect(bed, empty)	#$NMbed00{$startBed00} = $endBed00 (start of Region=0 )
+	$Y1=0.1;$Y2=0.25;
+	my$line3a = line3a($maxY,$Y1,$Y2,\%{ $NMbed00_r->{$gene} });
+	my$line3b = line3a($maxY,$Y1,$Y2,\%{ $Reg_00_r->{$gene} });
+
+	#$line3: cmdR for rect(not covered domains)
+	#$covEnd01{$file}{$threshold}{$ex}{$notCovStart00} = $notCovEnd00;
+	#@{ $covStart01{$file}{$threshold}{$ex} } = [ordered $notCovStarts00]
+	$Y1=0.1;$Y2=0.25;
+	my%line3 = line3($maxY,$Y1,$Y2,$Thresholds_r,$colors_r,scalar(keys%{ $Reg_00_r->{$gene} }),\%{ $covStart01_r->{$file} },\%{ $covEnd01_r->{$file} });
+
+	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
+	my$line4a="";
+	for(my$i=0;$i<$nNMs;$i++) {
+		if (scalar(keys%{ $UTR_r->{${$NMs_r}[$i]} }) != 0) {
+			$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
+			$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR_r->{${$NMs_r}[$i]} });
+			}
+		}
+
+	#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
+	my$line4b="";
+	for(my$i=0;$i<$nNMs;$i++) {
+		if (scalar(keys%{ $Cod_r->{${$NMs_r}[$i]} }) != 0) {
+			$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
+			$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod_r->{${$NMs_r}[$i]} });
+			}
+		}
+	
+	#$line4c: Nb exon
+	#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+	my$line4c="";
+	for(my$i=0;$i<$nNMs;$i++) {
+		$Y=(0.3+0.25*$i);
+		$line4c .= line4c($sens,$Rev,$maxY,$Y,\%{ ${$NM_Ex00_r}{${$NMs_r}[$i]} });
+		}
+	
+	#$line5: cmdR for legends
+	my$comp = "<";
+	my$line5 = line5a($comp,$colors_r,$Thresholds_r);
+	
+	#$line6: cmdR for mutations (symbol)
+	#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+	my$line6a = ""; my$line6b = "";
+	if (scalar(keys%{ $NMmut00_r->{$gene} }) != 0) {
+		$Y1=0.05;$Y2=(0.3+0.25*$nNMs);
+		$line6a = line6a($maxY,$Y1,$Y2,\%{ $NMmut00_r->{$gene} });
+		#$line6b: cmdR for mutations (text)
+		#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
+		$Y=(0.3+0.25*$nNMs);
+		$line6b = line6b($maxY,$Y,\%{ $NMmut00_r->{$gene} });
+		}
+
+	#$line7: NM names
+	my$line7 = line7($NMlength,$maxY,$NMs_r);
+
+	#print CMDR:
+	$cmdR .= "plot (c(0,0), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"n\", xlab = \"sample : ".${$sampleName_r}{$file}."\", ylab = \"Depth\", cex.lab=1, cex.axis=0.8, yaxt='n')
+axis(2, at=seq(0, $maxY, length = 5), labels=seq(0, $maxY, length = 5), las=2, cex.axis=0.8)\n";
+
+	$cmdR .= $line1a.$line1b;
+
+	$cmdR .= "abline(h=0, col=\"darkgrey\", lty = \"dotted\", lwd=1.5)\n";
+	my$col=0;
+	foreach my$threshold (@{$Thresholds_r}) {
+		$cmdR .= "abline(h=$threshold, col=\"".${$colors_r}[$col]."\", lty = \"dotted\", lwd=1.5)\n"; 
+		$col++;
+		}
+
+	$cmdR .= $line2.$line4a.$line4b.$line4c.$line5.$line6a.$line6b.$line7;
+
+	$cmdR .= $line3b." lwd=1, col=\"green\", border =\"green\")\n";
+	foreach my$threshold (@{$Thresholds_r}) {
+		if ($line3{$threshold}) 
+			{ $cmdR .= $line3{$threshold}; }
+		}
+	$cmdR .= $line3a." lwd=1, col=NA, border =\"black\")\n";
+	
+	if ($sens eq "+") {
+		$cmdR .= "mtext(\"$gene : chr $chr:$startReg >>> $endReg\", side = 3, outer=TRUE, line=-3, cex=1)\n";
+		}
+	else {
+		$cmdR .= "mtext(\"$gene : chr $chr:$startReg <<< $endReg\", side = 3, outer=TRUE, line=-3, cex=1)\n";
+		}
+	
+	print CMDR "$cmdR\n";
+
+	}
+
+print CMDR "dev.off();\n";
+close CMDR;
+system "Rscript $outdir/$gene\_temp.R";
+unlink "$outdir/$gene\_temp.R";
+
+}
+
+
+########################
 #graph foreach $NM 
 # graphAllSampleN($nGraf,$NM,$suff,$outdir,$gene,$sens,$maxGr,$Rev,$chr,$maxCovA{$NM},$NMlength{$NM},\@Files,\@colors,\@Thresholds,$Regions{"raw"},$Regions{"rev"},$NM_Ex{"rev"},$RegBed{"rev"},$intron{"rev"},$UTR{"rev"},$Cod{"rev"},$NMdepth{$NM},$covStart01{$NM},$covEnd01{$NM},$RegMut{"rev"},\%sName2);
 
-sub graphAllSampleN {
+sub graphAllSampleN {	#still in png, but not used anymore
 
 my($nGraf,$NM,$suff,$outdir,$gene,$sens,$maxD,$Rev,$chr,$maxY,$NMlength,$Files_r,$colors_r,$Thresholds_r,$Regions_r,$Reg_00_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMdepth_r,$covStart01_r,$covEnd01_r,$NMmut00_r,$sampleName_r)= @_;
 
@@ -6121,12 +6259,12 @@ foreach my$file (@{$Files_r}) {
 	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$startUTR} = $endUTR;
 	$Y1=0.375;$Y2=0.475;
 	my$line4a = "";
-	if (scalar(keys%UTR)!=0) { $line4a .= line4a($maxY,$Y1,$Y2,\%UTR); }
+	if (scalar(keys%{ $UTR_r->{$NM} }) != 0) { $line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR_r->{$NM} }); }
 
 	#$line4b: cmdR for rect(coding exons)	#$Cod{$startCod} = $endCod;
 	$Y1=0.35;$Y2=0.5;
 	my$line4b = "";
-	if (scalar(keys%Cod)!=0) { $line4b .= line4b($maxY,$Y1,$Y2,\%Cod); }
+	if (scalar(keys%{ $Cod_r->{$NM} }) != 0) { $line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod_r->{$NM} }); }
 
 	#$line4c: Nb exon
 	#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
@@ -6228,8 +6366,8 @@ foreach my$file (@{$Files_r}) {
 	print "print CMDR graphBySampleG: $gene\n";
 	open (CMDR, ">$outdir/$gene\_temp.R") || die;
 	print CMDR "#!/usr/bin/env Rscript\n\n" ;
-	print CMDR 
-	"png(\"$outdir/cov\_".${$sampleName_r}{$file}."/$gene\_".${$sampleName_r}{$file}.".png\", 1500, ".(400*(0.875+(0.125*$nNMs))).")\n"; 
+	#print CMDR "png(\"$outdir/cov\_".${$sampleName_r}{$file}."/$gene\_".${$sampleName_r}{$file}.".png\", 1500, ".(400*(0.875+(0.125*$nNMs))).")\n";
+	print CMDR "pdf(\"$outdir/cov\_".${$sampleName_r}{$file}."/$gene\_".${$sampleName_r}{$file}.".pdf\", width=11.69, height=".(4.135*(0.75+0.875+(0.125*$nNMs))/1.75).")\n";
 
 	my$maxY = $maxCov_r->{$file};
 	unless ($maxD) {
@@ -6237,7 +6375,7 @@ foreach my$file (@{$Files_r}) {
 		}
 
 	my($Y,$Y1,$Y2);
-	#$line1: cmdR for plot cov line
+	#$line1: cmdR for plot depth line
 	#@{ $NMdepth{$file}{$ex} } = [ cov foreach ordered bp of exon ]
 	$Y1=(0.5+0.25*$nNMs);$Y2=1.25;
 	my($line1a,$line1b) = line1($maxY,$NMlength,$Y1,$Y2,\%{ $Reg_00_r->{$gene} },\%{ $NMdepth_r->{$file} });
@@ -6263,18 +6401,18 @@ foreach my$file (@{$Files_r}) {
 	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
 	my$line4a="";
 	for(my$i=0;$i<$nNMs;$i++) {
-		if (scalar(keys%{ $UTR{${$NMs_r}[$i]} })!=0) {
+		if (scalar(keys%{ $UTR_r->{${$NMs_r}[$i]} }) != 0) {
 			$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
-			$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR{${$NMs_r}[$i]} });
+			$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR_r->{${$NMs_r}[$i]} });
 			}
 		}
 
 	#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
 	my$line4b="";
 	for(my$i=0;$i<$nNMs;$i++) {
-		if (scalar(keys%{ $Cod{${$NMs_r}[$i]} })!=0) {
+		if (scalar(keys%{ $Cod_r->{${$NMs_r}[$i]} }) != 0) {
 			$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
-			$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod{${$NMs_r}[$i]} });
+			$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod_r->{${$NMs_r}[$i]} });
 			}
 		}
 	
@@ -6306,18 +6444,17 @@ foreach my$file (@{$Files_r}) {
 	my$line7 = line7($NMlength,$maxY,$NMs_r);
 
 	#print CMDR:
-	print CMDR 
-"plot (c(0,0), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"n\", xlab = \"sample : ".${$sampleName_r}{$file}."\", ylab = \"depth\", cex.lab=1.5, cex.axis=1.2, yaxt='n')
-axis(2, at=seq(0, $maxY, length = 5),labels=seq(0, $maxY, length = 5), las=2)\n";
+	print CMDR "plot (c(0,0), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"n\", xlab = \"sample : ".${$sampleName_r}{$file}."\", ylab = \"depth\", cex.lab=1, cex.axis=0.8, yaxt='n')
+axis(2, at=seq(0, $maxY, length = 5),labels=seq(0, $maxY, length = 5), las=2, cex.axis=0.8)\n";
+	#png:"plot (c(0,0), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"n\", xlab = \"sample : ".${$sampleName_r}{$file}."\", ylab = \"depth\", cex.lab=1.5, cex.axis=1.2, yaxt='n')
+#axis(2, at=seq(0, $maxY, length = 5),labels=seq(0, $maxY, length = 5), las=2, cex.axis=1.2)\n";
 
 	print CMDR $line1a.$line1b;
 
-	print CMDR 
-"abline(h=0, col=\"darkgrey\", lty = \"dotted\", lwd=2)\n";
+	print CMDR "abline(h=0, col=\"darkgrey\", lty = \"dotted\", lwd=1.5)\n";
 	my$col=0;
 	foreach my$threshold (@{$Thresholds_r}) {
-		print CMDR 
-"abline(h=$threshold, col=\"".${$colors_r}[$col]."\", lty = \"dotted\", lwd=2)\n"; 
+		print CMDR "abline(h=$threshold, col=\"".${$colors_r}[$col]."\", lty = \"dotted\", lwd=1.5)\n"; 
 		$col++;
 		}
 
@@ -6331,13 +6468,14 @@ axis(2, at=seq(0, $maxY, length = 5),labels=seq(0, $maxY, length = 5), las=2)\n"
 	print CMDR $line3a." lwd=1, col=NA, border =\"black\")\n";
 	
 	if ($sens eq "+") {
-		print CMDR 
-		"mtext(\"$gene\tchr $chr\t".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+		#png: print CMDR "mtext(\"$gene\tchr $chr\t".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+		print CMDR "mtext(\"$gene : chr $chr:$startReg >>> $endReg\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 		}
 	else {
-		print CMDR 
-		"mtext(\"$gene\tchr $chr\t".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+		#png: print CMDR "mtext(\"$gene\tchr $chr\t".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+		print CMDR "mtext(\"$gene : chr $chr:$startReg <<< $endReg\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 		}
+
 	print CMDR "dev.off();\n";
 	close CMDR;
 	system "Rscript $outdir/$gene\_temp.R";
@@ -6351,7 +6489,7 @@ axis(2, at=seq(0, $maxY, length = 5),labels=seq(0, $maxY, length = 5), las=2)\n"
 #graph foreach $NM
 # graphBySampleN($nGraf,$NM,$suff,$outdir,$gene,$sens,$maxGr,$Rev,$chr,$NMlength{$NM},$maxCovS{$NM},\@Files,\@colors,\@Thresholds,$Regions{"raw"},$Regions{"rev"},$NM_Ex{"rev"},$RegBed{"rev"},$intron{"rev"},$UTR{"rev"},$Cod{"rev"},$NMdepth{$NM},$covStart01{$NM},$covEnd01{$NM},$RegMut{"rev"},\%sName2);
 
-sub graphBySampleN {
+sub graphBySampleN {	#still in png, but not used anymore
 
 my($nGraf,$NM,$suff,$outdir,$gene,$sens,$maxD,$Rev,$chr,$NMlength,$maxCov_r,$Files_r,$colors_r,$Thresholds_r,$Regions_r,$Reg_00_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMdepth_r,$covStart01_r,$covEnd01_r,$NMmut00_r,$sampleName_r)= @_;
 
@@ -6395,12 +6533,12 @@ foreach my$file (@{$Files_r}) {
 	#$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
 	$Y1=0.375;$Y2=0.475;
 	my$line4a = "";
-	if (scalar(keys%UTR)!=0) { $line4a .= line4a($maxY,$Y1,$Y2,\%UTR); }
+	if (scalar(keys%{ $UTR_r->{$NM} }) !=0 ) { $line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR_r->{$NM} }); }
 
 	#$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
 	$Y1=0.35;$Y2=0.5;
 	my$line4b = "";
-	if (scalar(keys%Cod)!=0) { $line4b .= line4b($maxY,$Y1,$Y2,\%Cod); }
+	if (scalar(keys%{ $Cod_r->{$NM} }) !=0 ) { $line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod_r->{$NM} }); }
 
 	#$line4c: Nb exon
 	#%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
@@ -6487,13 +6625,17 @@ for (my$n=0;$n<scalar@startR;$n++) {
 	while ($i < scalar@{ ${$NMdepth_r}{$n} }) {
 		if (${$NMdepth_r}{$n}[$i] eq "") { 
 			$line1a .= "0,";
-			$line1b .= "lines (c($p,".($p+1)."), c(0,0), lwd=2, col=\"grey\")\n"; 
+# png: 			$line1b .= "lines (c($p,".($p+1)."), c(0,0), lwd=2, col=\"grey\")\n";
+# pdf:
+ 				$line1b .= "lines (c($p,".($p+1)."), c(0,0), lwd=1.5, col=\"grey\")\n";
 			}
 		else { $line1a .= ${$NMdepth_r}{$n}[$i].","; }
 		$p++; $i++;
 		}
 	chop $line1a;
-	$line1a .= "), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".($Y1*$maxY).",".($Y2*$maxY)."), type =\"l\", lwd=2, col=\"black\", axes=FALSE, ann=FALSE)\n";
+# png:	$line1a .= "), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".($Y1*$maxY).",".($Y2*$maxY)."), type =\"l\", lwd=2, col=\"black\", axes=FALSE, ann=FALSE)\n";
+# pdf:
+		$line1a .= "), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".($Y1*$maxY).",".($Y2*$maxY)."), type =\"l\", lwd=1.5, col=\"black\", axes=FALSE, ann=FALSE)\n";
 	}
 return($line1a,$line1b);
 }
@@ -6610,7 +6752,9 @@ $line .= "), c(";
 for (my$ex=0;$ex<scalar@startUTR;$ex++)
 	{ $line .= "-".($Y2*$maxY).","; }
 chop $line;
-$line .= "), lwd=2, col=\"blue\")\n";
+#png: $line .= "), lwd=2, col=\"blue\")\n";
+#pdf:
+$line .= "), lwd=1.5, col=\"blue\")\n";
 return($line);
 }
 
@@ -6637,7 +6781,9 @@ $line .= "), c(";
 foreach (my$ex=0;$ex<scalar@startCod;$ex++) 
 	{ $line .= "-".($Y2*$maxY).","; }
 chop $line;
-$line .= "), lwd=2, col=\"blue\")\n";
+#png: $line .= "), lwd=2, col=\"blue\")\n";
+#pdf:
+$line .= "), lwd=1.5, col=\"blue\")\n";
 return($line);
 }
 
@@ -6678,7 +6824,9 @@ else {
 		}
 	}
 chop $line;
-$line .= "), cex = 1)\n";
+## png: $line .= "), cex = 1)\n";
+##pdf:
+$line .= "), cex = 0.66)\n";
 return($line);
 }
 
@@ -6695,7 +6843,9 @@ $line .= "), col = c(\"green\",";
 for (my$i=0;$i<scalar(@{$Thresholds_r});$i++)
 	{ $line .="\"".${$colors_r}[$i]."\","; }
 chop $line;
-$line .= "), pch = 15, bty = \"n\", pt.cex = 2.5, cex = 1, horiz = TRUE, inset = c(0, 0))\n";
+# png: $line .= "), pch = 15, bty = \"n\", pt.cex = 2.5, cex = 1, horiz = TRUE, inset = c(0, 0))\n";
+# pdf:
+$line .= "), pch = 15, bty = \"n\", pt.cex = 2, cex = 0.75, horiz = TRUE, inset = c(0, 0))\n";
 return($line);
 }
 
@@ -6711,7 +6861,9 @@ $line .= "), col = c(";
 for (my$i=0;$i<scalar(@{$Thresholds_r});$i++)
 	{ $line .="\"".${$colors_r}[$i]."\","; }
 chop $line;
-$line .= "), pch = 15, bty = \"n\", pt.cex = 2.5, cex = 1, horiz = TRUE, inset = c(0, 0))\n";
+# png: $line .= "), pch = 15, bty = \"n\", pt.cex = 2.5, cex = 1, horiz = TRUE, inset = c(0, 0))\n";
+# pdf:
+$line .= "), pch = 15, bty = \"n\", pt.cex = 2, cex = 0.75, horiz = TRUE, inset = c(0, 0))\n";
 return($line);
 }
 
@@ -6731,7 +6883,9 @@ $line .= "), c(";
 for (my$i=0;$i<scalar(keys%{$NMmut00_r});$i++)
 	{ $line .= "-".($Y1*$maxY).","; }			
 chop $line;
-$line .= "), pch = 6, col = \"black\", lwd = 2, cex = 1)\n";
+#png: $line .= "), pch = 6, col = \"black\", lwd = 2, cex = 1)\n";
+#pdf:
+$line .= "), pch = 6, col = \"black\", lwd = 1.5, cex = 0.75)\n";
 #below
 $line .= "points(c(";
 foreach my$mut (keys%{$NMmut00_r})
@@ -6741,7 +6895,9 @@ $line .= "), c(";
 for (my$i=0;$i<scalar(keys%{$NMmut00_r});$i++)
 	{ $line .= "-".($Y2*$maxY).","; }			
 chop $line;
-$line .= "), pch = 2, col = \"black\", lwd = 2, cex = 1)\n";
+#png: $line .= "), pch = 2, col = \"black\", lwd = 2, cex = 1)\n";
+#pdf:
+$line .= "), pch = 2, col = \"black\", lwd = 1.5, cex = 0.75)\n";
 return($line);
 }
 
@@ -6764,7 +6920,9 @@ $line .= "), c(";
 foreach my$mut (keys%{$NMmut00_r})
 	{ $line .= "\"".${$NMmut00_r}{$mut}."\" ,"; }			
 chop $line;
-$line .= "), adj = c(0.5,1.75), cex = 1.25, srt = -15)\n";
+#png: $line .= "), adj = c(0.5,1.75), cex = 1.25, srt = -15)\n";
+#pdf:
+$line .= "), adj = c(0.5,1.75), cex = 1, srt = -15)\n";
 #$line .= "), pos = 1, cex = 1)\n";
 #$line .= "), cex = 1)\n";
 return($line);
@@ -6789,7 +6947,9 @@ for (my$i=0;$i<scalar@{$NMs_r};$i++)
 	{ $line .= "\"".${$NMs_r}[$i]."\" ,"; }			
 chop $line;
 #$line .= "), adj = c(0,2), cex = 1)\n";
-$line .= "), cex = 1.2)\n";
+## png: $line .= "), cex = 1.2)\n";
+##pdf:
+$line .= "), cex = 0.75)\n";
 return($line);
 }
 
@@ -6802,27 +6962,32 @@ sub graphSumG {
 
 my($nGraf,$gene,$suff,$outdir,$sens,$chr,$length,$NMs_r,$Files_r,$colors_r,$Thresholds_r,$Regions_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMmut00_r,$NMCovEnd_r,$NMCovVal_r) = @_;
 
-print "print CMDR graphByGeneG: $gene\n";
+print "print CMDR graphSumG: $gene\n";
 open (CMDR, ">$outdir/$gene\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-my$nNM=scalar(@{$NMs_r});
+my$nNMs=scalar(@{$NMs_r});
 my$maxY=scalar(@{$Files_r});
 my@Starts = sort{$a<=>$b}(keys%{ $Regions_r->{$chr}{$gene} });
 my$startReg = $Starts[0];
 my$endReg = $Regions_r->{$chr}{$gene}{$Starts[-1]};
 
-print CMDR 
-"png(\"".$outdir."/cov_All/".$gene."_covSum.png\", 1500, ".(400*(0.875+(0.125*$nNM))).")\n"; 
+print CMDR "pdf(\"".$outdir."/cov_All/".$gene."_covSum.pdf\", width=11.69, height=".(4.135*(0.75+0.875+(0.125*$nNMs))/1.75).")\n";
 
 if ($sens eq "+")
 	{ print CMDR 
-"plot (c(0,0), xlim=c(-".(0.8*$length/10).",".$length."), ylim=c(-".((0.5+0.25*$nNM)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"chr $chr\t$startReg >>> $endReg\", ylab = \"nber of covered samples\", cex.lab=1.5, cex.axis=1.2, yaxt='n')
-axis(2, at=seq(0, $maxY, length = 2),labels=seq(0, $maxY, length = 2), las=2)\n";
+#png: "plot (c(0,0), xlim=c(-".(0.8*$length/10).",".$length."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"chr $chr\t$startReg >>> $endReg\", ylab = \"nber of covered samples\", cex.lab=1.5, cex.axis=1.2, yaxt='n')
+#axis(2, at=seq(0, $maxY, length = 2),labels=seq(0, $maxY, length = 2), las=2)\n";
+#pdf:
+"plot (c(0,0), xlim=c(-".(0.8*$length/10).",".$length."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"chr $chr: $startReg >>> $endReg\", ylab = \"nber of covered samples\", cex.lab=1, cex.axis=0.8, yaxt='n')
+axis(2, at=seq(0, $maxY, length = 2),labels=seq(0, $maxY, length = 2), las=2, cex.axis=0.8)\n";
 	}
 else
 	{ print CMDR 
-"plot (c(0,0), xlim=c(-".(0.8*$length/10).",".$length."), ylim=c(-".((0.5+0.25*$nNM)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"chr $chr\t$startReg <<< $endReg\", ylab = \"nber of covered samples\", cex.lab=1.5, cex.axis=1.2, yaxt='n')
-axis(2, at=seq(0, $maxY, length = 2),labels=seq(0, $maxY, length = 2), las=2)\n";
+#png: "plot (c(0,0), xlim=c(-".(0.8*$length/10).",".$length."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"chr $chr\t$startReg <<< $endReg\", ylab = \"nber of covered samples\", cex.lab=1.5, cex.axis=1.2, yaxt='n')
+#axis(2, at=seq(0, $maxY, length = 2),labels=seq(0, $maxY, length = 2), las=2)\n";
+#pdf:
+"plot (c(0,0), xlim=c(-".(0.8*$length/10).",".$length."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"l\", xlab = \"chr $chr: $startReg <<< $endReg\", ylab = \"nber of covered samples\", cex.lab=1, cex.axis=0.8, yaxt='n')
+axis(2, at=seq(0, $maxY, length = 2),labels=seq(0, $maxY, length = 2), las=2, cex.axis=0.8)\n";
 	}
 
 my($Y,$Y1,$Y2);
@@ -6839,7 +7004,7 @@ foreach my$threshold (@{$Thresholds_r}) {
 
 #$line2: cmdR for cmdR for lines(intron)	#$intron{$NM}{$startInt} = $endInt;
 my$line2="";
-for(my$i=0;$i<$nNM;$i++) { 
+for(my$i=0;$i<$nNMs;$i++) { 
 	$Y=(0.425+0.25*$i);
 	$line2 .= line2($maxY,$Y,\%{ ${$intron_r}{${$NMs_r}[$i]} });
 	}
@@ -6850,7 +7015,7 @@ my$line3a = line3a($maxY,$Y1,$Y2,\%{ $NMbed00_r->{$gene} });			#\%{ ${$NMbed00_r
 
 #$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
 my$line4a="";
-for(my$i=0;$i<$nNM;$i++) {
+for(my$i=0;$i<$nNMs;$i++) {
 	if (scalar(keys%{ ${$UTR_r}{${$NMs_r}[$i]} }) != 0) {
 		$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
 		$line4a .= line4a($maxY,$Y1,$Y2,\%{ ${$UTR_r}{${$NMs_r}[$i]} });
@@ -6859,7 +7024,7 @@ for(my$i=0;$i<$nNM;$i++) {
 
 #$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
 my$line4b="";
-for(my$i=0;$i<$nNM;$i++) {
+for(my$i=0;$i<$nNMs;$i++) {
 	if (scalar(keys%{ ${$Cod_r}{${$NMs_r}[$i]} }) != 0) {
 		$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
 		$line4b .= line4b($maxY,$Y1,$Y2,\%{ ${$Cod_r}{${$NMs_r}[$i]} });
@@ -6869,7 +7034,7 @@ for(my$i=0;$i<$nNM;$i++) {
 #$line4c: Nb exon
 #%NM_Ex00{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
 my$line4c="";
-for(my$i=0;$i<$nNM;$i++) {
+for(my$i=0;$i<$nNMs;$i++) {
 	$Y=(0.3+0.25*$i);
 	$line4c .= line4c($sens,$Rev,$maxY,$Y,\%{ ${$NM_Ex00_r}{${$NMs_r}[$i]} });
 	}
@@ -6882,11 +7047,11 @@ my$line5 = line5b($comp,$colors_r,$Thresholds_r);
 #$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
 my$line6a = ""; my$line6b = "";
 if (scalar(keys%{ $NMmut00_r->{$gene} }) != 0) {
-	$Y1=0.05;$Y2=(0.3+0.25*$nNM);
+	$Y1=0.05;$Y2=(0.3+0.25*$nNMs);
 	$line6a = line6a($maxY,$Y1,$Y2,\%{ $NMmut00_r->{$gene} });
 	#$line6b: cmdR for mutations (text)
 	#$NMmut00{$NM}{$mut00} = $infoMut (start of Region=0 )
-	$Y=(0.3+0.25*$nNM);
+	$Y=(0.3+0.25*$nNMs);
 	$line6b = line6b($maxY,$Y,\%{ $NMmut00_r->{$gene} });
 	}
 
@@ -6904,7 +7069,9 @@ print CMDR $line2.$line4a.$line4b.$line4c.$line5.$line6a.$line6b.$line7;
 print CMDR $line3a." lwd=1, col=NA, border =\"black\")\n";
 
 
-print CMDR "mtext(\"$gene\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+#png: print CMDR "mtext(\"$gene\", side = 3, outer=TRUE, line=-3, cex=1.5)\n";
+#pdf:
+print CMDR "mtext(\"$gene\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 print CMDR "dev.off();\n";
 close CMDR;
 system "Rscript $outdir/$gene\_temp.R";
@@ -6917,11 +7084,11 @@ unlink "$outdir/$gene\_temp.R";
 #graph foreach transcript of a gene
 #graphSumN($nGraf,$gene,$suff,$outdir,$sens,$chr,\%NMlength,\@NMs,\@Files,\@colors,\@Thresholds,$Regions{"raw"},$NM_Ex{"rev"},$RegBed{"rev"},$intron{"rev"},$UTR{"rev"},$Cod{"rev"},$RegMut{"rev"},\%NMCovEnd,\%NMCovVal);
 
-sub graphSumN {
+sub graphSumN {	#still in png, but not used anymore
 
 my($nGraf,$gene,$suff,$outdir,$sens,$chr,$lengths_r,$NMs_r,$Files_r,$colors_r,$Thresholds_r,$Regions_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMmut00_r,$NMCovEnd_r,$NMCovVal_r)= @_;
 
-print "print CMDR graphByGeneN: $gene\n";
+print "print CMDR graphSumN: $gene\n";
 
 my$nNM=scalar@{$NMs_r};
 my$maxY=scalar(@{$Files_r});
