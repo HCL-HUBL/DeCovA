@@ -695,7 +695,9 @@ foreach my$file (keys%Results) {
 	open (CNV1,">$outdir/${$sampleName_r}{$file}/CNV_${$sampleName_r}{$file}.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
 	print CNV1 "#Region\tCNV\tclean_intervals_Nbr\tclean_ratio_to_$center\tdirty_intervals_Nbr\tdirty_ratio_to_$center\toverlapping_Samples\n";
 	open (CNV2,">$outdir/${$sampleName_r}{$file}/CNV_${$sampleName_r}{$file}.allIntervals.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
-	print CNV2 "#Chrom\tStart\tEnd\tLength\tInfo\tinterval_Order\tCNV_type\tratio_to_$center\toccurences";
+	print CNV2 "#Chrom\tStart\tEnd\tLength\tInfo\tinterval_Order\tCNV_type\tratio_to_$center";
+	if ($spread_test) { print CNV2 "\tratio_to_$spread"; }
+	print CNV2 "\toccurences";
 	if (@cnvFields) {
 		foreach (@cnvFields) { 
 			#if ($_ eq "norm") {
@@ -738,7 +740,9 @@ foreach my$file (keys%Results) {
 						$Result4{$file}{$Chrom}{${$Regions_r}[${$nextReg_r}[0]]{"Start"}}{${$Regions_r}[${$nextReg_r}[0]]{"End"}} = $Results{$file}{${$nextReg_r}[0]};
 						if (exists $regionIndice{${$nextReg_r}[0]}) {
 							print CNV1 $Chromosome.":".${$Regions_r}[${$nextReg_r}[0]]{"Start"}."-".${$Regions_r}[${$nextReg_r}[0]]{"End"}."\t".$Results{$file}{${$nextReg_r}[0]}."\t1\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[0]]{$file}{"ratio2center"})."\t.\t.\t$overlapCNT\n";
-							print CNV2 $Chromosome."\t".${$Regions_r}[${$nextReg_r}[0]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[0]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[0]]{"End"}-${$Regions_r}[${$nextReg_r}[0]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[0]]{"label"}."\t".($regionIndice{${$nextReg_r}[0]}+1)."\t".$Results{$file}{${$nextReg_r}[0]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[0]]{$file}{"ratio2center"})."\t".${$Regions_r}[${$nextReg_r}[0]]{"nb_CNV"}{$Results{$file}{${$nextReg_r}[0]}};
+							print CNV2 $Chromosome."\t".${$Regions_r}[${$nextReg_r}[0]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[0]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[0]]{"End"}-${$Regions_r}[${$nextReg_r}[0]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[0]]{"label"}."\t".($regionIndice{${$nextReg_r}[0]}+1)."\t".$Results{$file}{${$nextReg_r}[0]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[0]]{$file}{"ratio2center"});
+							if ($spread_test) { print CNV2 "\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[0]]{$file}{"ratio2spread"}); }
+							print CNV2 "\t".${$Regions_r}[${$nextReg_r}[0]]{"nb_CNV"}{$Results{$file}{${$nextReg_r}[0]}};
 							if (@cnvFields) {
 								my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ ${$Regions_r}[${$nextReg_r}[0]] },\%{ $Patients{$file} });
 								print CNV2 "$txt";
@@ -755,7 +759,9 @@ foreach my$file (keys%Results) {
 								push(@cleanCNV, ${$Regions_r}[${$nextReg_r}[$j]]{$file}{"ratio2center"});
 								push(@dirtyCNV, ${$Regions_r}[${$nextReg_r}[$j]]{$file}{"ratio2center"});
 								if (exists $regionIndice{${$nextReg_r}[$j]}) {
-									print CNV2 $Chromosome."\t".${$Regions_r}[${$nextReg_r}[$j]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[$j]]{"End"}-${$Regions_r}[${$nextReg_r}[$j]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[$j]]{"label"}."\t".($regionIndice{${$nextReg_r}[$j]}+1)."\t".$Results{$file}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[$j]]{$file}{"ratio2center"})."\t".${$Regions_r}[${$nextReg_r}[$j]]{"nb_CNV"}{$Results{$file}{${$nextReg_r}[$j]}};
+									print CNV2 $Chromosome."\t".${$Regions_r}[${$nextReg_r}[$j]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[$j]]{"End"}-${$Regions_r}[${$nextReg_r}[$j]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[$j]]{"label"}."\t".($regionIndice{${$nextReg_r}[$j]}+1)."\t".$Results{$file}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[$j]]{$file}{"ratio2center"});
+									if ($spread_test) { print CNV2 "\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[$j]]{$file}{"ratio2spread"}); }
+									print CNV2 "\t".${$Regions_r}[${$nextReg_r}[$j]]{"nb_CNV"}{$Results{$file}{${$nextReg_r}[$j]}};
 									if (@cnvFields) {
 										my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ ${$Regions_r}[${$nextReg_r}[$j]] },\%{ $Patients{$file} });
 										print CNV2 "$txt";
@@ -775,6 +781,11 @@ foreach my$file (keys%Results) {
 										push(@dirtyCNV, ${$Regions_r}[${$nextReg_r}[$j]]{$file}{"ratio2center"});
 										}
 									else { print CNV2 "na\tna"; }
+									if ($spread_test) {
+										if (exists ${$Regions_r}[${$nextReg_r}[$j]]{$file}{"ratio2spread"})
+											{ print CNV2 "\t".${$Regions_r}[${$nextReg_r}[$j]]{$file}{"ratio2spread"}; }
+										else { print CNV2 "\tna"; }
+										}
 									if (@cnvFields) {
 										my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ ${$Regions_r}[${$nextReg_r}[$j]] },\%{ $Patients{$file} });
 										print CNV2 "$txt";
@@ -1598,7 +1609,11 @@ foreach my$patient (keys%Results) {
 	open (CNV1,">$outdir/CNV_$Patients{$patient}{ID}.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
 	print CNV1 "#Region\tCNV\tN_clean_intervals\tclean_ratio_to_$center\tN_dirty_intervals\tdirty_ratio_to_$center\toverlapping_Samples\n";
 	open (CNV2,">$outdir/CNV_$Patients{$patient}{ID}.allIntervals.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
-	print CNV2 "#Chrom\tStart\tEnd\tLength\tInfo\tinterval_Order\tCNV_type\tratio_to_$center\toccurences";
+	print CNV2 "#Chrom\tStart\tEnd\tLength\tInfo\tinterval_Order\tCNV_type\tratio_to_$center";
+	if ($spread_test) { print CNV2 "\tratio_to_$spread"; }
+	print CNV2 "\toccurences";
+#\tratio_to_$spread
+#
 	if (@cnvFields) {
 		foreach (@cnvFields) { 
 			#if ($_ eq "norm") {
@@ -1640,7 +1655,9 @@ foreach my$patient (keys%Results) {
 						$Result3{$patient}{${$nextReg_r}[0]}{"end"} = ${$nextReg_r}[0];
 						if (exists $regionIndice{${$nextReg_r}[0]}) {
 							print CNV1 $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[0]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t1\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"})."\t.\t.\t$overlapCNT\n";
-							print CNV2 $Chrom."\t".$Regions[${$nextReg_r}[0]]{"start"}."\t".$Regions[${$nextReg_r}[0]]{"end"}."\t".($Regions[${$nextReg_r}[0]]{"end"}-$Regions[${$nextReg_r}[0]]{"start"})." bp\t".$Regions[${$nextReg_r}[0]]{"label"}."\t".($regionIndice{${$nextReg_r}[0]}+1)."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"})."\t".$Regions[${$nextReg_r}[0]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[0]}};
+							print CNV2 $Chrom."\t".$Regions[${$nextReg_r}[0]]{"start"}."\t".$Regions[${$nextReg_r}[0]]{"end"}."\t".($Regions[${$nextReg_r}[0]]{"end"}-$Regions[${$nextReg_r}[0]]{"start"})." bp\t".$Regions[${$nextReg_r}[0]]{"label"}."\t".($regionIndice{${$nextReg_r}[0]}+1)."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"});
+							if ($spread_test) { print CNV2 "\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2spread"}); }
+							print CNV2 "\t".$Regions[${$nextReg_r}[0]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[0]}};
 							if (@cnvFields) {
 								my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[0]] },\%{ $Patients{$patient} });
 								print CNV2 "$txt";
@@ -1656,7 +1673,9 @@ foreach my$patient (keys%Results) {
 								push(@cleanCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
 								push(@dirtyCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
 								if (exists $regionIndice{${$nextReg_r}[$j]}) {
-									print CNV2 $Chrom."\t".$Regions[${$nextReg_r}[$j]]{"start"}."\t".$Regions[${$nextReg_r}[$j]]{"end"}."\t".($Regions[${$nextReg_r}[$j]]{"end"}-$Regions[${$nextReg_r}[$j]]{"start"})." bp\t".$Regions[${$nextReg_r}[$j]]{"label"}."\t".($regionIndice{${$nextReg_r}[$j]}+1)."\t".$Results{$patient}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"})."\t".$Regions[${$nextReg_r}[$j]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[$j]}};
+									print CNV2 $Chrom."\t".$Regions[${$nextReg_r}[$j]]{"start"}."\t".$Regions[${$nextReg_r}[$j]]{"end"}."\t".($Regions[${$nextReg_r}[$j]]{"end"}-$Regions[${$nextReg_r}[$j]]{"start"})." bp\t".$Regions[${$nextReg_r}[$j]]{"label"}."\t".($regionIndice{${$nextReg_r}[$j]}+1)."\t".$Results{$patient}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
+									if ($spread_test) { print CNV2 "\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"}); }
+									print CNV2 "\t".$Regions[${$nextReg_r}[$j]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[$j]}};
 									if (@cnvFields) {
 										my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[$j]] },\%{ $Patients{$patient} });
 										print CNV2 "$txt";
@@ -1675,6 +1694,12 @@ foreach my$patient (keys%Results) {
 										push(@dirtyCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
 										}
 									else { print CNV2 "na\tna"; }
+									if ($spread_test) {
+										if (exists $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"}) {
+											print CNV2 "\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"});
+											}
+										else { print CNV2 "\tna"; }
+										}
 									if (@cnvFields) {
 										my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[$j]] },\%{ $Patients{$patient} });
 										print CNV2 "$txt";
