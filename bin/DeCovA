@@ -3731,7 +3731,7 @@ print $fh "$chr\t$start\t$end\t$info\n";
 
 sub NM2GeneRegion {
 
-my($Genes,$geneNM,$NMchr,$RegionR,$NM_ExR)=@_;
+my($Genes,$geneNM,$NMchr,$RegionR,$NM_ExR) = @_;
 my%RegionG;
 foreach my$gene (keys%{$Genes}) {
 	my@NMs =  @{ ${$geneNM}{$gene} };
