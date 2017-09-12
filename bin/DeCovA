@@ -16,7 +16,7 @@
 
 our $VERSION="1.5.2";
 
-use warnings;
+use warnings FATAL => 'uninitialized';
 use strict;
 use Getopt::Long;
 use File::Basename;
@@ -3773,20 +3773,20 @@ my$i=0;	#$i: count of @StartN
 my$endN = ${$RegionN}{$StartN[0]};
 
 #if regionN ends before start of regionG
-while ( ($i < scalar@StartN) && ($endN < $StartG[0]) ) {
-	$RegionG2{$StartN[$i]} = $endN;
-	foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
-		{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
-	$i++;
-	$endN = ${$RegionN}{$StartN[$i]};
-	}
-
+#while ( ($i < scalar@StartN) && ($endN < $StartG[0]) ) {
+#	$RegionG2{$StartN[$i]} = $endN;
+#	foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
+#		{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
+#	$i++;
+#	$endN = ${$RegionN}{$StartN[$i]};
+#	}
 while ( $i < scalar@StartN ) {
 	$endN = ${$RegionN}{$StartN[$i]};				
 	if ( $endN < $StartG[$c] ) {
 		$RegionG2{$StartN[$i]} = $endN;
 		foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
 			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
+		$i++; next;
 		}
 	while ( ($c < (scalar@StartG -1)) && ($StartN[$i] > ${$RegionG1}{$StartG[$c]}) ) {
 		$RegionG2{$StartG[$c]} = ${$RegionG1}{$StartG[$c]};
@@ -3831,15 +3831,13 @@ while ( $i < scalar@StartN ) {
 		}
 	if ( $StartN[$i] > ${$RegionG1}{$StartG[$c]} ) {
 		$RegionG2{$StartG[$c]} = ${$RegionG1}{$StartG[$c]};
-		foreach my$nm (keys%{$geneNM_Ex1})
-			{
+		foreach my$nm (keys%{$geneNM_Ex1}) {
 			foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
 				{ $geneNM_Ex2{$nm}{$StartG[$c]}{$startEx} = ${$geneNM_Ex1}{$nm}{$StartG[$c]}{$startEx}; }
 			} 
 		}
 	if ( ($StartN[$i] <= ${$RegionG1}{$StartG[$c]}) && ($endN >= $StartG[$c]) ) {
-		if ($StartN[$i] < $StartG[$c])
-			{
+		if ($StartN[$i] < $StartG[$c]) {
 			if ($endN > ${$RegionG1}{$StartG[$c]})
 				{ $RegionG2{$StartN[$i]} = $endN; }
 			else
@@ -3864,8 +3862,8 @@ while ( $i < scalar@StartN ) {
 				{ $geneNM_Ex2{$NM}{$StartG[$c]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
 			}
 		}
-	if ( $StartN[$i] > ${$RegionG1}{$StartG[-1]} )	#if regionN keep going on after end of regionG
-		{
+	#if regionN keep going on after end of regionG
+	if ( $StartN[$i] > ${$RegionG1}{$StartG[-1]} ) {
 		$RegionG2{$StartN[$i]} = $endN;		
 		foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })
 			{ $geneNM_Ex2{$NM}{$StartN[$i]}{$startEx} = ${$NM_Ex_r}{$StartN[$i]}{$startEx}; }
@@ -3873,8 +3871,7 @@ while ( $i < scalar@StartN ) {
 	$i++;
 	}
 #if regionG keep going on after end of regionN
-while ( ($c < scalar@StartG) && ($StartG[$c] > $endN) )
-	{
+while ( ($c < scalar@StartG) && ($StartG[$c] > $endN) ) {
 	$RegionG2{$StartG[$c]} = ${$RegionG1}{$StartG[$c]};
 	foreach my$nm (keys%{$geneNM_Ex1}) { 
 		foreach my$startEx (keys%{ ${$geneNM_Ex1}{$nm}{$StartG[$c]} })
@@ -3905,8 +3902,7 @@ for (my$i=1;$i<scalar(@StartG);$i++) {
 		$RegionG3{$startReg} = $endReg;
 		$startReg = $StartG[$i];
 		$endReg = $RegionG2{$startReg};
-		foreach my$nm (keys%geneNM_Ex2)
-			{
+		foreach my$nm (keys%geneNM_Ex2) {
 			foreach my$startEx (keys%{ $geneNM_Ex2{$nm}{$startReg} })
 				{ $geneNM_Ex3{$nm}{$startReg}{$startEx} = $geneNM_Ex2{$nm}{$startReg}{$startEx}; }
 			}
