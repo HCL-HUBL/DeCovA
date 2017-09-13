@@ -886,7 +886,7 @@ close OUT;
 
 
 ##print graph foreach Chrom/CNV
-if ($graphByChr) {
+if ($graphByChr || $graphByCNV) {
 	print "drawing graphs:\n";
 	##graph by Chrom/CNV ?
 	my$Nbr_Reg_max = 0;
@@ -1806,7 +1806,7 @@ close OUT;
 
 
 ##print graph foreach Chrom/CNV
-if ($graphByChr) {
+if ($graphByChr || $graphByCNV) {
 	print "drawing graphs:\n";
 	##graph by Chrom/CNV ?
 	my$Nbr_Reg_max = 0;
