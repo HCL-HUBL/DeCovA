@@ -110,8 +110,9 @@ GetOptions (\%opt,
 	"ratioByGender=s",
 	"normAllChr",
 	"normDepth=s",
-	"noCNV_byGene",
-	"noCNV_byChr",
+	"graph_byGene:s",
+	"graph_byChr:s",
+	"graph_byCNV:s",
 	"CNV_fields=s@",
 	"compress|z",
 	"nGraph:i",
@@ -236,8 +237,9 @@ parameters:
 				def: no (depth ratio for F and M together)
 	--normAllChr : total depth used to norm sample depths = sum on all chr, whatever the sex (def: double the depth for chrX if male, and skip chrY in the sum)
 	--normDepth : \"mean\"/\"tot\" : total depth used to norm sample depths = sum of total depths of each region or sum of mean depths of each region (def)
-	--noCNV_byGene : to disable graph for gene affected by a CNV
-	--noCNV_byChr : to disable graph by chr
+	--graph_byGene : to enable graph for gene affected by a CNV (def: no)
+	--graph_byChr : to enable graph by chromosome (def: no)
+	--graph_byCNV : to enable graph around each CNV (def: yes)
 	--CNV_fields : fields foreach region (comma separated), among: min,max,med,avg,std,Q1,Q3 (default: none)
 
   *external tools path:
@@ -787,10 +789,16 @@ if (exists $opt{normDepth}) {
 	}
 $CNV_opt{"RefNoChrY"} = 1;
 if (exists $opt{normAllChr}) { $CNV_opt{"RefNoChrY"} = ""; }
-$CNV_opt{"geneGraph"} = 1;
-if (exists $opt{noCNV_byGene} || ($bed_cov_file && !@raw_cov_file)) { $CNV_opt{"geneGraph"} = ""; }
-$CNV_opt{"chromGraph"} = 1;
-if (exists $opt{noCNV_byChr}) { $CNV_opt{"chromGraph"} = ""; }
+$CNV_opt{"geneGraph"} = "";
+if (exists $opt{graph_byGene} && ($opt{graph_byGene} eq "" || $opt{graph_byGene}=~/^y|o/i)) { $CNV_opt{"geneGraph"} = 1; }
+if ($bed_cov_file && !@raw_cov_file) { $CNV_opt{"geneGraph"} = ""; }
+$CNV_opt{"chromGraph"} = "";
+if (exists $opt{graph_byChr} && ($opt{graph_byChr} eq "" || $opt{graph_byChr}=~/^y|o/i)) { $CNV_opt{"chromGraph"} = 1; }
+$CNV_opt{"CNVgraph"} = 1;
+if (exists $opt{graph_byCNV}) {
+	if ($opt{graph_byCNV} eq "" || $opt{graph_byCNV}=~/^y|o/i) { $CNV_opt{"CNVgraph"} = 1; }
+	elsif ($opt{graph_byCNV}=~/^n/i) { $CNV_opt{"CNVgraph"} = ""; }
+	}
 @{ $CNV_opt{"fields"} } = ();
 if (exists $opt{CNV_fields}) {
 	@{ $CNV_opt{"fields"} } = split(/,/, join(',',@{$opt{CNV_fields}}));
