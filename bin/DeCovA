@@ -100,6 +100,7 @@ GetOptions (\%opt,
 	"spread_del=f",
 	"spread_dup=f",
 	"range=f",
+	"highQual=s",
 	"ex_region=f",
 	"ex_sample=f",
 	"ex_cov=f",
@@ -225,6 +226,7 @@ parameters:
 	--spread_del : float , <0 (def: none)
 	--spread_dup : float , >0  (def: none)
 	--range : samples kept for avg-std calculation if within mediane+/-range*quartile (def: none, ie all samples used)
+	--highQual : flag as high qual if one of following criteria : enter l/s/c for level/spread/consecutive : ex : l:0.25,1.75;s:-5,5;c:2
 	--ex_region : float [0-1] : region excluded from analysis if CNVs/N_samples >value (def: 1)
 	--ex_sample : float [0-1] : sample excluded from analysis if CNVs/N_regions >value (def: 1)
 	--ex_cov : float [0-1] : region excluded from analysis if none of the samples have cov >=value (def: 0)
@@ -761,6 +763,25 @@ if (exists $opt{level_dup}) { $CNV_opt{"seuil_dup"} = $opt{level_dup}; }
 if (exists $opt{spread_del}) { $CNV_opt{"spread_del"} = $opt{spread_del}; }
 if (exists $opt{spread_dup}) { $CNV_opt{"spread_dup"} = $opt{spread_dup}; }
 if (exists $opt{range}) { $CNV_opt{"range"} = $opt{range}; }
+
+if (exists $opt{highQual}) {
+	my@tab1 = split(/;/,$opt{highQual});
+	foreach my$string (@tab1) {
+		my@tab2 = split(/:/,$string);
+		my@tab3 = split(/,/,$tab2[1]);
+		if ($tab2[0] =~/^l/i) {
+			$CNV_opt{"trueCNV"}{"level"}{"del"} = $tab3[0];
+			$CNV_opt{"trueCNV"}{"level"}{"dup"} = $tab3[1];
+			}
+		elsif ($tab2[0] =~/^s/i) {
+			$CNV_opt{"trueCNV"}{"spread"}{"del"} = $tab3[0];
+			$CNV_opt{"trueCNV"}{"spread"}{"dup"} = $tab3[1];
+			}
+		elsif ($tab2[0] =~/^c/i) { $CNV_opt{"trueCNV"}{"conseC"} = $tab2[1]; }
+		else  { die "opt --highQual not recognized (l/s/c)\n"; }
+		}
+	}
+
 $CNV_opt{"seuil_region"} = 1;
 if (exists $opt{ex_region}) { $CNV_opt{"seuil_region"} = $opt{ex_region}; }
 $CNV_opt{"seuil_patient"} = 1;

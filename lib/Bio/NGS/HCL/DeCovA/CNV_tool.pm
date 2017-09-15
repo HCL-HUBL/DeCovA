@@ -1611,26 +1611,17 @@ my%Result2;	##selected from %results
 my%Result3;	##selected from %results, starting with first interval , ending with last interval
 print "print results:\n";
 foreach my$patient (keys%Results) {
+
 	print "\t".$Patients{$patient}{"ID"}."\n";
-	open (CNV1,">$outdir/CNV_$Patients{$patient}{ID}.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
-	print CNV1 "#Region\tCNV\tN_clean_intervals\tclean_ratio_to_$center\tN_dirty_intervals\tdirty_ratio_to_$center\toverlapping_Samples\n";
-	open (CNV2,">$outdir/CNV_$Patients{$patient}{ID}.allIntervals.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
-	print CNV2 "#Chrom\tStart\tEnd\tLength\tInfo\tinterval_Order\tCNV_type\tratio_to_$center";
-	if ($spread_test) { print CNV2 "\tratio_to_$spread"; }
-	print CNV2 "\toccurences";
-#\tratio_to_$spread
-#
-	if (@cnvFields) {
-		foreach (@cnvFields) { 
-			#if ($_ eq "norm") {
-			#	if ($norm =~ /^std$/i) { print CNV2 "\tavg\tstd"; }
-			#	else  { print CNV2 "\t$norm"; }
-			#	}
-			#else { print CNV2 "\t$_"; }
-			print CNV2 "\t$_";
-			}
+	my($fh_sum,$fh_each,$fh_high,$fh_low);
+	open ($fh_sum,">","$outdir/CNV_$Patients{$patient}{ID}.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
+	print $fh_sum "#Region\tCNV\tN_clean_intervals\tclean_ratio_to_$center\tN_dirty_intervals\tdirty_ratio_to_$center\toverlapping_Samples\n";
+	if (exists ${$CNV_opt_r}{"trueCNV"}) {
+		$fh_high = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.highQual.txt",$center,$spread,$spread_test,\@cnvFields);
+		$fh_low = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.lowQual.txt",$center,$spread,$spread_test,\@cnvFields);
 		}
-	print CNV2 "\n";
+	else { $fh_each = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.allIntervals.txt",$center,$spread,$spread_test,\@cnvFields); }
+
 	foreach my$Chrom (@ChrOrder) {
 		if (exists $orderedCNV{$patient}{$Chrom}) {
 			my$r=0;		##index in @{ $orderedCNV{$patient}{$Chrom} }
@@ -1660,7 +1651,7 @@ foreach my$patient (keys%Results) {
 						$Result3{$patient}{${$nextReg_r}[0]}{"type"} = $Results{$patient}{${$nextReg_r}[0]};
 						$Result3{$patient}{${$nextReg_r}[0]}{"end"} = ${$nextReg_r}[0];
 						if (exists $regionIndice{${$nextReg_r}[0]}) {
-							print CNV1 $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[0]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t1\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"})."\t.\t.\t$overlapCNT\n";
+							print $fh_sum $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[0]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t1\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"})."\t.\t.\t$overlapCNT\n";
 							print CNV2 $Chrom."\t".$Regions[${$nextReg_r}[0]]{"start"}."\t".$Regions[${$nextReg_r}[0]]{"end"}."\t".($Regions[${$nextReg_r}[0]]{"end"}-$Regions[${$nextReg_r}[0]]{"start"})." bp\t".$Regions[${$nextReg_r}[0]]{"label"}."\t".($regionIndice{${$nextReg_r}[0]}+1)."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"});
 							if ($spread_test) { print CNV2 "\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2spread"}); }
 							print CNV2 "\t".$Regions[${$nextReg_r}[0]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[0]}};
@@ -1721,7 +1712,7 @@ foreach my$patient (keys%Results) {
 						my$dirtyAverage = 0;
 						foreach (@dirtyCNV) { $dirtyAverage += $_; }
 						$dirtyAverage /= scalar@dirtyCNV;
-						print CNV1 $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[$cnvOK]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage)."\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage)."\t$overlapCNT\n";
+						print $fh_sum $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[$cnvOK]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage)."\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage)."\t$overlapCNT\n";
 						$Result3{$patient}{${$nextReg_r}[0]}{"type"} = $Results{$patient}{${$nextReg_r}[0]};
 						$Result3{$patient}{${$nextReg_r}[0]}{"end"} = ${$nextReg_r}[$cnvOK];
 						}
@@ -1731,7 +1722,7 @@ foreach my$patient (keys%Results) {
 				}
 			}
 		}
-	close CNV1;
+	close $fh_sum;
 	close CNV2;
 	}
 
@@ -1834,7 +1825,21 @@ if ($graphByChr || $graphByCNV) {
 }
 
 
-
+####################
+sub printCNVheaders {
+my($outFile,$center,$spread,$spread_test,$cnvFields_r) = @_;
+open (my$fh,">",$outFile) or die "Pb lors de l'ecriture du fichier sortie $outFile ($!)\n";
+print $fh "#Chrom\tStart\tEnd\tLength\tInfo\tinterval_Order\tCNV_type\tratio_to_$center";
+if ($spread_test) { print $fh "\tratio_to_$spread"; }
+print $fh "\toccurences";
+if (@cnvFields) {
+	foreach (@cnvFields) { 
+		print $fh "\t$_";
+		}
+	}
+print $fh "\n";
+return($fh);
+}
 ####################
 # $Regions[$r]{"normByR_depth"} = getRegionStats($sortDepths,$CNV_opt_r,\%cnvStats,\@Autosomes);
 # $Regions[$r]{"normByR_depth"}->{"avg"}
