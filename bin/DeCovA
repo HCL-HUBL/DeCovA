@@ -866,13 +866,14 @@ unless ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} |
 ###################
 #check progr installation and db existence
 my(%pathCmd);
-#R
+
+#check R
 $pathCmd{"R"} = `which "R"`;
 if ($? eq "0") { print "R tools OK\n"; }
 else { die "R tools not installed or not found\n"; }
 
 my(%sName,%sName2,%gatkIdx); 
-my(@ChromOrder,@chromLength,%chromLength,%withChr,%faIdx);
+my(@ChromOrder,%chromLength,%withChr,%faIdx);
 my$bedTversion = "";
 
 #genome index
@@ -880,9 +881,16 @@ if ($genom) {
 	if (-e $genom) { print "$genom OK\n"; }
 	else { die "$genom not found\n"; }
 	if (-e "$genom.fai") {
-		@chromLength = `cut -f1-2 $genom.fai`;
-		chomp @chromLength;
-		if ($chromLength[0] =~ /^chr/) {
+		#@chromLength = `cut -f1-2 $genom.fai`;
+		#chomp @chromLength;
+		open(my$fh, '<', "$genom.fai") or die "cannot open $genom.fai\n";
+		while (my$line = <$fh>) {
+			my@tab = split(/\t/,$line);
+			push(@ChromOrder,$tab[0]);
+			$chromLength{$tab[0]} = $tab[1];
+			}
+		close $fh;
+		if ($ChromOrder[0] =~ /^chr/) {
 			$withChr{"all"}="_wChr.bed";
 			foreach (@Files) { $withChr{$_}="_wChr.bed"; } 
 			}
@@ -890,18 +898,13 @@ if ($genom) {
 			$withChr{"all"}="_0Chr.bed";
 			foreach (@Files) { $withChr{$_}="_0Chr.bed"; } 
 			}
-		foreach (@chromLength) {
-			my@tab = split(/\t/,$_);
-			push(@ChromOrder,$tab[0]);
-			$chromLength{$tab[0]} = $tab[1];
-			}
 		}
-	}
+	} 
 
 if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) && (!$bed_cov_file) ) {
 
 	if ($raw_cov_file[0]) {
-		open(COV, "$raw_cov_file[0]") or die "cannot open $raw_cov_file[0]\n";;
+		open(COV, "$raw_cov_file[0]") or die "cannot read $raw_cov_file[0]\n";
 		my$firstLine = <COV>;
 		unless (@ChromOrder) {
 			my%allChr = ();
@@ -1045,7 +1048,7 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 		if ($mmq && !$gatk) {
 			unless ($samT) { die "samtools not installed or not found\n"; }
 			}
-		if ($jobs{"CNV"} && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
+		#if ($jobs{"CNV"} && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
 		if ($dedup eq "do" && !$picard) { die "picard tools not installed or not found\n"; }
 		if (!$bedT && !$gatk) { die "bedtools or GATK required\n"; }
 
@@ -1093,11 +1096,13 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 
 		#genome index
 		if ($genom) {
-			unless (-e "$genom.fai") { 
-				if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
+			unless (-e "$genom.fai") {
+				if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"})
+					{ die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
 				}
 			}
 		else { die "reference genome.fa required\n"; }
+
 		#bam index
 		if (@Files) {
 			if ($samT) {
@@ -1113,7 +1118,6 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 						if ($_ =~ /^\w/) { push(@{ $faIdx{$file} }, $_); }
 						}
 					}
-
 				}
 			else {
 				if (@ChromOrder) {
@@ -1122,10 +1126,10 @@ if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || 
 							{ push(@{ $faIdx{$file} }, $_); }
 						}
 					}
-				else {
-					if ($jobs{"CNV"} && $CNV_opt{"RefDepth"} eq "tot")
-						{ die "cannot determine chr idx of bam files\n"; }
-					}
+				#else {
+				#	if ($jobs{"CNV"} && $CNV_opt{"RefDepth"} eq "tot")
+				#		{ die "cannot determine chr idx of bam files\n"; }
+				#	}
 				}
 			}
 
@@ -1188,11 +1192,14 @@ if ($raw_cov_file[0]) {
 	system "$cmd";
 	}
 else {
-	if (@chromLength && !$gatk) {	
-		$chromLength = "$outdir/chromLength.txt";		#used by bedtools
-		open (my$fhOut, ">", "$chromLength");
-		foreach(@chromLength) { print $fhOut "$_\n"; }
-		close $fhOut;
+	if (!$gatk && $bedTversion == 2) {
+		if (scalar(keys%chromLength)) {	
+			$chromLength = "$outdir/chromLength.txt";		#used by bedtools
+			open (my$fhOut, ">", "$chromLength");
+			foreach(@ChromOrder) { print $fhOut "$_\t$chromLength{$_}\n"; }
+			close $fhOut;
+			}
+		else { die "index of genome.fa.fai required\n"; }
 		}
 	}
 
@@ -1240,7 +1247,7 @@ if ($bedFile) {
 		%{ ${$Bed_r}{$chr} } = mergeIntervals(\%{ ${$Bed_r}{$chr} });
 		}
 	#print merged bed
-	printBed("original",$Bed_r);
+	printBed("original",$Bed_r,\@ChromOrder);
 	#eventually slice bed intervals
 	$bedFile = sliceBedIntervals($bedFile,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
 	}
@@ -1456,9 +1463,9 @@ foreach my$gene (keys%{$Genes_r}) {
 			}
 		foreach my$NM (@NMs) {
 			if (exists $NM_Ex{"coord0"}->{$NM}) { $NM_Ex{"rev"}->{$NM} = $NM_Ex{"coord0"}->{$NM}; }
-			if (exists $intron{"coord0"}->{$NM}) { %{ $intron{"rev"}->{$NM} } = $intron{"coord0"}->{$NM}; }
-			if (exists $UTR{"coord0"}->{$NM}) { %{ $UTR{"rev"}->{$NM} } = $UTR{"coord0"}->{$NM}; }
-			if (exists $Cod{"coord0"}->{$NM}) { %{ $Cod{"rev"}->{$NM} } = $Cod{"coord0"}->{$NM}; }
+			if (exists $intron{"coord0"}->{$NM}) { $intron{"rev"}->{$NM} = $intron{"coord0"}->{$NM}; }
+			if (exists $UTR{"coord0"}->{$NM}) { $UTR{"rev"}->{$NM} = $UTR{"coord0"}->{$NM}; }
+			if (exists $Cod{"coord0"}->{$NM}) { $Cod{"rev"}->{$NM} = $Cod{"coord0"}->{$NM}; }
 			}
 		}
 	}
@@ -1481,7 +1488,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		#print bed corresponding to regions
 		my$allIntervals_r = mergeRegions($Regions{"raw"});
 		$intervalName = "regions";
-		printBed($intervalName,$allIntervals_r);
+		printBed($intervalName,$allIntervals_r,\@ChromOrder);
 		if ($bedFile || ($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
 			$intervalName = "merge";
 			open (MERGE, ">$outdir/$intervalName.bed") || die "can't create file $outdir/$intervalName.bed\n";
@@ -1494,7 +1501,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 				close BED;
 				}
 			if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
-				printBed("txtRegions",$coordBed_r);
+				printBed("txtRegions",$coordBed_r,\@ChromOrder);
 				open (BED, "$outdir/txtRegions_0Chr.bed") || die "can't open file $outdir/txtRegions_0Chr.bed\n";
 				while (my$line=<BED>) { print MERGE $line; }
 				close BED;
@@ -1503,7 +1510,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 			my$merge_r = readBed("$outdir/$intervalName.bed");
 			foreach my$chr (keys%{$merge_r})
 				{ %{ ${$merge_r}{$chr} } = mergeIntervals(\%{ ${$merge_r}{$chr} }); }
-			printBed($intervalName,$merge_r);
+			printBed($intervalName,$merge_r,\@ChromOrder);
 			unlink "$outdir/$intervalName.bed";
 			}
 		}
@@ -2223,8 +2230,8 @@ exit;
 
 
 ######################
-sub readBed
-{
+sub readBed {
+
 my($bed) = @_;
 my%covBed;			#$covbed{$chr}{$start} = $end;	transform in hash with 1-based coord
 open(BED, $bed) || die "can't open file $bed\n";
@@ -2235,7 +2242,7 @@ while (my$line=<BED>) {
 		$ok++;
 		chomp $line;
 		my@tab = split(/\t/,$line);
-		$tab[0] =~ s/chr//i;
+		$tab[0] =~ s/^chr//i;
 		#keep longest interval
 		if ( exists $covBed{$tab[0]}{($tab[1]+1)} ) {
 			if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)}) 
@@ -2249,13 +2256,15 @@ while (my$line=<BED>) {
 unless ($ok) { die "no bed formatted line in $bed file";}
 close BED;
 return(\%covBed);
+
 }
 
 
 ######################
 #only genes and transcipts
-sub reAnnotBed1
-{
+
+sub reAnnotBed1 {
+
 print"look for transcripts overlapping bed file\n";
 my($bedFile,$outFile,$refFile) = @_;	#refseq is in 0-based
 
@@ -2369,8 +2378,9 @@ close ($fh);
 
 ######################
 #genes and transcipts and exon nbr
-sub reAnnotBed2
-{
+
+sub reAnnotBed2 {
+
 print"look for transcripts overlapping bed file\n";
 my($bedFile,$outFile,$refFile) = @_;	#refseq is in 0-based
 
@@ -2748,13 +2758,13 @@ close BED; close OUT;
 ######################
 sub sliceBedIntervals {
 
-my($bedFile,$outFile,$splitBed,$rmOverlapBed,$cutBed,$cutB_optRf,$chromOrderRf) = @_;
+my($bedFile,$outFile,$splitBed,$rmOverlapBed,$cutBed,$cutB_optRf,$chromOrder_r) = @_;
 if ($splitBed) {
 	print "splitting overlapping intervals from $bedFile\n";
 	$splitBed = "$outFile";
 	$splitBed =~ s/.bed$//;
 	$splitBed .= "_split.bed";
-	split_Bed($bedFile,$splitBed,$chromOrderRf);
+	split_Bed($bedFile,$splitBed,$chromOrder_r);
 	$bedFile = $splitBed;
 	}
 elsif ($rmOverlapBed) {
@@ -2762,7 +2772,7 @@ elsif ($rmOverlapBed) {
 	$rmOverlapBed = "$outFile";
 	$rmOverlapBed =~ s/.bed$//;
 	$rmOverlapBed .= "_flat.bed";
-	rm_overlap_Bed($bedFile,$rmOverlapBed,$chromOrderRf);
+	rm_overlap_Bed($bedFile,$rmOverlapBed,$chromOrder_r);
 	$bedFile = $rmOverlapBed;
 	}
 if ($cutBed) {
@@ -3429,8 +3439,7 @@ return(@Transcripts);
 #RefSeq:
 ##bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
 #0	NM_032291	chr1	+	66999824	67210768	67000041	67208778	25	66999824,67091529,67098752,67101626,67105459,67108492,67109226,67126195,67133212,67136677,67137626,67138963,67142686,67145360,67147551,67154830,67155872,67161116,67184976,67194946,67199430,67205017,67206340,67206954,67208755,	67000051,67091593,67098777,67101698,67105516,67108547,67109402,67126207,67133224,67136702,67137678,67139049,67142779,67145435,67148052,67154958,67155999,67161176,67185088,67195102,67199563,67205220,67206405,67207119,67210768,	0	SGIP1	cmpl	cmpl	0,1,2,0,0,0,1,0,0,0,1,2,1,1,1,1,0,1,1,2,2,0,2,1,1,
-##@hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$noOverlap,$nonCod,$wUTR,$id2Bed);
-##Id2Coord($idFile,$lenForTxt,$nonCod,$UTRinTxt)
+## @hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,\@ChromOrder);
 
 sub Id2Coord {
 
@@ -3620,7 +3629,7 @@ close(IDS);
 if ($id2Bed) {
 	my@allChrom = ();
 	if (@ChromOrder) {
-		foreach my$chr (@ChromOrder) {
+		foreach my$chr (@ChromOrder) {	print STDERR "$chr\n";
 			$chr =~ s/^chr//i;
 			if (exists $printBed{$chr}) { push(@allChrom,$chr); }
 			}
@@ -5001,17 +5010,30 @@ return (\%interval3)	#$interval3{$chr}{$start} = $end;
 
 
 #####################
-#printBed("original",\%Bed);
+#printBed("original",\%Bed,\@ChromOrder);
 
 sub printBed {
 
-my($bedFile,$interval) = @_;
+my($bedFile,$interval_r,$ChromOrder_r) = @_;
 open (OUT0, ">$outdir/$bedFile\_0Chr.bed")  || die "cannot create $outdir/$bedFile\_0Chr.bed\n";
 open (OUTw, ">$outdir/$bedFile\_wChr.bed")  || die "cannot create $outdir/$bedFile\_wChr.bed\n";
-foreach my$chr (sort(keys%{$interval})) {
-	foreach my$start (sort{$a<=>$b}keys%{ ${$interval}{$chr} }) {
-		print OUT0 $chr."\t".($start-1)."\t".${$interval}{$chr}{$start}."\n";
-		print OUTw "chr".$chr."\t".($start-1)."\t".${$interval}{$chr}{$start}."\n";
+if (@{$ChromOrder_r}) {
+	foreach my$chr (@{$ChromOrder_r}) {
+		$chr =~ s/^chr//i;
+		if (exists ${$interval_r}{$chr}) {
+			foreach my$start (sort{$a<=>$b}keys%{ ${$interval_r}{$chr} }) {
+				print OUT0 $chr."\t".($start-1)."\t".${$interval_r}{$chr}{$start}."\n";
+				print OUTw "chr".$chr."\t".($start-1)."\t".${$interval_r}{$chr}{$start}."\n";
+				}
+			}
+		}
+	}
+else {
+	foreach my$chr (sort(keys%{$interval_r})) {
+		foreach my$start (sort{$a<=>$b}keys%{ ${$interval_r}{$chr} }) {
+			print OUT0 $chr."\t".($start-1)."\t".${$interval_r}{$chr}{$start}."\n";
+			print OUTw "chr".$chr."\t".($start-1)."\t".${$interval_r}{$chr}{$start}."\n";
+			}
 		}
 	}
 close OUT0;
@@ -7269,7 +7291,10 @@ return($line);
 
 
 ############################
-#covPlot($bin,$max2,"original",$bedName,\%path,$extenS,\@Files,\%fName,\%sName2,$outdir,\%withChr);
+#	if (!$bedFile || $jobs{"genePlot"}) 
+#		{ %withChr = covPlot($bin,$maxPl,"all_Genes_Regions",\%path,$extenS,\@Files,\%fName,\%sName2,$outdir,$coordBed_r); }
+#	if ($bedFile) 
+#		{ %withChr = covPlot($bin,$maxPl,$bedName,\%path,$extenS,\@Files,\%fName,\%sName2,$outdir,$Bed_r); }
 
 sub covPlot {
 
@@ -7299,22 +7324,22 @@ foreach(@Files) {
 	else { $isChr{$_} = "_0Chr.bed"; }
 	}
 
-my(%hist,$lengthBed);
+my($hist_r,$lengthBed);
 
-foreach my$file (@Files) {
+foreach my$file (@Files) {	print STDERR "$file\n";
 
 	print "analysing ".$sName2{$file}." for plot on $outName\n";
 	if ($gatk) {
 		print "intersect $outdir/all.cov with $outName for histPlot\n";
 		my@hashSub = intersectForHist($gatkIdx{$file},"$outdir/all.cov",$maxPl,$allInterval_r,$gatk);
 		$lengthBed = $hashSub[0];
-		%hist = %{$hashSub[1]};
+		$hist_r = $hashSub[1];
 		}
 	else {
 		print "intersect $outdir/$fName{$file}.cov with $outName for histPlot\n";
 		my@hashSub = intersectForHist($fName{$file},"$outdir/$fName{$file}.cov",$maxPl,$allInterval_r,$gatk);
 		$lengthBed = $hashSub[0];
-		%hist = %{$hashSub[1]};
+		$hist_r = $hashSub[1];
 		}
 
 	print OUT1 "sample_$sName2{$file}\t";
@@ -7323,26 +7348,26 @@ foreach my$file (@Files) {
 	while ( ($i*$bin) <= $max2 ) {
 		$histCount=0;
 		for (my$j=($bin*$i);$j<($bin*($i+1));$j++)
-			{ if (exists$hist{$j}) { $histCount+=$hist{$j}; } }
+			{ if (exists${$hist_r}{$j}) { $histCount += ${$hist_r}{$j}; } }
 		print OUT1 $histCount."\t";
 		$i++;
 		}
-	my@array=sort{$a<=>$b}keys%hist;
+	my@array=sort{$a<=>$b}keys%{$hist_r};
 	$histCount=0;
 	for ($i=$max2;$i<=$#array;$i++)
-		{ $histCount+=$hist{$array[$i]}; }
+		{ $histCount += ${$hist_r}{$array[$i]}; }
 	print OUT1 $histCount."\n";
 
 	print OUT2 "sample_$sName2{$file}\t";
 	my$totCount=0;
-	if (exists$hist{0}) { $totCount+=$hist{0}; }
+	if (exists ${$hist_r}{0}) { $totCount += ${$hist_r}{0}; }
 	print OUT2 (1-$totCount)."\t";
 	$i=0;
 	while ( ($i*$bin) < $max2 ) {
 		$histCount=0;
 		for (my$j=(($bin*$i)+1);$j<=($bin*($i+1));$j++)
-			{ if (exists$hist{$j}) { $histCount+=$hist{$j}; } }
-		$totCount+=$histCount;
+			{ if (exists ${$hist_r}{$j}) { $histCount += ${$hist_r}{$j}; } }
+		$totCount += $histCount;
 		print OUT2 (1-$totCount)."\t";
 		$i++;
 		}
