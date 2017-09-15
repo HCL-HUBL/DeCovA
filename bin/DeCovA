@@ -16,7 +16,7 @@
 
 our $VERSION="1.5.2b";
 
-use warnings FATAL => 'uninitialized';
+use warnings;
 use strict;
 use Getopt::Long;
 use File::Basename;
