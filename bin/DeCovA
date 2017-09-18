@@ -8094,7 +8094,7 @@ sub CNVgraphByGene {
 
 my($file,$suff,$outdir,$gene,$sens,$maxD,$Rev,$chr,$maxY,$threshold,$NMlength,$Files_r,$sampleName_r,$Regions_r,$Reg_00_r,$NMs_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMdepth_r) = @_;
 
-print "print CMDR CNVgraphByGene: ".${$sampleName_r}{$file}." , $gene\n";
+#print "print CMDR CNVgraphByGene: ".${$sampleName_r}{$file}." , $gene\n";
 
 unless ($maxD) {
 	if ($maxY<10) { $maxY = 10; }
@@ -8103,7 +8103,7 @@ unless ($maxD) {
 my$nNMs = scalar@{$NMs_r};
 my@Starts = sort{$a<=>$b}(keys%{ $Regions_r->{$chr}{$gene} });
 my$startReg = $Starts[0];
-my$endReg = $Regions{$Starts[-1]};
+my$endReg = $Regions_r->{$chr}{$gene}{$Starts[-1]};
 
 my($Y,$Y1,$Y2);
 #$line1: cmdR for plot cov line
@@ -8131,7 +8131,7 @@ my$line3a = line3a($maxY,$Y1,$Y2,\%{ $NMbed00_r->{$gene} });
 #$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
 my$line4a="";
 for(my$i=0;$i<$nNMs;$i++) {
-	if (scalar(keys%{ $UTR{${$NMs_r}[$i]} })!=0) {
+	if (scalar(keys%{ $UTR_r->{${$NMs_r}[$i]} })!=0) {
 		$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
 		$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR_r->{${$NMs_r}[$i]} });
 		}
@@ -8140,7 +8140,7 @@ for(my$i=0;$i<$nNMs;$i++) {
 #$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
 my$line4b="";
 for(my$i=0;$i<$nNMs;$i++) {
-	if (scalar(keys%{ $Cod{${$NMs_r}[$i]} })) {
+	if (scalar(keys%{ $Cod_r->{${$NMs_r}[$i]} })) {
 		$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
 		$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod_r->{${$NMs_r}[$i]} });
 		}
@@ -8160,7 +8160,7 @@ my$line7 = line7($NMlength,$maxY,$NMs_r);
 #print CMDR:
 open (CMDR, ">$outdir/".${$sampleName_r}{$file}.".$gene.temp.R") || die "cannot create $outdir/".${$sampleName_r}{$file}.".$gene.temp.R";
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "png(\"$outdir/".${$sampleName_r}{$file}.".$gene.pdf\", width=11.69, height=".(4.135*(0.75+0.875+(0.125*$nNMs))/1.75).")\n";
+print CMDR "pdf(\"$outdir/".${$sampleName_r}{$file}.".$gene.pdf\", width=11.69, height=".(4.135*(0.75+0.875+(0.125*$nNMs))/1.75).")\n";
  
 #png: my$cmdR = "plot (c(0,0), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"n\", xlab = \"sample : ".${$sampleName_r}{$file}."\", ylab = \"normalized_depth\", cex.lab=1.5, cex.axis=1.2)\n";
 #pdf:
@@ -8177,10 +8177,10 @@ $cmdR .= $line3a." lwd=1, col=NA, border =\"black\")\n";
 
 print CMDR "$cmdR";
 if ($sens eq "+") {
-	print CMDR "mtext(\"$gene\tchr $chr\t".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1)\n";
+	print CMDR "mtext(\"$gene : chr $chr:".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 	}
 else {
-	print CMDR "mtext(\"$gene\tchr $chr\t".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1)\n";
+	print CMDR "mtext(\"$gene : chr $chr:".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 	}
 print CMDR "dev.off();\n";
 close CMDR;
