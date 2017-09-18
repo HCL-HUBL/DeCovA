@@ -831,11 +831,20 @@ if ($spread_test) {
 	intervals detected as deletion if normalized depth below $center + ($spread_del * $spread)
 	intervals detected as duplication if normalized depth above $center + ($spread_dup * $spread)\n";
 	}
+if ($range) { print OUT "\tsamples selected for avg/std computation, within $range*quartile around mediane\n"; }
+if (exists ${$CNV_opt_r}{"trueCNV"}) {
+	print OUT "\thigh qual CNVs:\n";
+	if (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"del"}) { print OUT "\t\tratio to $center <= ${$CNV_opt_r}{trueCNV}{level}{del}\n"; }
+	if (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"dup"}) { print OUT "\t\tratio to $center >= ${$CNV_opt_r}{trueCNV}{level}{dup}\n"; }
+	if (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"del"}) { print OUT "\t\tratio to $spread <= ${$CNV_opt_r}{trueCNV}{spread}{del}\n"; }
+	if (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"dup"}) { print OUT "\t\tratio to $spread >= ${$CNV_opt_r}{trueCNV}{spread}{dup}\n"; }
+	if (exists${$CNV_opt_r}{"trueCNV"}{"conseC"}) { print OUT "\t\t>= ${$CNV_opt_r}{trueCNV}{conseC} consecutive hits\n"; }
+	}
 if ($seuil_patient <1) { print OUT "\tsamples kept if NO more than ".(100*$seuil_patient)."% of intervals are CNVs\n"; }
 if ($seuil_region <1) { print OUT "\tintervals kept if NO more than ".(100*$seuil_region)."% of samples are CNVs\n"; }
 if ($minCov) { print OUT "\tintervals discarded if at least one sample covered less or equal to $minCov\n"; }
 if (defined $minDP) { print OUT "\tntervals discarded if avg depth of all samples are less or equal to $minDP\n"; }
-if ($minCNV) { print OUT "\tCNV calling requires at least $minCNV consecutive called intervals\n"; }
+#if ($minCNV) { print OUT "\tCNV calling requires at least $minCNV consecutive called intervals\n"; }
 if ($maxNonCNV) { print OUT "\tCNV calling tolerates NO more than $maxNonCNV non-CNV inside\n"; }
 if ($ratioByGender eq "all") { print OUT "\tinterval depth normalization by gender for all chromosomes\n"; }
 elsif ($ratioByGender eq "gono") { print OUT "\tinterval depth normalization by gender for sex chromosomes only\n"; }
@@ -868,18 +877,31 @@ foreach my$file (@{$Files_r}) {
 		}
 unless ($N_discard) { print OUT "\tnone\n"; }
 
-print OUT "\nResults :\n
-patient\tCNV\tnber\n";
+print OUT "\nResults :\n";
+if (exists ${$CNV_opt_r}{"trueCNV"}) { print OUT "patient\tCNV\thigh_qual\tlow_qual\n"; }
+else { print OUT "patient\tCNV\tnber\n"; }
+
 foreach my$file (@{$Files_r}) {
 	unless($Patients{$file}{"ecarte"}) {
-		my$N_dup=0; my$N_del=0;
-		foreach (keys%{ $Result3{$file} }) {
-			if ($Result3{$file}{$_}{"type"} eq "DUP") { $N_dup++; }
-			elsif ($Result3{$file}{$_}{"type"} eq "DEL") { $N_del++; }
+		my$N_dup_hi = 0; my$N_del_hi = 0;
+		my$N_dup_lo = 0; my$N_del_lo = 0;
+		foreach (keys%{ $Result3{"high"}{$file} }) {
+			if ($Result3{"high"}{$file}{$_}{"type"} eq "DUP") { $N_dup_hi++; }
+			elsif ($Result3{"high"}{$file}{$_}{"type"} eq "DEL") { $N_del_hi++; }
 			}
-		print OUT "\n${$sampleName_r}{$file}: 
-		DUP: $N_dup
-		DEL: $N_del\n";
+		if (exists ${$CNV_opt_r}{"trueCNV"}) {
+			foreach (keys%{ $Result3{"low"}{$file} }) {
+				if ($Result3{"low"}{$file}{$_}{"type"} eq "DUP") { $N_dup_lo++; }
+				elsif ($Result3{"low"}{$file}{$_}{"type"} eq "DEL") { $N_del_lo++; }
+				}
+			}
+		print OUT "\n${$sampleName_r}{$file}{ID}:\n";
+		if (exists ${$CNV_opt_r}{"trueCNV"}) {
+			print OUT "\t\tDUP:\t$N_dup_hi\t$N_dup_lo\n\t\tDEL:\t$N_del_hi\t$N_del_lo\n";
+			}
+		else {
+			print OUT "\t\tDUP:\t$N_dup_hi\n\t\tDEL:\t$N_del_hi\n";
+			}
 		}
 	}
 close OUT;
@@ -898,16 +920,40 @@ if ($graphByChr || $graphByCNV) {
 	#my$graphByCNV = 0;
 	#if ($Nbr_Reg_max > ${$CNV_opt_r}{"switch2graphByCNV"}) { $graphByCNV = 1; print "\tgraphs by CNV:\n"; }
 	#else { print "\tgraphs by chrom:\n"; }
-	foreach my$file (keys%Result2)  {
-		if ($graphByCNV) {
-			print "\tgraphs by CNV:\n";
-			graphByCNV1("$outdir/".${$sampleName_r}{$file},$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,\%regionOrder,\%regionIndice,\%Patients,\%Result2,\%Result3);
+
+	if ($graphByCNV) {
+		print "\tgraphs by CNV:\n";
+		if (exists ${$CNV_opt_r}{"trueCNV"}) {
+			foreach my$file (keys%{ $Result2{"high"} })  {
+				graphByCNV1("$outdir/${$sampleName_r}{$file}/CNV_${$sampleName_r}{$file}\_highQ",$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,\%regionOrder,\%regionIndice,\%Patients,\%{ $Result2{"high"} },\%{ $Result3{"high"} });
+				}
+			foreach my$file (keys%{ $Result2{"low"} })  {
+				graphByCNV1("$outdir/${$sampleName_r}{$file}/CNV_${$sampleName_r}{$file}\_lowQ",$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,\%regionOrder,\%regionIndice,\%Patients,\%{ $Result2{"low"} },\%{ $Result3{"low"} });
+				}
 			}
-		if ($graphByChr) {
-			print "\tgraphs by chrom:\n"; 
-			graphByChr1($nGraf,"$outdir/".${$sampleName_r}{$file},$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,\%regionOrder,\%Patients,\%Result2);
+		else {
+			foreach my$file (keys%{ $Result2{"high"} })  {
+				graphByCNV1("$outdir/${$sampleName_r}{$file}/CNV_${$sampleName_r}{$file}",$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,\%regionOrder,\%regionIndice,\%Patients,\%{ $Result2{"high"} },\%{ $Result3{"high"} });
+				}
 			}
 		}
+	if ($graphByChr) {
+		print "\tgraphs by chrom:\n";
+		if (exists ${$CNV_opt_r}{"trueCNV"}) {
+			foreach my$file (keys%{ $Result2{"high"} })  {
+				graphByChr1($nGraf,"$outdir/${$sampleName_r}{$file}/CNV_${$sampleName_r}{$file}\_byChr_highQ",$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,\%regionOrder,\%Patients,\%{ $Result2{"high"} });
+				}
+			foreach my$file (keys%{ $Result2{"low"} })  {
+				graphByChr1($nGraf,"$outdir/${$sampleName_r}{$file}/CNV_${$sampleName_r}{$file}\_byChr_lowQ",$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,\%regionOrder,\%Patients,\%{ $Result2{"low"} });
+				}
+			}
+		else {
+			foreach my$file (keys%{ $Result2{"high"} })  {
+				graphByChr1($nGraf,"$outdir/${$sampleName_r}{$file}/CNV_${$sampleName_r}{$file}\_byChr",$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,\%regionOrder,\%Patients,\%{ $Result2{"high"} });
+				}
+			}
+		}
+
 	}
 
 
@@ -940,7 +986,7 @@ my$seuil_region = ${$CNV_opt_r}{"seuil_region"};
 my$seuil_patient = ${$CNV_opt_r}{"seuil_patient"};
 my$seuil_cov = ${$CNV_opt_r}{"seuil_cov"};
 my$minDP = ${$CNV_opt_r}{"min_DP"} ;
-my$minCNV = ${$CNV_opt_r}{"min_following_CNV"};
+#my$minCNV = ${$CNV_opt_r}{"min_following_CNV"};
 my$maxNonCNV = ${$CNV_opt_r}{"max_Non_CNV"};
 my$maxNonCNVrate = ${$CNV_opt_r}{"max_Non_CNV_rate"};
 my$ratioByGender = ${$CNV_opt_r}{"ratioByGender"};
@@ -1606,21 +1652,23 @@ foreach my$patient (keys%Results) {
 		}
 	}
 
-unless($minCNV) { $minCNV = 1; }
+#unless($minCNV) { $minCNV = 1; }
 my%Result2;	##selected from %results
 my%Result3;	##selected from %results, starting with first interval , ending with last interval
 print "print results:\n";
 foreach my$patient (keys%Results) {
 
 	print "\t".$Patients{$patient}{"ID"}."\n";
-	my($fh_sum,$fh_each,$fh_high,$fh_low);
-	open ($fh_sum,">","$outdir/CNV_$Patients{$patient}{ID}.summary.txt") or die "Pb lors de l'ecriture du fichier sortie $!\n";
-	print $fh_sum "#Region\tCNV\tN_clean_intervals\tclean_ratio_to_$center\tN_dirty_intervals\tdirty_ratio_to_$center\toverlapping_Samples\n";
+	my($fh_sum,$fh_allI_hi,$fh_allI_lo);
+	open ($fh_sum,">","$outdir/CNV_$Patients{$patient}{ID}.summary.txt") or die "could not create $!\n";
+	print $fh_sum "#Region\tCNV\tN_clean_intervals\tclean_ratio_to_$center\tN_dirty_intervals\tdirty_ratio_to_$center\toverlapping_Samples";
+	if (exists ${$CNV_opt_r}{"trueCNV"}) { print $fh_sum "\tqual\n"; }
+	else { print $fh_sum "\n"; }
 	if (exists ${$CNV_opt_r}{"trueCNV"}) {
-		$fh_high = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.highQual.txt",$center,$spread,$spread_test,\@cnvFields);
-		$fh_low = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.lowQual.txt",$center,$spread,$spread_test,\@cnvFields);
+		$fh_allI_hi = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.highQual.txt",$center,$spread,$spread_test,\@cnvFields);
+		$fh_allI_lo = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.lowQual.txt",$center,$spread,$spread_test,\@cnvFields);
 		}
-	else { $fh_each = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.allIntervals.txt",$center,$spread,$spread_test,\@cnvFields); }
+	else { $fh_allI_hi = printCNVheaders("$outdir/CNV_$Patients{$patient}{ID}.allIntervals.txt",$center,$spread,$spread_test,\@cnvFields); }
 
 	foreach my$Chrom (@ChrOrder) {
 		if (exists $orderedCNV{$patient}{$Chrom}) {
@@ -1644,78 +1692,105 @@ foreach my$patient (keys%Results) {
 							}
 						}
 					}
-				##print patient's summary and allIntervals
-				if ($cnvOK >= ($minCNV-1)) {
-					if ($cnvOK == 0) {
-						$Result2{$patient}{${$nextReg_r}[0]} = $Results{$patient}{${$nextReg_r}[0]};
-						$Result3{$patient}{${$nextReg_r}[0]}{"type"} = $Results{$patient}{${$nextReg_r}[0]};
-						$Result3{$patient}{${$nextReg_r}[0]}{"end"} = ${$nextReg_r}[0];
-						if (exists $regionIndice{${$nextReg_r}[0]}) {
-							print $fh_sum $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[0]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t1\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"})."\t.\t.\t$overlapCNT\n";
-							print CNV2 $Chrom."\t".$Regions[${$nextReg_r}[0]]{"start"}."\t".$Regions[${$nextReg_r}[0]]{"end"}."\t".($Regions[${$nextReg_r}[0]]{"end"}-$Regions[${$nextReg_r}[0]]{"start"})." bp\t".$Regions[${$nextReg_r}[0]]{"label"}."\t".($regionIndice{${$nextReg_r}[0]}+1)."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"});
-							if ($spread_test) { print CNV2 "\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2spread"}); }
-							print CNV2 "\t".$Regions[${$nextReg_r}[0]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[0]}};
-							if (@cnvFields) {
-								my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[0]] },\%{ $Patients{$patient} });
-								print CNV2 "$txt";
-								}
-							print CNV2 "\n\n";
+				## high confidence CNV?
+				my($qual,$fh_allI);
+				if (exists ${$CNV_opt_r}{"trueCNV"}) {
+					my$true = 0;
+					if (exists${$CNV_opt_r}{"trueCNV"}{"conseC"} && $cnvOK >= (${$CNV_opt_r}{"trueCNV"}{"conseC"}-1)) { $true = 1; }
+					unless ($true) {
+						for (my$j=0;$j<=$cnvOK;$j++) {	##if at least 1 is true, all CNV ok
+							if (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"del"} && $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"} <= ${$CNV_opt_r}{"trueCNV"}{"level"}{"del"}) { $true = 1; last; }
+							elsif (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"dup"} && $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"} >= ${$CNV_opt_r}{"trueCNV"}{"level"}{"dup"}) { $true = 1; last; }
+							if (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"del"} && $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"} <= ${$CNV_opt_r}{"trueCNV"}{"level"}{"del"}) { $true = 1; last; }
+							elsif (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"dup"} && $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"} >= ${$CNV_opt_r}{"trueCNV"}{"level"}{"del"}) { $true = 1; last; }
 							}
 						}
-					else {
-						my@cleanCNV = (); my@dirtyCNV = ();
-						for (my$j=0;$j<=$cnvOK;$j++) {
-							if (exists $Results{$patient}{${$nextReg_r}[$j]}) {
-								$Result2{$patient}{${$nextReg_r}[$j]} = $Results{$patient}{${$nextReg_r}[$j]};
-								push(@cleanCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
-								push(@dirtyCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
-								if (exists $regionIndice{${$nextReg_r}[$j]}) {
-									print CNV2 $Chrom."\t".$Regions[${$nextReg_r}[$j]]{"start"}."\t".$Regions[${$nextReg_r}[$j]]{"end"}."\t".($Regions[${$nextReg_r}[$j]]{"end"}-$Regions[${$nextReg_r}[$j]]{"start"})." bp\t".$Regions[${$nextReg_r}[$j]]{"label"}."\t".($regionIndice{${$nextReg_r}[$j]}+1)."\t".$Results{$patient}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
-									if ($spread_test) { print CNV2 "\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"}); }
-									print CNV2 "\t".$Regions[${$nextReg_r}[$j]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[$j]}};
-									if (@cnvFields) {
-										my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[$j]] },\%{ $Patients{$patient} });
-										print CNV2 "$txt";
-										}
-									print CNV2 "\n";
+					if ($true) { $qual = "high"; $fh_allI = $fh_allI_hi; }
+					else { $qual = "low"; $fh_allI = $fh_allI_lo; }
+					}
+				else { $qual = "high"; $fh_allI = $fh_allI_hi; }
+
+				##print patient's summary and allIntervals
+				if ($cnvOK == 0) {	##single CNV
+
+					$Result2{$qual}{$patient}{${$nextReg_r}[0]} = $Results{$patient}{${$nextReg_r}[0]};
+					$Result3{$qual}{$patient}{${$nextReg_r}[0]}{"type"} = $Results{$patient}{${$nextReg_r}[0]};
+					$Result3{$qual}{$patient}{${$nextReg_r}[0]}{"end"} = ${$nextReg_r}[0];
+
+					if (exists $regionIndice{${$nextReg_r}[0]}) {
+						print $fh_sum $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[0]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t1\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"})."\t.\t.\t$overlapCNT";
+						if (exists ${$CNV_opt_r}{"trueCNV"}) { print $fh_sum "\t$qual\n"; }
+						else { print $fh_sum "\n"; }
+						print $fh_allI $Chrom."\t".$Regions[${$nextReg_r}[0]]{"start"}."\t".$Regions[${$nextReg_r}[0]]{"end"}."\t".($Regions[${$nextReg_r}[0]]{"end"}-$Regions[${$nextReg_r}[0]]{"start"})." bp\t".$Regions[${$nextReg_r}[0]]{"label"}."\t".($regionIndice{${$nextReg_r}[0]}+1)."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2center"});
+						if ($spread_test) { print $fh_allI "\t".sprintf("%.3f",$Regions[${$nextReg_r}[0]]{$patient}{"ratio2spread"}); }
+						print $fh_allI "\t".$Regions[${$nextReg_r}[0]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[0]}};
+						if (@cnvFields) {
+							my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[0]] },\%{ $Patients{$patient} });
+							print $fh_allI "$txt";
+							}
+						print $fh_allI "\n\n";
+						}
+					}
+				else {		##consecutive CNVs
+					my@cleanCNV = (); my@dirtyCNV = ();
+					for (my$j=0;$j<=$cnvOK;$j++) {
+						if (exists $Results{$patient}{${$nextReg_r}[$j]}) {
+							$Result2{$qual}{$patient}{${$nextReg_r}[$j]} = $Results{$patient}{${$nextReg_r}[$j]};
+							push(@cleanCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
+							push(@dirtyCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
+							if (exists $regionIndice{${$nextReg_r}[$j]}) {
+								print $fh_allI $Chrom."\t".$Regions[${$nextReg_r}[$j]]{"start"}."\t".$Regions[${$nextReg_r}[$j]]{"end"}."\t".($Regions[${$nextReg_r}[$j]]{"end"}-$Regions[${$nextReg_r}[$j]]{"start"})." bp\t".$Regions[${$nextReg_r}[$j]]{"label"}."\t".($regionIndice{${$nextReg_r}[$j]}+1)."\t".$Results{$patient}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
+								if ($spread_test) { print $fh_allI "\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"}); }
+								print $fh_allI "\t".$Regions[${$nextReg_r}[$j]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[$j]}};
+								if (@cnvFields) {
+									my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[$j]] },\%{ $Patients{$patient} });
+									print $fh_allI "$txt";
 									}
-								}
-							else	{ 
-								$Result2{$patient}{${$nextReg_r}[$j]} = "NA";
-								if (exists $regionIndice{${$nextReg_r}[$j]}) {
-									print CNV2 $Chrom."\t".$Regions[${$nextReg_r}[$j]]{"start"}."\t".$Regions[${$nextReg_r}[$j]]{"end"}."\t".($Regions[${$nextReg_r}[$j]]{"end"}-$Regions[${$nextReg_r}[$j]]{"start"})." bp\t".$Regions[${$nextReg_r}[$j]]{"label"}."\t".($regionIndice{${$nextReg_r}[$j]}+1)."\t";
-									if (exists $Regions[${$nextReg_r}[$j]]{"Appel"}) { print CNV2 "NA\t"; }
-									else { print CNV2 "no\t"; }
-									if (exists $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"}) {
-										print CNV2 sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"})."\t".$Regions[${$nextReg_r}[$j]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[0]}};
-										push(@dirtyCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
-										}
-									else { print CNV2 "na\tna"; }
-									if ($spread_test) {
-										if (exists $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"}) {
-											print CNV2 "\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"});
-											}
-										else { print CNV2 "\tna"; }
-										}
-									if (@cnvFields) {
-										my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[$j]] },\%{ $Patients{$patient} });
-										print CNV2 "$txt";
-										}
-									print CNV2 "\n";
-									}
+								print $fh_allI "\n";
 								}
 							}
-						print CNV2 "\n";
-						my$cleanAverage = 0;
-						foreach (@cleanCNV) { $cleanAverage += $_; }
-						$cleanAverage /= scalar@cleanCNV;
-						my$dirtyAverage = 0;
+						else	{ 
+							$Result2{$qual}{$patient}{${$nextReg_r}[$j]} = "NA";
+							if (exists $regionIndice{${$nextReg_r}[$j]}) {
+								print $fh_allI $Chrom."\t".$Regions[${$nextReg_r}[$j]]{"start"}."\t".$Regions[${$nextReg_r}[$j]]{"end"}."\t".($Regions[${$nextReg_r}[$j]]{"end"}-$Regions[${$nextReg_r}[$j]]{"start"})." bp\t".$Regions[${$nextReg_r}[$j]]{"label"}."\t".($regionIndice{${$nextReg_r}[$j]}+1)."\t";
+								if (exists $Regions[${$nextReg_r}[$j]]{"Appel"}) { print $fh_allI "NA\t"; }
+								else { print $fh_allI "no\t"; }
+								if (exists $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"}) {
+									print $fh_allI sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"})."\t".$Regions[${$nextReg_r}[$j]]{"nb_CNV"}{$Results{$patient}{${$nextReg_r}[0]}};
+									push(@dirtyCNV, $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2center"});
+									}
+								else { print $fh_allI "na\tna"; }
+								if ($spread_test) {
+									if (exists $Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"}) {
+										print $fh_allI "\t".sprintf("%.3f",$Regions[${$nextReg_r}[$j]]{$patient}{"ratio2spread"});
+										}
+									else { print $fh_allI "\tna"; }
+									}
+								if (@cnvFields) {
+									my$txt = printCNVfields($ratioByGender,\@cnvFields,\%{ $Regions[${$nextReg_r}[$j]] },\%{ $Patients{$patient} });
+									print $fh_allI "$txt";
+									}
+								print $fh_allI "\n";
+								}
+							}
+						}
+					print $fh_allI "\n";
+					my$cleanAverage = 0;
+					foreach (@cleanCNV) { $cleanAverage += $_; }
+					$cleanAverage /= scalar@cleanCNV;
+					my$dirtyAverage = 0;
+					if (scalar@dirtyCNV > scalar@cleanCNV) {
 						foreach (@dirtyCNV) { $dirtyAverage += $_; }
 						$dirtyAverage /= scalar@dirtyCNV;
-						print $fh_sum $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[$cnvOK]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage)."\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage)."\t$overlapCNT\n";
-						$Result3{$patient}{${$nextReg_r}[0]}{"type"} = $Results{$patient}{${$nextReg_r}[0]};
-						$Result3{$patient}{${$nextReg_r}[0]}{"end"} = ${$nextReg_r}[$cnvOK];
 						}
+					print $fh_sum $Chrom.":".$Regions[${$nextReg_r}[0]]{"start"}."-".$Regions[${$nextReg_r}[$cnvOK]]{"end"}."\t".$Results{$patient}{${$nextReg_r}[0]}."\t".scalar@cleanCNV."\t".sprintf("%.3f",$cleanAverage);
+					if (scalar@dirtyCNV > scalar@cleanCNV) { print $fh_sum "\t".($cnvOK+1)."\t".sprintf("%.3f",$dirtyAverage); }
+					else { print $fh_sum "\t-\t-"; }
+					print $fh_sum "\t$overlapCNT";
+					if (exists ${$CNV_opt_r}{"trueCNV"}) { print $fh_sum "\t$qual\n"; }
+					else { print $fh_sum "\n"; }
+					$Result3{$qual}{$patient}{${$nextReg_r}[0]}{"type"} = $Results{$patient}{${$nextReg_r}[0]};
+					$Result3{$qual}{$patient}{${$nextReg_r}[0]}{"end"} = ${$nextReg_r}[$cnvOK];
 					}
 				if ($i > 1) { $r += $i; }
 				else { $r++; }
@@ -1723,7 +1798,8 @@ foreach my$patient (keys%Results) {
 			}
 		}
 	close $fh_sum;
-	close CNV2;
+	close $fh_allI_hi;
+	if (exists ${$CNV_opt_r}{"trueCNV"}) { close $fh_allI_lo; }
 	}
 
 
@@ -1741,11 +1817,20 @@ if ($spread_test) {
 	intervals detected as deletion if normalized depth below $center + ($spread_del * $spread)
 	intervals detected as duplication if normalized depth above $center + ($spread_dup * $spread)\n";
 	}
+if ($range) { print OUT "\tsamples selected for avg/std computation, within $range*quartile around mediane\n"; }
+if (exists ${$CNV_opt_r}{"trueCNV"}) {
+	print OUT "\thigh qual CNVs:\n";
+	if (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"del"}) { print OUT "\t\tratio to $center <= ${$CNV_opt_r}{trueCNV}{level}{del}\n"; }
+	if (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"dup"}) { print OUT "\t\tratio to $center >= ${$CNV_opt_r}{trueCNV}{level}{dup}\n"; }
+	if (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"del"}) { print OUT "\t\tratio to $spread <= ${$CNV_opt_r}{trueCNV}{spread}{del}\n"; }
+	if (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"dup"}) { print OUT "\t\tratio to $spread >= ${$CNV_opt_r}{trueCNV}{spread}{dup}\n"; }
+	if (exists${$CNV_opt_r}{"trueCNV"}{"conseC"}) { print OUT "\t\t>= ${$CNV_opt_r}{trueCNV}{conseC} consecutive hits\n"; }
+	}
 if ($seuil_patient <1) { print OUT "\tsamples kept if NO more than ".(100*$seuil_patient)."% of intervals are CNVs\n"; }
 if ($seuil_region <1) { print OUT "\tintervals kept if NO more than ".(100*$seuil_region)."% of samples are CNVs\n"; }
 if ($seuil_cov) { print OUT "\tintervals discarded if all samples are covered less or equal to $seuil_cov\n"; }
 if (defined $minDP) { print OUT "\tintervals discarded if avg/med depth of all samples are less or equal to $minDP\n"; }
-if ($minCNV) { print OUT "\tCNV calling requires at least $minCNV consecutive called intervals\n"; }
+#if ($minCNV) { print OUT "\tCNV calling requires at least $minCNV consecutive called intervals\n"; }
 if ($maxNonCNV) { print OUT "\tCNV calling tolerates NO more than $maxNonCNV non-CNV inside\n"; }
 if ($ratioByGender eq "all") { print OUT "\tinterval depth normalization by gender for all chromosomes\n"; }
 elsif ($ratioByGender eq "gono") { print OUT "\tinterval depth normalization by gender for sex chromosomes only\n"; }
@@ -1779,18 +1864,31 @@ foreach my$patient (sort(keys%Patients)) {
 		}
 unless ($N_discard) { print OUT "\tnone\n"; }
 
-print OUT "\nResults :\n
-patient\tCNV\tnber\n";
+print OUT "\nResults :\n";
+if (exists ${$CNV_opt_r}{"trueCNV"}) { print OUT "patient\tCNV\thigh_qual\tlow_qual\n"; }
+else { print OUT "patient\tCNV\tnber\n"; }
+
 foreach my$patient (sort(keys%Patients)) {
 	unless($Patients{$patient}{"ecarte"}) {
-		my$N_dup=0; my$N_del=0;
-		foreach (keys%{ $Result3{$patient} }) {
-			if ($Result3{$patient}{$_}{"type"} eq "DUP") { $N_dup++; }
-			elsif ($Result3{$patient}{$_}{"type"} eq "DEL") { $N_del++; }
+		my$N_dup_hi = 0; my$N_del_hi = 0;
+		my$N_dup_lo = 0; my$N_del_lo = 0;
+		foreach (keys%{ $Result3{"high"}{$patient} }) {
+			if ($Result3{"high"}{$patient}{$_}{"type"} eq "DUP") { $N_dup_hi++; }
+			elsif ($Result3{"high"}{$patient}{$_}{"type"} eq "DEL") { $N_del_hi++; }
 			}
-		print OUT "\n$Patients{$patient}{ID}: 
-		DUP: $N_dup
-		DEL: $N_del\n";
+		if (exists ${$CNV_opt_r}{"trueCNV"}) {
+			foreach (keys%{ $Result3{"low"}{$patient} }) {
+				if ($Result3{"low"}{$patient}{$_}{"type"} eq "DUP") { $N_dup_lo++; }
+				elsif ($Result3{"low"}{$patient}{$_}{"type"} eq "DEL") { $N_del_lo++; }
+				}
+			}
+		print OUT "\n$Patients{$patient}{ID}:\n";
+		if (exists ${$CNV_opt_r}{"trueCNV"}) {
+			print OUT "\t\tDUP:\t$N_dup_hi\t$N_dup_lo\n\t\tDEL:\t$N_del_hi\t$N_del_lo\n";
+			}
+		else {
+			print OUT "\t\tDUP:\t$N_dup_hi\n\t\tDEL:\t$N_del_hi\n";
+			}
 		}
 	}
 close OUT;
@@ -1809,16 +1907,40 @@ if ($graphByChr || $graphByCNV) {
 	#my$graphByCNV = 0;
 	#if ($Nbr_Reg_max > ${$CNV_opt_r}{"switch2graphByCNV"}) { $graphByCNV = 1; print "\tgraphs by CNV:\n"; }
 	#else { print "\tgraphs by chrom:\n"; }
-	foreach my$patient (keys%Result2)  {
-		if ($graphByCNV) {
-			print "\tgraphs by CNV:\n";
-			graphByCNV2($outdir,$CNV_opt_r,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%regionIndice,\%Result2,\%Result3);
+
+	if ($graphByCNV) {
+		print "\tgraphs by CNV:\n";
+		if (exists ${$CNV_opt_r}{"trueCNV"}) {
+			foreach my$patient (keys%{ $Result2{"high"} })  {
+				graphByCNV2("$outdir/CNV_".$Patients{$patient}{"ID"}."_highQ",$CNV_opt_r,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%regionIndice,\%{ $Result2{"high"} },\%{ $Result3{"high"} });
+				}
+			foreach my$patient (keys%{ $Result2{"low"} })  {
+				graphByCNV2("$outdir/CNV_".$Patients{$patient}{"ID"}."_lowQ",$CNV_opt_r,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%regionIndice,\%{ $Result2{"low"} },\%{ $Result3{"low"} });
+				}
 			}
-		if ($graphByChr) {
-			print "\tgraphs by chrom:\n";
-			graphByChr2($outdir,$CNV_opt_r,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%Result2);
+		else {
+			foreach my$patient (keys%{ $Result2{"high"} })  {
+				graphByCNV2("$outdir/CNV_".$Patients{$patient}{"ID"},$CNV_opt_r,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%regionIndice,\%{ $Result2{"high"} },\%{ $Result3{"high"} });
+				}
 			}
 		}
+	if ($graphByChr) {
+		print "\tgraphs by chrom:\n";
+		if (exists ${$CNV_opt_r}{"trueCNV"}) {
+			foreach my$patient (keys%{ $Result2{"high"} })  {
+				graphByChr2("$outdir/CNV_".$Patients{$patient}{"ID"}."_byChr_highQ",$CNV_opt_r,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%{ $Result2{"high"} });
+				}
+			foreach my$patient (keys%{ $Result2{"low"} })  {
+				graphByChr2("$outdir/CNV_".$Patients{$patient}{"ID"}."_byChr_lowQ",$CNV_opt_r,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%{ $Result2{"low"} });
+				}
+			}
+		else {
+			foreach my$patient (keys%{ $Result2{"high"} })  {
+				graphByChr2("$outdir/CNV_".$Patients{$patient}{"ID"}."_byChr",$CNV_opt_r,$patient,\%Patients,\@Regions,\@ChrOrder,\%regionOrder,\%{ $Result2{"high"} });
+				}
+			}
+		}
+
 	}
  
 
@@ -1832,8 +1954,8 @@ open (my$fh,">",$outFile) or die "Pb lors de l'ecriture du fichier sortie $outFi
 print $fh "#Chrom\tStart\tEnd\tLength\tInfo\tinterval_Order\tCNV_type\tratio_to_$center";
 if ($spread_test) { print $fh "\tratio_to_$spread"; }
 print $fh "\toccurences";
-if (@cnvFields) {
-	foreach (@cnvFields) { 
+if (@{$cnvFields_r}) {
+	foreach (@{$cnvFields_r}) { 
 		print $fh "\t$_";
 		}
 	}
@@ -2024,9 +2146,6 @@ return ($txt);
 
 sub mergeConsecutiveCNV {
 my($maxI,$maxNonCNV,$orderedCNV,$regionIndice,$regionOrder_r,$Results_r,$Regions_r)=@_;
-#my@regionOrder = @$h1;
-#my%Results = %$h2;
-#my@Regions = @$h3;
 my$ok=1; my$i=0; my$cnvOK=0; my$nonCNV=0; my$nonCNVtot=0;
 my@nextReg=($orderedCNV);
 while ($ok) {
@@ -2063,7 +2182,7 @@ return($i,$cnvOK,$nonCNVtot,\@nextReg);
 
 sub graphByChr1 {
 
-my($nGraf,$outdir,$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,$regionOrder_r,$Patients_r,$Results_r)= @_;
+my($nGraf,$outfile,$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,$regionOrder_r,$Patients_r,$Results_r)= @_;
 
 print "\tcmdR, for sample ${$sampleName_r}{$file}\n";
 
@@ -2092,9 +2211,9 @@ my$maxDepthGraph = ${$CNV_opt_r}{"maxDepthGraph"};
 #my$N=1; #graph iteration
 
 ##1 sheet / chr :
-open (CMDR, ">$outdir/${$sampleName_r}{$file}\_temp.R") || die;
+open (CMDR, ">$outfile\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "pdf(\"$outdir/CNV_".${$sampleName_r}{$file}."_byChr.pdf\", width=11.69, height=4.135)\n";
+print CMDR "pdf(\"$outfile.pdf\", width=11.69, height=4.135)\n";
 
 foreach my$Chrom (@{$ChromOrder_r}) {
 
@@ -2403,8 +2522,8 @@ foreach my$Chrom (@{$ChromOrder_r}) {
 #print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
 print CMDR "dev.off()\nquit(save=\"no\")\n";
 close CMDR;
-system "Rscript $outdir/${$sampleName_r}{$file}\_temp.R";
-unlink "$outdir/${$sampleName_r}{$file}\_temp.R";
+system "Rscript $outfile\_temp.R";
+unlink "$outfile\_temp.R";
 
 }
 
@@ -2415,7 +2534,7 @@ unlink "$outdir/${$sampleName_r}{$file}\_temp.R";
 ####################
 sub graphByChr2 {
 
-my($outdir,$CNV_opt_r,$patient,$Patients_r,$Regions_r,$ChrOrder_r,$regionOrder_r,$Results_r)= @_;
+my($outfile,$CNV_opt_r,$patient,$Patients_r,$Regions_r,$ChrOrder_r,$regionOrder_r,$Results_r)= @_;
 
 print "\tcmdR, for ${$Patients_r}{$patient}{ID}\n";
 
@@ -2436,14 +2555,14 @@ my$maxDepthGraph = ${$CNV_opt_r}{"maxDepthGraph"};
 ##all in 1 sheet:
 #my$Nbr_Chr= scalar(keys%{$regionOrder_r});
 
-open (CMDR, ">$outdir/${$Patients_r}{$patient}{ID}\_temp.R") || die;
+open (CMDR, ">$outfile\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
 ##all in 1 sheet:
 #print CMDR "pdf(\"".$outdir."/CNV_".${$Patients_r}{$patient}{"ID"}.".pdf\", width=11.69, height=".($Nbr_Chr*3).")\n
 #par(mfrow=c($Nbr_Chr,1))\n";		#A4 size print measures 21.0 x 29.7cm, 8.27 x 11.69 inches
 
 ##1 sheet / chr
-print CMDR "pdf(\"".$outdir."/CNV_".${$Patients_r}{$patient}{"ID"}."_byChr.pdf\", width=11.69, height=4.135)\n";
+print CMDR "pdf(\"$outfile.pdf\", width=11.69, height=4.135)\n";
 
 
 for my$Chrom (@{$ChrOrder_r}) {	
@@ -2701,8 +2820,8 @@ for my$Chrom (@{$ChrOrder_r}) {
 #print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
 print CMDR "dev.off()\nquit(save=\"no\")\n";
 close CMDR;
-system "Rscript $outdir/${$Patients_r}{$patient}{ID}\_temp.R";
-unlink "$outdir/${$Patients_r}{$patient}{ID}\_temp.R";
+system "Rscript $outfile\_temp.R";
+unlink "$outfile\_temp.R";
 }
 
 
@@ -2711,7 +2830,7 @@ unlink "$outdir/${$Patients_r}{$patient}{ID}\_temp.R";
 
 sub graphByCNV1 {
 
-my($outdir,$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,$regionOrder_r,$regionIndice_r,$Patients_r,$Result2_r,$Result3_r) = @_;
+my($outfile,$CNV_opt_r,$file,$Files_r,$sampleName_r,$Regions_r,$ChromOrder_r,$regionOrder_r,$regionIndice_r,$Patients_r,$Result2_r,$Result3_r) = @_;
 
 print "\tcmdR, for sample ${$sampleName_r}{$file}\n";
 
@@ -2725,9 +2844,9 @@ my$ext = ${$CNV_opt_r}{"graphCNVpadding"};
 my$maxDepthGraph = ${$CNV_opt_r}{"maxDepthGraph"};
 my$ploidy = ${$CNV_opt_r}{"ploidy"};
 
-open (CMDR, ">$outdir/${$sampleName_r}{$file}\_temp.R") || die;
+open (CMDR, ">$outfile\_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "pdf(\"$outdir/CNV_".${$sampleName_r}{$file}.".pdf\", width=11.69, height=4.135)\n";
+print CMDR "pdf(\"$outfile.pdf\", width=11.69, height=4.135)\n";
 
 foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3_r}{$file} }) {
 
@@ -3027,8 +3146,8 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3_r}{$file} }) {
 #print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
 print CMDR "dev.off()\nquit(save=\"no\")\n";
 close CMDR;
-system "Rscript $outdir/${$sampleName_r}{$file}\_temp.R";
-unlink "$outdir/${$sampleName_r}{$file}\_temp.R";
+system "Rscript $outfile\_temp.R";
+unlink "$outfile\_temp.R";
 
 }
 
@@ -3036,7 +3155,7 @@ unlink "$outdir/${$sampleName_r}{$file}\_temp.R";
 ####################
 sub graphByCNV2 {
 
-my($outdir,$CNV_opt_r,$patient,$Patients_r,$Regions_r,$ChrOrder_r,$regionOrder_r,$regionIndice_r,$Result2_r,$Result3_r)= @_;
+my($outfile,$CNV_opt_r,$patient,$Patients_r,$Regions_r,$ChrOrder_r,$regionOrder_r,$regionIndice_r,$Result2_r,$Result3_r)= @_;
 
 my$center = ${$CNV_opt_r}{"center"};
 my$spread = ${$CNV_opt_r}{"spread"};
@@ -3049,9 +3168,9 @@ my$maxDepthGraph = ${$CNV_opt_r}{"maxDepthGraph"};
 my$ploidy = ${$CNV_opt_r}{"ploidy"};
 
 print "\tcmdR, for ${$Patients_r}{$patient}{ID}\n";
-open (CMDR, ">$outdir/${$Patients_r}{$patient}{ID}\_temp.R") || die;
+open (CMDR, ">$outfile\_temp.R") || die "could not create $outfile\_temp.R $!";
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "pdf(\"".$outdir."/CNV_".${$Patients_r}{$patient}{"ID"}.".pdf\", width=11.69, height=4.135)\n";
+print CMDR "pdf(\"$outfile.pdf\", width=11.69, height=4.135)\n";
 
 foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3_r}{$patient} }) {
 
@@ -3345,8 +3464,8 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3_r}{$patient} }) {
 #print CMDR ", outer=TRUE, line=-2, cex.main=2)\n";
 print CMDR "dev.off()\nquit(save=\"no\")\n";
 close CMDR;
-system "Rscript $outdir/${$Patients_r}{$patient}{ID}\_temp.R";
-unlink "$outdir/${$Patients_r}{$patient}{ID}\_temp.R";
+system "Rscript $outfile\_temp.R";
+unlink "$outfile\_temp.R";
 
 }
 
