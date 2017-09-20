@@ -2160,7 +2160,7 @@ if ($jobs{"CNV"}) {
 						my%tmp;
 						foreach my$ex (sort{$a<=>$b}(keys%{ $CNV_NMdepth{$gene}->{$file} }))
 							{ @{ $tmp{($nEx-$ex)} } = reverse@{ $CNV_NMdepth{$gene}->{$file}{$ex} }; }
-						$CNV_NMdepth{$gene}->{$file} = %tmp;
+						%{ $CNV_NMdepth{$gene}->{$file} } = %tmp;
 						}
 					}
 
