@@ -5,10 +5,10 @@ use strict;
 use warnings;
 
 #############
-#@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$refBedLines,\@ChromOrder);
+#@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$fichier_sexe,\%CNV_opt,$refBedLines,\@ChromOrder);
 sub CNV_detect {
 
-my($Files_r,$sampleName_r,$outdir,$nGraf,$fichier_sexe,$CNV_opt_r,$Regions_r,$ChromOrder_r) = @_;
+my($Files_r,$sampleName_r,$outdir,$fichier_sexe,$CNV_opt_r,$Regions_r,$ChromOrder_r) = @_;
 
 my$center = ${$CNV_opt_r}{"center"};
 my$spread = ${$CNV_opt_r}{"spread"};
@@ -725,10 +725,10 @@ return(\%Patients,$Result4_r);
 ####################
 
 
-#CNV_tool::CNV_reAnalyse($fichier_cov,$outdir,$nGraf,$fichier_sexe,\%CNV_opt);
+#CNV_tool::CNV_reAnalyse($fichier_cov,$outdir,$fichier_sexe,\%CNV_opt);
 sub CNV_reAnalyse
 {
-my($fichier_cov,$outdir,$nGraf,$fichier_sexe,$CNV_opt_r)=@_;
+my($fichier_cov,$outdir,$fichier_sexe,$CNV_opt_r)=@_;
 
 my$center = ${$CNV_opt_r}{"center"};
 my$spread = ${$CNV_opt_r}{"spread"};
@@ -1513,17 +1513,18 @@ foreach my$sample (keys%{$Results_r}) {
 
 	print "\t".${$Patients_r}{$sample}{"ID"}."\n";
 
-	my($fh_sum,$fh_allI_hi,$fh_allI_lo);
-	if ($inFolder) { $inFolder = "/${$Patients_r}{$sample}{ID}"; }
-	open ($fh_sum,">","$outdir$inFolder/CNV_${$Patients_r}{$sample}{ID}.summary.txt") or die "could not create $!\n";
+	my($outfile,$fh_sum,$fh_allI_hi,$fh_allI_lo);
+	if ($inFolder) { $outfile = "$outdir/${$Patients_r}{$sample}{ID}/CNV_${$Patients_r}{$sample}{ID}"; }
+	else { $outfile = "$outdir/CNV_${$Patients_r}{$sample}{ID}"; }
+	open ($fh_sum,">","$outfile.summary.txt") or die "could not create $outfile.summary.txt ($!)\n";
 	print $fh_sum "#Region\tCNV\tN_clean_intervals\tclean_ratio_to_$center\tN_dirty_intervals\tdirty_ratio_to_$center\toverlapping_Samples";
 	if (exists ${$CNV_opt_r}{"trueCNV"}) { print $fh_sum "\tqual\n"; }
 	else { print $fh_sum "\n"; }
 	if (exists ${$CNV_opt_r}{"trueCNV"}) {
-		$fh_allI_hi = printCNVheaders("$outdir$inFolder/CNV_${$Patients_r}{$sample}{ID}.highQual.txt",$center,$spread,$spread_test,${$CNV_opt_r}{"fields"});
-		$fh_allI_lo = printCNVheaders("$outdir$inFolder/CNV_${$Patients_r}{$sample}{ID}.lowQual.txt",$center,$spread,$spread_test,${$CNV_opt_r}{"fields"});
+		$fh_allI_hi = printCNVheaders("$outfile.highQual.txt",$center,$spread,$spread_test,${$CNV_opt_r}{"fields"});
+		$fh_allI_lo = printCNVheaders("$outfile.lowQual.txt",$center,$spread,$spread_test,${$CNV_opt_r}{"fields"});
 		}
-	else { $fh_allI_hi = printCNVheaders("$outdir$inFolder/CNV_${$Patients_r}{$sample}{ID}.allIntervals.txt",$center,$spread,$spread_test,${$CNV_opt_r}{"fields"}); }
+	else { $fh_allI_hi = printCNVheaders("$outfile.allIntervals.txt",$center,$spread,$spread_test,${$CNV_opt_r}{"fields"}); }
 
 
 #	foreach my$Chromosome (@{$ChromOrder_r}) {

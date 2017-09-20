@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
 
-our $VERSION="1.5.2b";
+our $VERSION="1.5.3";
 
 use warnings;
 use strict;
@@ -1161,7 +1161,7 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 			foreach (@Files) { $withChr{$_}="_0Chr.bed"; } 
 			}
 		}
-	#read gender file
+	#read gender file, just to check existing sample names
 	if ($fichier_sexe) {
 		open(PATIENTS, "$fichier_sexe") or die "cannot read $fichier_sexe\n";
 		foreach my $ligne (<PATIENTS>) {
@@ -1218,7 +1218,7 @@ if ($raw_cov_file[0]) {
 	system "$cmd";
 	}
 else {
-	if ($bedTversion == 2 && ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) ) {
+	if (!$gatk && !$bed_cov_file && $bedTversion == 2 && ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) ) {
 		if (scalar(keys%chromLength)) {
 			$chromLength = "$outdir/chromLength.txt";		#used by bedtools
 			open (my$fhOut, ">", "$chromLength");
@@ -2044,14 +2044,14 @@ if ($jobs{"CNV"}) {
 
 
 	if ($bed_cov_file) {
-		Bio::NGS::HCL::DeCovA::CNV_tool::CNV_reAnalyse($bed_cov_file,$outdir,$nGraf,$fichier_sexe,\%CNV_opt);
+		Bio::NGS::HCL::DeCovA::CNV_tool::CNV_reAnalyse($bed_cov_file,$outdir,$fichier_sexe,\%CNV_opt);
 		}
 	
 	else {
 	
 		mkdir "$outdir/CNV_analysis";
 
-		($cnv_Patients_r,$cnv_Results_r) = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$bedLines_r,\@ChromOrder);
+		($cnv_Patients_r,$cnv_Results_r) = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$fichier_sexe,\%CNV_opt,$bedLines_r,\@ChromOrder);
 
 		if ($CNV_opt{"geneGraph"} && keys%{$cnv_Results_r}) {
 			print "cnv geneGraph \n";
