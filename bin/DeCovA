@@ -100,11 +100,11 @@ GetOptions (\%opt,
 	"spread_del=f",
 	"spread_dup=f",
 	"range=f",
+	"highQual=s",
 	"ex_region=f",
 	"ex_sample=f",
 	"ex_cov=f",
 	"ex_DP=i",
-	"min_CNV=i",
 	"max_nonCNVcons=i",
 	"max_nonCNVrate=f",
 	"ratioByGender=s",
@@ -225,11 +225,11 @@ parameters:
 	--spread_del : float , <0 (def: none)
 	--spread_dup : float , >0  (def: none)
 	--range : samples kept for avg-std calculation if within mediane+/-range*quartile (def: none, ie all samples used)
+	--highQual : flag as high qual if one of following criteria : enter li/ls/si/ss/c for level inf-sup / spread inf/sup / consecutive :\n\t\t\tex : li:0.25,ls:1.75,si:-5,ss:-5,c:2
 	--ex_region : float [0-1] : region excluded from analysis if CNVs/N_samples >value (def: 1)
 	--ex_sample : float [0-1] : sample excluded from analysis if CNVs/N_regions >value (def: 1)
 	--ex_cov : float [0-1] : region excluded from analysis if none of the samples have cov >=value (def: 0)
 	--ex_DP : int : region excluded from analysis if avg depth <=value (def: 0)
-	--min_CNV : min nber consecutive CNV (def: 1)
 	--max_nonCNVcons : max nber of non-CNV consecutive intervals tolerated within a CNV (def: 0)
 	--max_nonCNVrate : max rate of non-CNV intervals tolerated within a CNV (def: 0)
 	--ratioByGender :	enter \"a\" : foreach region from all chrom, depth ratio computed separately for F and M ; 
@@ -761,6 +761,18 @@ if (exists $opt{level_dup}) { $CNV_opt{"seuil_dup"} = $opt{level_dup}; }
 if (exists $opt{spread_del}) { $CNV_opt{"spread_del"} = $opt{spread_del}; }
 if (exists $opt{spread_dup}) { $CNV_opt{"spread_dup"} = $opt{spread_dup}; }
 if (exists $opt{range}) { $CNV_opt{"range"} = $opt{range}; }
+if (exists $opt{highQual}) {
+	my@tab1 = split(/,/,$opt{highQual});
+	foreach my$string (@tab1) {
+		my@tab2 = split(/:/,$string);
+		if ($tab2[0] =~ /^li/i) { $CNV_opt{"trueCNV"}{"level"}{"del"} = $tab2[1]; }
+		elsif ($tab2[0] =~ /^ls/i) { $CNV_opt{"trueCNV"}{"level"}{"dup"} = $tab2[1]; }
+		elsif ($tab2[0] =~ /^si/i) { $CNV_opt{"trueCNV"}{"spread"}{"del"} = $tab2[1]; }
+		elsif ($tab2[0] =~ /^ss/i) { $CNV_opt{"trueCNV"}{"spread"}{"dup"} = $tab2[1]; }
+		elsif ($tab2[0] =~ /^c/i) { $CNV_opt{"trueCNV"}{"conseC"} = $tab2[1]; }
+		else  { die "opt --highQual not recognized (li/ls/si/ss/c)\n"; }
+		}
+	}
 $CNV_opt{"seuil_region"} = 1;
 if (exists $opt{ex_region}) { $CNV_opt{"seuil_region"} = $opt{ex_region}; }
 $CNV_opt{"seuil_patient"} = 1;
@@ -769,7 +781,7 @@ if (exists $opt{ex_cov}) { $CNV_opt{"seuil_cov"} = $opt{ex_cov}; }
 $CNV_opt{"min_DP"} = 0;
 if (exists $opt{ex_DP}) { $CNV_opt{"min_DP"} = $opt{ex_DP}; }
 $CNV_opt{"min_following_CNV"} = "";
-if (exists $opt{min_CNV}) { $CNV_opt{"min_following_CNV"} = $opt{min_CNV}; }
+#if (exists $opt{min_CNV}) { $CNV_opt{"min_following_CNV"} = $opt{min_CNV}; }
 $CNV_opt{"max_Non_CNV"} = "";
 if (exists $opt{max_nonCNVcons}) { $CNV_opt{"max_Non_CNV"} = $opt{max_nonCNVcons}; }
 $CNV_opt{"max_Non_CNV_rate"} = "";
@@ -810,6 +822,7 @@ if (exists $opt{CNV_fields}) {
 $CNV_opt{"switch2graphByCNV"} = 250;
 $CNV_opt{"maxGeneLab"} = 200;
 $CNV_opt{"maxGeneSep"} = 500;
+$CNV_opt{"maxLabelLgth"} = 25;
 $CNV_opt{"graphCNVpadding"} = 4;
 $CNV_opt{"maxDepthGraph"} = 10;
 $CNV_opt{"ploidy"} = 2;
@@ -1577,7 +1590,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		if ($gatk) {
 			my($r1,$r2) = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,\%sName,$outdir,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$threads,$gatk,$picard,$genom);
 			%gatkIdx = %$r1;
-			@{ $headers{"$outdir/all.cov"} } = @$r2;
+			#@{ $headers{"$outdir/all.cov"} } = @$r2;
 			}
 		else {
 			$keepTmp = 0;
@@ -1585,7 +1598,6 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 			}
 		}
 	}
-
 
 
 ###################
@@ -2027,7 +2039,7 @@ if ($jobs{"covBed"}) {
 		}
 	}
 
-my(%cnv_Patients,%cnv_Results);
+my($cnv_Patients_r,$cnv_Results_r);
 if ($jobs{"CNV"}) {
 
 
@@ -2039,24 +2051,24 @@ if ($jobs{"CNV"}) {
 	
 		mkdir "$outdir/CNV_analysis";
 
-		@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$bedLines_r,\@ChromOrder);
-		%cnv_Patients = %{$hashSub[0]};
-		%cnv_Results = %{$hashSub[1]};
+		($cnv_Patients_r,$cnv_Results_r) = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$nGraf,$fichier_sexe,\%CNV_opt,$bedLines_r,\@ChromOrder);
 
-		if ($CNV_opt{"geneGraph"} && keys%cnv_Results) {
+		if ($CNV_opt{"geneGraph"} && keys%{$cnv_Results_r}) {
 			print "cnv geneGraph \n";
 			#get transcripts and genes overlapping bed CNV results
 			my(%IDs,%CNVbed,%CNV_Genes);
 			open (MERGE, ">$outdir/allCNVs.bed") || die "can't create file $outdir/allCNVs.bed\n";
 			##cnv_Results{$Chrom}{Start}{End} = "DEL/DUP	foldRatio"
-			foreach my$file (keys%cnv_Results) {
+			foreach my$file (keys%{$cnv_Results_r}) {
+				print "\tfor $file\t";
 				#open (BED, "$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt") || die "can't open $outdir/CNV_analysis/CNV_$sName2{$file}.txt\n";
 				#while (my$line=<BED>) { print MERGE $line; }
 				#close BED;
 				#%{ $CNVbed{$file} } = readBed("$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt");
-				foreach my$chr (keys%{ $cnv_Results{$file} }) {
-					foreach my$start (keys%{ $cnv_Results{$file}{$chr} }) {
-						foreach my$end (keys%{ $cnv_Results{$file}{$chr}{$start} }) {
+				foreach my$chrom (keys%{ ${$cnv_Results_r}{$file} }) {
+					foreach my$start (keys%{ ${$cnv_Results_r}{$file}{$chrom} }) {
+						foreach my$end (keys%{ ${$cnv_Results_r}{$file}{$chrom}{$start} }) {
+							my$chr = $chrom; $chr =~ s/^chr//i;
 							print MERGE "$chr\t$start\t$end\n";
 							if (exists $CNVbed{$file}{$chr}{($start+1)}) {
 								if ($end > $CNVbed{$file}{$chr}{($start+1)}) 
@@ -2101,7 +2113,7 @@ if ($jobs{"CNV"}) {
 					my@tab = split(/\t/,$line);
 					my$line2="";
 					for my$i (0..2) { $line2 .= $tab[$i]."\t"; }
-					for my$i (3..$#tab) { $line2 .= ($tab[$i] / $cnv_Patients{$gatkIdx2File{$i}}{"Ref_depth"})."\t"; }
+					for my$i (3..$#tab) { $line2 .= ($tab[$i] / ${$cnv_Patients_r}{$gatkIdx2File{$i}}{"Ref_depth"})."\t"; }
 					chop $line2;
 					print NORM $line2."\n";
 					$l++;
@@ -2115,7 +2127,7 @@ if ($jobs{"CNV"}) {
 					while (my$line=<COV>){
 						chomp $line;
 						my@tab = split(/\t/,$line);
-						$tab[-1] /= $cnv_Patients{$file}{"Ref_depth"};
+						$tab[-1] /= ${$cnv_Patients_r}{$file}{"Ref_depth"};
 						my$line2="";
 						foreach (@tab) { $line2 .= $_."\t"; }
 						chop $line2;
@@ -2135,7 +2147,7 @@ if ($jobs{"CNV"}) {
 				## %allDepth: depth foreach position in intervals from %allInterval : $allDepth{$loc} = depth
 	
 				foreach my$file (@Files) {
-
+					print "\tfor $file\n";
 					my$allDepth_r;
 					if ($gatk)
 						{ $allDepth_r = intersect($gatkIdx{$file},"$outdir/all.norm.cov",$maxGr,$chr,\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$gene} },$gatk,""); }
@@ -2143,7 +2155,7 @@ if ($jobs{"CNV"}) {
 						{ $allDepth_r = intersect($fName{$file},"$outdir/$fName{$file}.norm.cov",$maxGr,$chr,\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$gene} },$gatk,""); }
 
 					## %NMdepth: key = $file, value = %(key = $NM, value = %( key = $ex, value = @(cov foreach ordered bp of exon) ) )
-					## @{ $NMdepth{$file}{$NM}{$startReg} } = [ cov foreach ordered bp of exon ]
+					## @{ $CNV_NMdepth{$gene}->{$file}{$eachReg} } = [ depth foreach ordered bp of Reg ]
 					$CNV_NMdepth{$gene}->{$file} = depthLine(\%{ $Regions{"raw"}->{$chr}{$gene} },$allDepth_r);
 					}
 
@@ -2155,11 +2167,13 @@ if ($jobs{"CNV"}) {
 
 				##reverse depth coord if sens "-"
 				if ($Rev && ($sens eq "-")) {
+					my$nEx = scalar(keys%{ $CNV_NMdepth{$gene}->{$Files[0]} }) -1;
 					foreach my$file (@Files) {
-						my$nEx=scalar(keys%{ $CNV_NMdepth{$gene}->{$file} })-1;
+						#$nEx = scalar(keys%{ $CNV_NMdepth{$gene}->{$file} }) -1;
 						my%tmp;
-						foreach my$ex (sort{$a<=>$b}(keys%{ $CNV_NMdepth{$gene}->{$file} }))
-							{ @{ $tmp{($nEx-$ex)} } = reverse@{ $CNV_NMdepth{$gene}->{$file}{$ex} }; }
+						foreach my$ex (sort{$a<=>$b}(keys%{ $CNV_NMdepth{$gene}->{$file} })) {
+							@{ $tmp{($nEx-$ex)} } = reverse@{ $CNV_NMdepth{$gene}->{$file}{$ex} };
+							}
 						%{ $CNV_NMdepth{$gene}->{$file} } = %tmp;
 						}
 					}
@@ -2168,7 +2182,7 @@ if ($jobs{"CNV"}) {
 			#print graphs
 			foreach my$file (@Files) {
 				foreach my$gene (sort(keys%{ $CNV_Genes{$file} })) {
-					print "printing CNV graph for $sName2{$file}, in $gene\n";
+					#print "printing CNV graph for $sName2{$file}, in $gene\n";
 					my@NMs =  @{ ${$geneNM_r}{$gene} };
 					my$chr = ${$NMchr_r}{$NMs[0]};
 					my$sens = ${$NMsens_r}{$NMs[0]};
@@ -2202,18 +2216,21 @@ if (!$jobs{"keepBed"}) {
 
 if ($jobs{"keepCov"}) {
 	if ($gatk) {
-		open(my$fhOut, ">", "$outdir/gatk.all.cov.txt") or die "cannot create $outdir/gatk.all.cov.txt file\n";
-		foreach (@{ $headers{"$outdir/all.cov"} }) { print $fhOut "$_"; }
-		open(my$fhIn, "<", "$outdir/all.cov") or die "cannot read $outdir/all.cov\n";
-		while (<$fhIn>) { print $fhOut "$_"; }
-		close $fhIn; close $fhOut;
+		#open(my$fhOut, ">", "$outdir/gatk.all.cov.txt") or die "cannot create $outdir/gatk.all.cov.txt file\n";
+		#foreach (@{ $headers{"$outdir/all.cov"} }) { print $fhOut "$_"; }
+		#open(my$fhIn, "<", "$outdir/all.cov") or die "cannot read $outdir/all.cov\n";
+		#while (<$fhIn>) { print $fhOut "$_"; }
+		#close $fhIn; close $fhOut;
+		my$cmd = "cat $outdir/all.cov.headers.txt $outdir/all.cov > $outdir/gatk.all.cov.txt";
+		print "$cmd\n";
+		system "$cmd";
 		}	
 	}
 
 if (-e "$outdir/chromLength.txt") { unlink "$outdir/chromLength.txt"; }
 
 if ($gatk) {
-	unlink glob "$outdir/all.cov*"; 
+	unlink glob "$outdir/all.cov*";
 	if ($jobs{"CNV"}) { unlink glob "$outdir/all.norm.cov*"; }
 	}
 else {
@@ -2256,8 +2273,8 @@ while (my$line=<BED>) {
 		$tab[0] =~ s/^chr//i;
 		#keep longest interval
 		if ( exists $covBed{$tab[0]}{($tab[1]+1)} ) {
-			if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)}) 
-				{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }	
+			if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)})
+				{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }
 			else { next; }
 			}
 		else
@@ -3041,8 +3058,8 @@ close $fh;
 sub rm_overlap_Bed {
 
 #no_overlap_Bed($bedFile,$splitBed);
-my($bedFile,$newBed,$chromOrderRf) = @_;
-my@chromOrder = @{$chromOrderRf};
+my($bedFile,$newBed,$chromOrder_r) = @_;
+my@chromOrder = @{$chromOrder_r};
 
 ##bedFile in %intervals
 my(%intervals,@tmpOrder,%allChrom,%trueChr);		
@@ -3070,7 +3087,7 @@ while (my$line=<$fh>) {
 	}
 unless ($ok) { die "no bed formatted line in $bedFile file"; }
 close ($fh);
-unless (@{$chromOrderRf}) { @chromOrder = @tmpOrder; }
+unless (@{$chromOrder_r}) { @chromOrder = @tmpOrder; }
 
 #intervals with same start : start = end of second to last; end = end of last
 # $interval2{$chr}[idx]{"start"/"end"/"info"} = ;
@@ -3640,7 +3657,7 @@ close(IDS);
 if ($id2Bed) {
 	my@allChrom = ();
 	if (@ChromOrder) {
-		foreach my$chr (@ChromOrder) {	print STDERR "$chr\n";
+		foreach my$chr (@ChromOrder) {	#print STDERR "$chr\n";
 			$chr =~ s/^chr//i;
 			if (exists $printBed{$chr}) { push(@allChrom,$chr); }
 			}
@@ -5029,7 +5046,8 @@ my($bedFile,$interval_r,$ChromOrder_r) = @_;
 open (OUT0, ">$outdir/$bedFile\_0Chr.bed")  || die "cannot create $outdir/$bedFile\_0Chr.bed\n";
 open (OUTw, ">$outdir/$bedFile\_wChr.bed")  || die "cannot create $outdir/$bedFile\_wChr.bed\n";
 if (@{$ChromOrder_r}) {
-	foreach my$chr (@{$ChromOrder_r}) {
+	foreach my$chrom (@{$ChromOrder_r}) {
+		my$chr = $chrom;
 		$chr =~ s/^chr//i;
 		if (exists ${$interval_r}{$chr}) {
 			foreach my$start (sort{$a<=>$b}keys%{ ${$interval_r}{$chr} }) {
@@ -5239,17 +5257,20 @@ open(COV, "$outdir/$outName");
 my$firstLine = <COV>;
 print $firstLine;
 chomp $firstLine;
-my@tab = split(/\t/,$firstLine);
+my@header_cov = split(/\t/,$firstLine);
 foreach my$file(@Files) {
-	for (my$i=0;$i<scalar@tab;$i++) {
-		if ($tab[$i] eq "Depth_for_$sName{$file}")
+	for (my$i=0;$i<scalar@header_cov;$i++) {
+		if ($header_cov[$i] eq "Depth_for_$sName{$file}")
 			{ $gatkIdx{$file} = $i; last; }
 		}
 	}
 close COV;
 
 #$cmd = "sed -i '1d' $outdir/$bedName-$outName";
-my@header_cov = `head -n 1 $outdir/$outName`; 
+#my@header_cov = `head -n 1 $outdir/$outName`;
+$cmd = "head -n 1 $outdir/$outName > $outdir/$outName.headers.txt";
+print "$cmd\n";
+system "$cmd";
 $cmd = "tail -n +2 $outdir/$outName > $outdir/tmpTail; mv $outdir/tmpTail $outdir/$outName";
 print "$cmd\n";
 system "$cmd";
@@ -7735,9 +7756,11 @@ while (my$line=<BED>) {
 	$allLines[$i] = $line;
 	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
 		my@tab = split(/\t/,$line);
-		$tab[0] =~ s/chr//i;
+#		$tab[0] =~ s/chr//i;
 		$bedLines[$j]{"allLine"} = $line;
 		$bedLines[$j]{"Chrom"} = $tab[0]; $bedLines[$j]{"Start"} = ($tab[1]+1); $bedLines[$j]{"End"} = $tab[2];
+		if ($tab[3] && $tab[3] !~ /^\s*$/) { $bedLines[$j]{"Infos"} = $tab[3]; }
+		$tab[0] =~ s/chr//i;
 		$Chr{$i} = $tab[0]; $Start{$i} = ($tab[1]+1); $End{$i} = $tab[2];		##1-based
 		$Intervals{$Chr{$i}}{$Start{$i}}{$End{$i}} = 1;
 		$j++;
@@ -8003,8 +8026,10 @@ foreach my$chr (keys%{$mergeBed_r}) {
 
 my$nCol;
 foreach (@allLines) {
-	if (($_ =~ /^\w+\t\d+\t\d+/) && ($_ !~ /^#/))
-		{ $nCol = scalar(split(/\t/,$_)); }
+	if (($_ =~ /^\w+\t\d+\t\d+/) && ($_ !~ /^#/)) {
+		my@Col = split(/\t/,$_);
+		$nCol = scalar@Col;
+		}
 	if ($nCol) { last; }
 	}
 
@@ -8094,7 +8119,7 @@ sub CNVgraphByGene {
 
 my($file,$suff,$outdir,$gene,$sens,$maxD,$Rev,$chr,$maxY,$threshold,$NMlength,$Files_r,$sampleName_r,$Regions_r,$Reg_00_r,$NMs_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMdepth_r) = @_;
 
-#print "print CMDR CNVgraphByGene: ".${$sampleName_r}{$file}." , $gene\n";
+print "print CMDR CNVgraphByGene: ".${$sampleName_r}{$file}." , in $gene\n";
 
 unless ($maxD) {
 	if ($maxY<10) { $maxY = 10; }
@@ -8108,10 +8133,10 @@ my$endReg = $Regions_r->{$chr}{$gene}{$Starts[-1]};
 my($Y,$Y1,$Y2);
 #$line1: cmdR for plot cov line
 my$line1="";
-for (my$f=0;$f<scalar@{$Files_r};$f++) {
-	unless (${$Files_r}[$f] eq $file) {
+foreach my$f2 (@{$Files_r}) {
+	unless ($f2 eq $file) {
 		#@{ $NMdepth{$file}{$ex} } = [ cov foreach ordered bp of exon ]
-		$line1 .= line1c("black",\%{ $Reg_00_r->{$gene} },\%{ $NMdepth_r->{${$Files_r}[$f]} });
+		$line1 .= line1c("black",\%{ $Reg_00_r->{$gene} },\%{ $NMdepth_r->{$f2} });
 		}
 	}
 $line1 .= line1c("green",\%{ $Reg_00_r->{$gene} },\%{ $NMdepth_r->{$file} });
@@ -8177,10 +8202,10 @@ $cmdR .= $line3a." lwd=1, col=NA, border =\"black\")\n";
 
 print CMDR "$cmdR";
 if ($sens eq "+") {
-	print CMDR "mtext(\"$gene : chr $chr:".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1)\n";
+	print CMDR "mtext(\"$gene : chr $chr:$startReg >>> $endReg\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 	}
 else {
-	print CMDR "mtext(\"$gene : chr $chr:".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1)\n";
+	print CMDR "mtext(\"$gene : chr $chr:$startReg <<< $endReg\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 	}
 print CMDR "dev.off();\n";
 close CMDR;
