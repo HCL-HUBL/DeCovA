@@ -2060,13 +2060,15 @@ if ($jobs{"CNV"}) {
 			open (MERGE, ">$outdir/allCNVs.bed") || die "can't create file $outdir/allCNVs.bed\n";
 			##cnv_Results{$Chrom}{Start}{End} = "DEL/DUP	foldRatio"
 			foreach my$file (keys%{$cnv_Results_r}) {
+				print "\tfor $file\t";
 				#open (BED, "$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt") || die "can't open $outdir/CNV_analysis/CNV_$sName2{$file}.txt\n";
 				#while (my$line=<BED>) { print MERGE $line; }
 				#close BED;
 				#%{ $CNVbed{$file} } = readBed("$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt");
-				foreach my$chr (keys%{ ${$cnv_Results_r}{$file} }) {
-					foreach my$start (keys%{ ${$cnv_Results_r}{$file}{$chr} }) {
-						foreach my$end (keys%{ ${$cnv_Results_r}{$file}{$chr}{$start} }) {
+				foreach my$chrom (keys%{ ${$cnv_Results_r}{$file} }) {
+					foreach my$start (keys%{ ${$cnv_Results_r}{$file}{$chrom} }) {
+						foreach my$end (keys%{ ${$cnv_Results_r}{$file}{$chrom}{$start} }) {
+							my$chr = $chrom; $chr =~ s/^chr//i;
 							print MERGE "$chr\t$start\t$end\n";
 							if (exists $CNVbed{$file}{$chr}{($start+1)}) {
 								if ($end > $CNVbed{$file}{$chr}{($start+1)}) 
@@ -2153,7 +2155,7 @@ if ($jobs{"CNV"}) {
 						{ $allDepth_r = intersect($fName{$file},"$outdir/$fName{$file}.norm.cov",$maxGr,$chr,\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$gene} },$gatk,""); }
 
 					## %NMdepth: key = $file, value = %(key = $NM, value = %( key = $ex, value = @(cov foreach ordered bp of exon) ) )
-					## @{ $NMdepth{$file}{$NM}{$startReg} } = [ cov foreach ordered bp of exon ]
+					## @{ $CNV_NMdepth{$gene}->{$file}{$eachReg} } = [ depth foreach ordered bp of Reg ]
 					$CNV_NMdepth{$gene}->{$file} = depthLine(\%{ $Regions{"raw"}->{$chr}{$gene} },$allDepth_r);
 					}
 
@@ -2165,12 +2167,14 @@ if ($jobs{"CNV"}) {
 
 				##reverse depth coord if sens "-"
 				if ($Rev && ($sens eq "-")) {
+					my$nEx = scalar(keys%{ $CNV_NMdepth{$gene}->{$Files[0]} }) -1;
 					foreach my$file (@Files) {
-						my$nEx=scalar(keys%{ $CNV_NMdepth{$gene}->{$file} })-1;
+						#$nEx = scalar(keys%{ $CNV_NMdepth{$gene}->{$file} }) -1;
 						my%tmp;
-						foreach my$ex (sort{$a<=>$b}(keys%{ $CNV_NMdepth{$gene}->{$file} }))
-							{ @{ $tmp{($nEx-$ex)} } = reverse@{ $CNV_NMdepth{$gene}->{$file}{$ex} }; }
-						$CNV_NMdepth{$gene}->{$file} = %tmp;
+						foreach my$ex (sort{$a<=>$b}(keys%{ $CNV_NMdepth{$gene}->{$file} })) {
+							@{ $tmp{($nEx-$ex)} } = reverse@{ $CNV_NMdepth{$gene}->{$file}{$ex} };
+							}
+						%{ $CNV_NMdepth{$gene}->{$file} } = %tmp;
 						}
 					}
 
@@ -2178,7 +2182,7 @@ if ($jobs{"CNV"}) {
 			#print graphs
 			foreach my$file (@Files) {
 				foreach my$gene (sort(keys%{ $CNV_Genes{$file} })) {
-					print "printing CNV graph for $sName2{$file}, in $gene\n";
+					#print "printing CNV graph for $sName2{$file}, in $gene\n";
 					my@NMs =  @{ ${$geneNM_r}{$gene} };
 					my$chr = ${$NMchr_r}{$NMs[0]};
 					my$sens = ${$NMsens_r}{$NMs[0]};
@@ -2269,8 +2273,8 @@ while (my$line=<BED>) {
 		$tab[0] =~ s/^chr//i;
 		#keep longest interval
 		if ( exists $covBed{$tab[0]}{($tab[1]+1)} ) {
-			if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)}) 
-				{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }	
+			if ( $tab[2] > $covBed{$tab[0]}{($tab[1]+1)})
+				{ $covBed{$tab[0]}{($tab[1]+1)} = $tab[2]; }
 			else { next; }
 			}
 		else
@@ -8115,7 +8119,7 @@ sub CNVgraphByGene {
 
 my($file,$suff,$outdir,$gene,$sens,$maxD,$Rev,$chr,$maxY,$threshold,$NMlength,$Files_r,$sampleName_r,$Regions_r,$Reg_00_r,$NMs_r,$NM_Ex00_r,$NMbed00_r,$intron_r,$UTR_r,$Cod_r,$NMdepth_r) = @_;
 
-print "print CMDR CNVgraphByGene: ".${$sampleName_r}{$file}." , $gene\n";
+print "print CMDR CNVgraphByGene: ".${$sampleName_r}{$file}." , in $gene\n";
 
 unless ($maxD) {
 	if ($maxY<10) { $maxY = 10; }
@@ -8124,15 +8128,15 @@ unless ($maxD) {
 my$nNMs = scalar@{$NMs_r};
 my@Starts = sort{$a<=>$b}(keys%{ $Regions_r->{$chr}{$gene} });
 my$startReg = $Starts[0];
-my$endReg = $Regions{$Starts[-1]};
+my$endReg = $Regions_r->{$chr}{$gene}{$Starts[-1]};
 
 my($Y,$Y1,$Y2);
 #$line1: cmdR for plot cov line
 my$line1="";
-for (my$f=0;$f<scalar@{$Files_r};$f++) {
-	unless (${$Files_r}[$f] eq $file) {
+foreach my$f2 (@{$Files_r}) {
+	unless ($f2 eq $file) {
 		#@{ $NMdepth{$file}{$ex} } = [ cov foreach ordered bp of exon ]
-		$line1 .= line1c("black",\%{ $Reg_00_r->{$gene} },\%{ $NMdepth_r->{${$Files_r}[$f]} });
+		$line1 .= line1c("black",\%{ $Reg_00_r->{$gene} },\%{ $NMdepth_r->{$f2} });
 		}
 	}
 $line1 .= line1c("green",\%{ $Reg_00_r->{$gene} },\%{ $NMdepth_r->{$file} });
@@ -8152,7 +8156,7 @@ my$line3a = line3a($maxY,$Y1,$Y2,\%{ $NMbed00_r->{$gene} });
 #$line4a: cmdR for cmdR for rect(UTR exons)	#$UTR{$NM}{$startUTR} = $endUTR;
 my$line4a="";
 for(my$i=0;$i<$nNMs;$i++) {
-	if (scalar(keys%{ $UTR{${$NMs_r}[$i]} })!=0) {
+	if (scalar(keys%{ $UTR_r->{${$NMs_r}[$i]} })!=0) {
 		$Y1=(0.375+0.25*$i);$Y2=(0.475+0.25*$i);
 		$line4a .= line4a($maxY,$Y1,$Y2,\%{ $UTR_r->{${$NMs_r}[$i]} });
 		}
@@ -8161,7 +8165,7 @@ for(my$i=0;$i<$nNMs;$i++) {
 #$line4b: cmdR for rect(coding exons)	#$Cod{$NM}{$startCod} = $endCod;
 my$line4b="";
 for(my$i=0;$i<$nNMs;$i++) {
-	if (scalar(keys%{ $Cod{${$NMs_r}[$i]} })) {
+	if (scalar(keys%{ $Cod_r->{${$NMs_r}[$i]} })) {
 		$Y1=(0.35+0.25*$i);$Y2=(0.5+0.25*$i);
 		$line4b .= line4b($maxY,$Y1,$Y2,\%{ $Cod_r->{${$NMs_r}[$i]} });
 		}
@@ -8181,7 +8185,7 @@ my$line7 = line7($NMlength,$maxY,$NMs_r);
 #print CMDR:
 open (CMDR, ">$outdir/".${$sampleName_r}{$file}.".$gene.temp.R") || die "cannot create $outdir/".${$sampleName_r}{$file}.".$gene.temp.R";
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "png(\"$outdir/".${$sampleName_r}{$file}.".$gene.pdf\", width=11.69, height=".(4.135*(0.75+0.875+(0.125*$nNMs))/1.75).")\n";
+print CMDR "pdf(\"$outdir/".${$sampleName_r}{$file}.".$gene.pdf\", width=11.69, height=".(4.135*(0.75+0.875+(0.125*$nNMs))/1.75).")\n";
  
 #png: my$cmdR = "plot (c(0,0), xlim=c(-".(0.8*$NMlength/10).",".$NMlength."), ylim=c(-".((0.5+0.25*$nNMs)*$maxY).",".(1.25*$maxY)."), type =\"n\", xlab = \"sample : ".${$sampleName_r}{$file}."\", ylab = \"normalized_depth\", cex.lab=1.5, cex.axis=1.2)\n";
 #pdf:
@@ -8198,10 +8202,10 @@ $cmdR .= $line3a." lwd=1, col=NA, border =\"black\")\n";
 
 print CMDR "$cmdR";
 if ($sens eq "+") {
-	print CMDR "mtext(\"$gene\tchr $chr\t".$startReg." >>> ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1)\n";
+	print CMDR "mtext(\"$gene : chr $chr:$startReg >>> $endReg\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 	}
 else {
-	print CMDR "mtext(\"$gene\tchr $chr\t".$startReg." <<< ".$endReg."\", side = 3, outer=TRUE, line=-3, cex=1)\n";
+	print CMDR "mtext(\"$gene : chr $chr:$startReg <<< $endReg\", side = 3, outer=TRUE, line=-3, cex=1)\n";
 	}
 print CMDR "dev.off();\n";
 close CMDR;
