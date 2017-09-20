@@ -1590,7 +1590,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		if ($gatk) {
 			my($r1,$r2) = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,\%sName,$outdir,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$threads,$gatk,$picard,$genom);
 			%gatkIdx = %$r1;
-			@{ $headers{"$outdir/all.cov"} } = @$r2;
+			#@{ $headers{"$outdir/all.cov"} } = @$r2;
 			}
 		else {
 			$keepTmp = 0;
@@ -1598,7 +1598,6 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 			}
 		}
 	}
-
 
 
 ###################
@@ -2213,18 +2212,21 @@ if (!$jobs{"keepBed"}) {
 
 if ($jobs{"keepCov"}) {
 	if ($gatk) {
-		open(my$fhOut, ">", "$outdir/gatk.all.cov.txt") or die "cannot create $outdir/gatk.all.cov.txt file\n";
-		foreach (@{ $headers{"$outdir/all.cov"} }) { print $fhOut "$_"; }
-		open(my$fhIn, "<", "$outdir/all.cov") or die "cannot read $outdir/all.cov\n";
-		while (<$fhIn>) { print $fhOut "$_"; }
-		close $fhIn; close $fhOut;
+		#open(my$fhOut, ">", "$outdir/gatk.all.cov.txt") or die "cannot create $outdir/gatk.all.cov.txt file\n";
+		#foreach (@{ $headers{"$outdir/all.cov"} }) { print $fhOut "$_"; }
+		#open(my$fhIn, "<", "$outdir/all.cov") or die "cannot read $outdir/all.cov\n";
+		#while (<$fhIn>) { print $fhOut "$_"; }
+		#close $fhIn; close $fhOut;
+		my$cmd = "cat $outdir/all.cov.headers.txt $outdir/all.cov > $outdir/gatk.all.cov.txt";
+		print "$cmd\n";
+		system "$cmd";
 		}	
 	}
 
 if (-e "$outdir/chromLength.txt") { unlink "$outdir/chromLength.txt"; }
 
 if ($gatk) {
-	unlink glob "$outdir/all.cov*"; 
+	unlink glob "$outdir/all.cov*";
 	if ($jobs{"CNV"}) { unlink glob "$outdir/all.norm.cov*"; }
 	}
 else {
@@ -3052,8 +3054,8 @@ close $fh;
 sub rm_overlap_Bed {
 
 #no_overlap_Bed($bedFile,$splitBed);
-my($bedFile,$newBed,$chromOrderRf) = @_;
-my@chromOrder = @{$chromOrderRf};
+my($bedFile,$newBed,$chromOrder_r) = @_;
+my@chromOrder = @{$chromOrder_r};
 
 ##bedFile in %intervals
 my(%intervals,@tmpOrder,%allChrom,%trueChr);		
@@ -3081,7 +3083,7 @@ while (my$line=<$fh>) {
 	}
 unless ($ok) { die "no bed formatted line in $bedFile file"; }
 close ($fh);
-unless (@{$chromOrderRf}) { @chromOrder = @tmpOrder; }
+unless (@{$chromOrder_r}) { @chromOrder = @tmpOrder; }
 
 #intervals with same start : start = end of second to last; end = end of last
 # $interval2{$chr}[idx]{"start"/"end"/"info"} = ;
@@ -3651,7 +3653,7 @@ close(IDS);
 if ($id2Bed) {
 	my@allChrom = ();
 	if (@ChromOrder) {
-		foreach my$chr (@ChromOrder) {	print STDERR "$chr\n";
+		foreach my$chr (@ChromOrder) {	#print STDERR "$chr\n";
 			$chr =~ s/^chr//i;
 			if (exists $printBed{$chr}) { push(@allChrom,$chr); }
 			}
@@ -5040,7 +5042,8 @@ my($bedFile,$interval_r,$ChromOrder_r) = @_;
 open (OUT0, ">$outdir/$bedFile\_0Chr.bed")  || die "cannot create $outdir/$bedFile\_0Chr.bed\n";
 open (OUTw, ">$outdir/$bedFile\_wChr.bed")  || die "cannot create $outdir/$bedFile\_wChr.bed\n";
 if (@{$ChromOrder_r}) {
-	foreach my$chr (@{$ChromOrder_r}) {
+	foreach my$chrom (@{$ChromOrder_r}) {
+		my$chr = $chrom;
 		$chr =~ s/^chr//i;
 		if (exists ${$interval_r}{$chr}) {
 			foreach my$start (sort{$a<=>$b}keys%{ ${$interval_r}{$chr} }) {
@@ -5250,17 +5253,20 @@ open(COV, "$outdir/$outName");
 my$firstLine = <COV>;
 print $firstLine;
 chomp $firstLine;
-my@tab = split(/\t/,$firstLine);
+my@header_cov = split(/\t/,$firstLine);
 foreach my$file(@Files) {
-	for (my$i=0;$i<scalar@tab;$i++) {
-		if ($tab[$i] eq "Depth_for_$sName{$file}")
+	for (my$i=0;$i<scalar@header_cov;$i++) {
+		if ($header_cov[$i] eq "Depth_for_$sName{$file}")
 			{ $gatkIdx{$file} = $i; last; }
 		}
 	}
 close COV;
 
 #$cmd = "sed -i '1d' $outdir/$bedName-$outName";
-my@header_cov = `head -n 1 $outdir/$outName`; 
+#my@header_cov = `head -n 1 $outdir/$outName`;
+$cmd = "head -n 1 $outdir/$outName > $outdir/$outName.headers.txt";
+print "$cmd\n";
+system "$cmd";
 $cmd = "tail -n +2 $outdir/$outName > $outdir/tmpTail; mv $outdir/tmpTail $outdir/$outName";
 print "$cmd\n";
 system "$cmd";
@@ -7749,8 +7755,7 @@ while (my$line=<BED>) {
 #		$tab[0] =~ s/chr//i;
 		$bedLines[$j]{"allLine"} = $line;
 		$bedLines[$j]{"Chrom"} = $tab[0]; $bedLines[$j]{"Start"} = ($tab[1]+1); $bedLines[$j]{"End"} = $tab[2];
-		if ($tab[3] !~ /^\s*$/) { $bedLines[$j]{"Gene"} = $tab[3]; }
-		else { $bedLines[$j]{"Gene"} = "NA"; }
+		if ($tab[3] && $tab[3] !~ /^\s*$/) { $bedLines[$j]{"Infos"} = $tab[3]; }
 		$tab[0] =~ s/chr//i;
 		$Chr{$i} = $tab[0]; $Start{$i} = ($tab[1]+1); $End{$i} = $tab[2];		##1-based
 		$Intervals{$Chr{$i}}{$Start{$i}}{$End{$i}} = 1;
@@ -8017,8 +8022,10 @@ foreach my$chr (keys%{$mergeBed_r}) {
 
 my$nCol;
 foreach (@allLines) {
-	if (($_ =~ /^\w+\t\d+\t\d+/) && ($_ !~ /^#/))
-		{ $nCol = scalar(split(/\t/,$_)); }
+	if (($_ =~ /^\w+\t\d+\t\d+/) && ($_ !~ /^#/)) {
+		my@Col = split(/\t/,$_);
+		$nCol = scalar@Col;
+		}
 	if ($nCol) { last; }
 	}
 
