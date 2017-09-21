@@ -3137,14 +3137,14 @@ foreach my$chr (keys%interval2) {
 				}
 			}
 		else {
-			unless (exists $interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"}) {
+			if (!exists $interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} && $interval2{$chr}[$i]{"start"} != $interval2{$chr}[$i]{"end"}) {
 				$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} = $interval2{$chr}[$i]{"end"};
 				$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"info"} = $interval2{$chr}[$i]{"info"};
 				}
 			}
 		$i++;
 		}
-	unless (exists $interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"}) {
+	if (!exists $interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} && $interval2{$chr}[$i]{"start"} != $interval2{$chr}[$i]{"end"}) {
 		$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"end"} = $interval2{$chr}[$i]{"end"};
 		$interval3{$chr}{$interval2{$chr}[$i]{"start"}}{"info"} = $interval2{$chr}[$i]{"info"};
 		}
@@ -7756,14 +7756,16 @@ while (my$line=<BED>) {
 	$allLines[$i] = $line;
 	if (($line =~ /^\w+\t\d+\t\d+/)&&($line !~ /^#/)) {
 		my@tab = split(/\t/,$line);
-#		$tab[0] =~ s/chr//i;
-		$bedLines[$j]{"allLine"} = $line;
-		$bedLines[$j]{"Chrom"} = $tab[0]; $bedLines[$j]{"Start"} = ($tab[1]+1); $bedLines[$j]{"End"} = $tab[2];
-		if ($tab[3] && $tab[3] !~ /^\s*$/) { $bedLines[$j]{"Infos"} = $tab[3]; }
-		$tab[0] =~ s/chr//i;
-		$Chr{$i} = $tab[0]; $Start{$i} = ($tab[1]+1); $End{$i} = $tab[2];		##1-based
-		$Intervals{$Chr{$i}}{$Start{$i}}{$End{$i}} = 1;
-		$j++;
+		if ($tab[1] < $tab[2]) {
+	#		$tab[0] =~ s/chr//i;
+			$bedLines[$j]{"allLine"} = $line;
+			$bedLines[$j]{"Chrom"} = $tab[0]; $bedLines[$j]{"Start"} = ($tab[1]+1); $bedLines[$j]{"End"} = $tab[2];
+			if ($tab[3] && $tab[3] !~ /^\s*$/) { $bedLines[$j]{"Infos"} = $tab[3]; }
+			$tab[0] =~ s/chr//i;
+			$Chr{$i} = $tab[0]; $Start{$i} = ($tab[1]+1); $End{$i} = $tab[2];		##1-based
+			$Intervals{$Chr{$i}}{$Start{$i}}{$End{$i}} = 1;
+			$j++;
+			}
 		}
 	$i++;
 	}
