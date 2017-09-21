@@ -1772,10 +1772,10 @@ foreach my$sample (@{$smplList_r}) {
 			}
 		print OUT "\n${$Patients_r}{$sample}{ID}:\n";
 		if (exists ${$CNV_opt_r}{"trueCNV"}) {
-			print OUT "\t\tDUP:\t$N_dup_hi\t$N_dup_lo\n\t\tDEL:\t$N_del_hi\t$N_del_lo\n";
+			print OUT "\tDUP:\t$N_dup_hi\t$N_dup_lo\n\tDEL:\t$N_del_hi\t$N_del_lo\n";
 			}
 		else {
-			print OUT "\t\tDUP:\t$N_dup_hi\n\t\tDEL:\t$N_del_hi\n";
+			print OUT "\tDUP:\t$N_dup_hi\n\tDEL:\t$N_del_hi\n";
 			}
 		}
 	}
