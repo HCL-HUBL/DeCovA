@@ -8070,8 +8070,8 @@ for (my$i=0;$i<scalar@allLines;$i++) {
 				elsif ($_ eq "median") { print OUT1 "\t".sprintf("%.1f",$median{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}); }
 				elsif ($_ eq "cov") { print OUT1 "\t".100*(sprintf("%.3f", $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}))."%"; }
 				}
-			if ($toReseq && $bedLines[$j]{$file}{"Cov"} < $toReseq) 
-				{ push(@{ $reseq{$i} },"${$sName_r}{$file} (".100*(sprintf("%.3f", $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}))."%)"); }
+			if ($toReseq && $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}} < $toReseq) 
+				{ push(@{ $reseq{$i} },"${$sName_r}{$file} (".100*(sprintf("%.3f", $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}))."%)"); print STDERR "$toReseq ${$sName_r}{$file} $i $cov{$file}{$Chr{$i}}{$Start{$i}}{$End{$i}}\n";}
 			}
 		$j++;
 		}
