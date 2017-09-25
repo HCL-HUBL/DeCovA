@@ -7518,7 +7518,7 @@ while ( ($i*$bin) <= $max2 ) {
 chop $line;
 open (CMDR, ">$outdir/plot_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "png(\"$outdir/covPlot/$outName\_meanCovPlot.png\", 800, 500)
+print CMDR "pdf(\"$outdir/covPlot/$outName\_meanCovPlot.pdf\", width=11.69, height=4.135)
 mat <- read.table(\"$outdir/covPlot/$outName\_sumCovPlot.txt\",header=T, row.names=1)
 allMean = apply(mat,2,mean)
 std = apply(mat,2,sd)
@@ -7552,8 +7552,17 @@ while ( ($i*$bin) <= $max2 ) {
 chop $line;
 open (CMDR, ">$outdir/hist_temp.R") || die;
 print CMDR "#!/usr/bin/env Rscript\n\n" ;
-print CMDR "png(\"$outdir/covPlot/$outName\_allCovPlot.png\", 800, ".(scalar@Files*250).")
-par(mfrow=c(".scalar@Files.",1))
+##png:
+#print CMDR "png(\"$outdir/covPlot/$outName\_allCovPlot.png\", 800, ".(scalar@Files*250).")
+#par(mfrow=c(".scalar@Files.",1))
+#mat <- read.table(\"$outdir/covPlot/$outName\_sumCovPlot.txt\",header=T, row.names=1)\n";
+#foreach my$file (@Files) {
+#	print CMDR "barplot(t(matrix(mat[\"sample_$sampleName{$file}\",])), names.arg=c(";
+#	print CMDR $line;
+#	print CMDR "), ylim=c(0,1), col=\"blue\", axis.lty=1, main=\"$sampleName{$file}\",xlab=\"Depth\", ylab=\"fraction of $outName\", cex.lab=1.2, cex.main=1.5, #cex.axis=1.2, cex.names=1.2)\n";
+#	}
+##pdf:
+print CMDR "pdf(\"$outdir/covPlot/$outName\_allCovPlot.pdf\", width=11.69, height=4.135)
 mat <- read.table(\"$outdir/covPlot/$outName\_sumCovPlot.txt\",header=T, row.names=1)\n";
 foreach my$file (@Files) {
 	print CMDR "barplot(t(matrix(mat[\"sample_$sampleName{$file}\",])), names.arg=c(";
