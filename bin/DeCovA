@@ -1218,7 +1218,7 @@ if ($raw_cov_file[0]) {
 	system "$cmd";
 	}
 else {
-	if (!$gatk && !$bed_cov_file && $bedTversion == 2 && ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) ) {
+	if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) && !$gatk && $bedTversion == 2) {
 		if (scalar(keys%chromLength)) {
 			$chromLength = "$outdir/chromLength.txt";		#used by bedtools
 			open (my$fhOut, ">", "$chromLength");
@@ -2536,9 +2536,9 @@ close ($fh);
 
 ######################
 #genes and transcipts and exon nbr, and if none, introns or intergenic (closer gene and distance to it)
-sub reAnnotBed3
-{
-print"look for transcripts overlapping bed file\n";
+sub reAnnotBed3 {
+
+print"re_annotating with transcripts overlapping bed file\n";
 my($bedFile,$outFile,$refFile,$chromOrderRf,$nonCod) = @_;	#refseq is in 0-based		if (exists ${$IDrf}{$nm})
 
 my@chromOrder = @{$chromOrderRf};
@@ -2603,7 +2603,7 @@ foreach my$chr (keys%intervals) {
 				}
 			foreach my$bedEnd (sort{$a<=>$b}keys%{ $intervals{$chr}{$bedstart} }) {
 				if ($bedEnd < $refStarts[$c]) {					##out of genes
-					if ($c==0) {								##before 1st gene
+					if ($c==0) {							##before 1st gene
 						foreach my$refEnd (@RefEndC) {
 							foreach my$nm (@{ $RefCoord{$chr}{$refStarts[$c]}{$refEnd} }) {
 								$intervals{$chr}{$bedstart}{$bedEnd}{"interG"}{$nm} = "--".($refStarts[$c] - $bedEnd);
@@ -2667,9 +2667,8 @@ open($fh, ">", "$outFile") || die "can't create file $outFile\n";
 foreach my$chr (@chromOrder) {
 	$chr =~ s/^chr//i;
 	foreach my$start ( sort{$a<=>$b}(keys%{ $intervals{$chr} }) ) {
-		my$line = $trueChr{$chr}."\t".$start;
 		foreach my$end ( sort{$a<=>$b}(keys%{ $intervals{$chr}{$start} }) ) {
-			$line .= "\t".$end."\t";
+			my$line = $trueChr{$chr}."\t".$start."\t".$end."\t";
 			if (exists $intervals{$chr}{$start}{$end}{"interG"}) {
 				$line .= "interG:";
 				my%genes;
