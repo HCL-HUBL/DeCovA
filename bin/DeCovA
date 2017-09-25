@@ -909,6 +909,7 @@ if ($genom) {
 if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"} ) {
 
 	if ($raw_cov_file[0]) {
+		print "get chrom order and sample names from $raw_cov_file[0]\n";
 		## get @ChromOrder
 		open(COV, "$raw_cov_file[0]") or die "cannot read $raw_cov_file[0]\n";
 		my$firstLine = <COV>;
@@ -1244,37 +1245,51 @@ if (@IDs) {
 	}
 
 ##if bedFile provided:
-my($Bed_r);	#$Bed{$chr}{$start} = $end , in 1-based
+my($Bed_r);	#bed in %hash : $Bed{$chr}{$start} = $end , in 1-based
 if ($bedFile) {
 	print "processing $bedFile\n";
+	my$currentBed = "$bedFile";
 	if ($lenForBed) {
-		print "adding $lenForBed bp to $bedFile intervals ends\n";
+		print "adding $lenForBed bp to $currentBed intervals ends\n";
 		my$expandedBed = "$outdir/$bedName";
 		$expandedBed =~ s/.bed$//;
 		$expandedBed .= "_w$lenForBed.bed";
-		addLength2Bed($bedFile,$expandedBed,$lenForBed);
-		$bedFile = $expandedBed;
+		addLength2Bed($currentBed,$expandedBed,$lenForBed);
+		$currentBed = $expandedBed;
 		}
 	if ($reAnnotBed) {
-		print "re-annotating intervals of $bedFile with $ref\n";
+		print "re-annotating intervals of $currentBed with $ref\n";
 		$reAnnotBed = "$outdir/$bedName";
 		$reAnnotBed =~ s/.bed$//;
 		$reAnnotBed .= "_ann.bed";
-		if ($idFile) { reAnnotBed3($bedFile,$reAnnotBed,$idFile,\@ChromOrder,$nonCod); }
-		else { reAnnotBed3($bedFile,$reAnnotBed,$ref,\@ChromOrder,$nonCod); }
-		$bedFile = $reAnnotBed;
+		if ($idFile) { reAnnotBed3($currentBed,$reAnnotBed,$idFile,\@ChromOrder,$nonCod); }
+		else { reAnnotBed3($currentBed,$reAnnotBed,$ref,\@ChromOrder,$nonCod); }
+		unless ($currentBed eq $bedFile) { unlink $currentBed; }
+		$currentBed = $reAnnotBed;
 		}
-	#transform in 1-based coord; keep longest intervals
-	$Bed_r = readBed($bedFile);
-	#merge overlapping intervals
-	foreach my$chr (keys%{$Bed_r}) {
-		%{ ${$Bed_r}{$chr} } = mergeIntervals(\%{ ${$Bed_r}{$chr} });
+	if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"} ) {
+		#transform in 1-based coord; keep longest intervals
+		$Bed_r = readBed($currentBed);
+		#merge overlapping intervals
+		foreach my$chr (keys%{$Bed_r}) {
+			%{ ${$Bed_r}{$chr} } = mergeIntervals(\%{ ${$Bed_r}{$chr} });
+			}
+		#print merged bed
+		printBed("original",$Bed_r,\@ChromOrder);
 		}
-	#print merged bed
-	printBed("original",$Bed_r,\@ChromOrder);
-	#eventually slice bed intervals
-	$bedFile = sliceBedIntervals($bedFile,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
+	#eventually slice bed intervals : split_Bed, rm_Overlap_Bed, cut_Bed
+	my$currentBed2 = sliceBedIntervals($currentBed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@ChromOrder);
+	if ($currentBed2 ne $currentBed && $currentBed ne $bedFile) { unlink $currentBed; }
+	if ($opt{keepBed} && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs{"graphBySample"} && !$jobs{"geneSummary"} && !$jobs{"geneReport"} && !$jobs{"covPlot"} && !$jobs{"genePlot"} && !$jobs{"interSplot"} && !$jobs{"covBed"} && !$jobs{"CNV"} && !$jobs{"covMut"}) {
+		my$outBed = "$outdir/$bedName"; $outBed =~ s/.bed$//; $outBed .= ".bed";
+		#rename $currentBed2, "$outdir/$bedName" or die "rename failed: $!";
+		use File::Copy qw/move/;
+		move($currentBed2, "$outBed") or die "move failed: $!";
+		$currentBed2 = "$outBed";
+		}
+	$bedFile = $currentBed2;
 	}
+
 
 my$keepTmp = "";
 my%tmpFile;
@@ -2199,19 +2214,15 @@ if ($jobs{"CNV"}) {
 ###################
 #rm tmp files
 foreach my$f ("regions","original","merge")
-	{ unlink "$outdir/$f\_0Chr.bed","$outdir/$f\_wChr.bed"; }
+	{ unlink "$outdir/$f\_0Chr.bed", "$outdir/$f\_wChr.bed"; }
 if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream))
-	{ unlink "$outdir/txtRegions_0Chr.bed","$outdir/txtRegions_wChr.bed"; }
+	{ unlink "$outdir/txtRegions_0Chr.bed", "$outdir/txtRegions_wChr.bed"; }
 
 if (!$jobs{"keepBed"}) {
 	if ($jobs{"covBed"} && !$bedFile)
 		{ unlink "$outdir/$bedName.bed"; }
-	if ($splitBed)
-		{ unlink "$splitBed"; }
-	if ($rmOverlapBed)
-		{ unlink "$rmOverlapBed"; }
-	if ($cutBed)
-		{ unlink "$cutBed"; }
+	if ($lenForBed || $reAnnotBed || $splitBed || $rmOverlapBed || $cutBed)
+		{ unlink $bedFile; }
 	}
 
 if ($jobs{"keepCov"}) {
@@ -2538,7 +2549,7 @@ close ($fh);
 #genes and transcipts and exon nbr, and if none, introns or intergenic (closer gene and distance to it)
 sub reAnnotBed3 {
 
-print"re_annotating with transcripts overlapping bed file\n";
+#print"re_annotating with transcripts overlapping bed file\n";
 my($bedFile,$outFile,$refFile,$chromOrderRf,$nonCod) = @_;	#refseq is in 0-based		if (exists ${$IDrf}{$nm})
 
 my@chromOrder = @{$chromOrderRf};
@@ -2786,24 +2797,25 @@ close BED; close OUT;
 sub sliceBedIntervals {
 
 my($bedFile,$outFile,$splitBed,$rmOverlapBed,$cutBed,$cutB_optRf,$chromOrder_r) = @_;
+my$currentBed = $bedFile;
 if ($splitBed) {
-	print "splitting overlapping intervals from $bedFile\n";
+	print "splitting overlapping intervals from $currentBed\n";
 	$splitBed = "$outFile";
 	$splitBed =~ s/.bed$//;
 	$splitBed .= "_split.bed";
-	split_Bed($bedFile,$splitBed,$chromOrder_r);
-	$bedFile = $splitBed;
+	split_Bed($currentBed,$splitBed,$chromOrder_r);
+	$currentBed = $splitBed;
 	}
 elsif ($rmOverlapBed) {
-	print "removing overlapping intervals from $bedFile\n";
+	print "removing overlapping intervals from $currentBed\n";
 	$rmOverlapBed = "$outFile";
 	$rmOverlapBed =~ s/.bed$//;
 	$rmOverlapBed .= "_flat.bed";
-	rm_overlap_Bed($bedFile,$rmOverlapBed,$chromOrder_r);
-	$bedFile = $rmOverlapBed;
+	rm_overlap_Bed($currentBed,$rmOverlapBed,$chromOrder_r);
+	$currentBed = $rmOverlapBed;
 	}
 if ($cutBed) {
-	print "cutting intervals from $bedFile 
+	print "cutting intervals from $currentBed 
 (above $cutB_opt{maxL} bp ; in $cutB_opt{cutL} bp pieces , if longer than $cutB_opt{minL} bp , else ";
 	if ($cutB_opt{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
 	elsif ($cutB_opt{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
@@ -2811,11 +2823,11 @@ if ($cutBed) {
 	$cutBed = "$outFile";
 	$cutBed =~ s/.bed$//;
 	$cutBed .= "_cut".$cutB_opt{"cutL"}.".bed";
-	cut_Bed($bedFile,$cutBed,$cutB_optRf);
-	if ($splitBed || $rmOverlapBed) { unlink $bedFile; }
-	$bedFile = $cutBed;
+	cut_Bed($currentBed,$cutBed,$cutB_optRf);
+	unless ($currentBed eq $bedFile) { unlink $currentBed; }
+	$currentBed = $cutBed;
 	}
-return($bedFile);
+return($currentBed);
 }
 
 
