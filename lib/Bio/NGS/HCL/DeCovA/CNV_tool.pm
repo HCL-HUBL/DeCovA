@@ -1037,7 +1037,10 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 		print SORTIE $Regions[$r]{"Chrom"}."\t";
 		print SORTIE $Regions[$r]{"Start"}."\t";
 		print SORTIE $Regions[$r]{"End"}."\t";
-		print SORTIE $Regions[$r]{"Infos"}."\t";
+		my$Infos = "";
+		if (exists $Regions[$r]{"Infos"}) { $Infos = $Regions[$r]{"Infos"}; }
+		else { $Infos = "NA"; }
+		print SORTIE "$Infos\t";
 		print SORTIE $r."\t";
 
 		# SI LA REGION N'EST PAS "MOCHE"
@@ -1203,7 +1206,7 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 				}
 				if ($recurrent) {
 					print SORTIE "CNV_Recurrent";
-					print LOG "Region ecartee \: ". $Regions[$r]{"Chrom"}."\t".$Regions[$r]{"Start"}."\t".$Regions[$r]{"End"}."\t".$Regions[$r]{"Infos"}."\n";
+					print LOG "Region ecartee \: ". $Regions[$r]{"Chrom"}."\t".$Regions[$r]{"Start"}."\t".$Regions[$r]{"End"}."\t$Infos\n";
 					$Regions[$r]{"Appel"} = "CNV_Recurrent";
 					$regions_ecartees++;
 					$continuer = 1;
@@ -1302,7 +1305,7 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 				## test recurrence CNV dans region
 				if ( @{ $Regions[$r]{"all_normByS_depths"} } && ($nb_evts/scalar@{ $Regions[$r]{"all_normByS_depths"} }) > $seuil_region && $nb_parcours > 0 ) {
 					print SORTIE "CNV_Recurrent";
-					print LOG "Region ecartee \: ". $Regions[$r]{"Chrom"}."\t".$Regions[$r]{"Start"}."\t".$Regions[$r]{"End"}."\t".$Regions[$r]{"Infos"}."\n";
+					print LOG "Region ecartee \: ". $Regions[$r]{"Chrom"}."\t".$Regions[$r]{"Start"}."\t".$Regions[$r]{"End"}."\t$Infos\n";
 					$Regions[$r]{"Appel"} = "CNV_Recurrent";
 					$regions_ecartees++;
 					$continuer = 1;
