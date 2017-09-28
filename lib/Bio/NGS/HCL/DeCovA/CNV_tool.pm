@@ -1370,14 +1370,11 @@ while ($continuer == 1 || $nb_parcours <= 1) {
 }
 
 
-
-
-
-
 ## @{ $regionOrder{$Chrom} } = [ regions sorted by pos ]
 ##put the first region with some coordinates in array (in case several regions with same coordinates exists)
 my($regionOrder_r,$regionIndice_r,$orderedCNV_r) = orderRegions(${$CNV_opt_r}{"maxLabelLgth"},\@Regions,\%Results);
 
+	
 ##%Result2	selected from %results
 ##%Result3	selected from %results, starting with first interval , ending with last interval
 my($Result2_r,$Result3_r) = printAllCNVs($outdir,0,$CNV_opt_r,\%Patients,\@Regions,\%Results,\@ChrOrder,$regionOrder_r,$regionIndice_r,$orderedCNV_r);
@@ -1538,10 +1535,10 @@ foreach my$sample (keys%{$Results_r}) {
 			my$r=0;		##index in @{ ${$orderedCNV_r}{$sample}{$Chrom} }
 			while ($r < scalar@{ ${$orderedCNV_r}{$sample}{$Chrom} } ) {
 				##merge consecutive CNVs
-				my($i,$cnvOK,$nonCNVtot,$nextReg_r) = mergeConsecutiveCNV("",$maxNonCNV,${$orderedCNV_r}{$sample}{$Chrom}[$r],${$regionIndice_r}{${$orderedCNV_r}{$sample}{$Chrom}[$r]},\@{ ${$regionOrder_r}{$Chrom} },\%{ ${$Results_r}{$sample} },$Regions_r);
+				my($cnvOK,$nonCNVtot,$nextReg_r) = mergeConsecutiveCNV("",$maxNonCNV,${$orderedCNV_r}{$sample}{$Chrom}[$r],${$regionIndice_r}{${$orderedCNV_r}{$sample}{$Chrom}[$r]},\@{ ${$regionOrder_r}{$Chrom} },\%{ ${$Results_r}{$sample} },$Regions_r);
 				if ($maxNonCNVrate) {
-					while (($nonCNVtot/($cnvOK+1)) > $maxNonCNVrate) {
-						($i,$cnvOK,$nonCNVtot,$nextReg_r) = mergeConsecutiveCNV(($cnvOK-1),$maxNonCNV,${$orderedCNV_r}{$sample}{$Chrom}[$r],${$regionIndice_r}{${$orderedCNV_r}{$sample}{$Chrom}[$r]},\@{ ${$regionOrder_r}{$Chrom} },\%{ ${$Results_r}{$sample} },$Regions_r);
+					while (($nonCNVtot/($cnvOK+1)) > $maxNonCNVrate) {		##iteration, shortening CNV while too many nonCNVs
+						($cnvOK,$nonCNVtot,$nextReg_r) = mergeConsecutiveCNV(($cnvOK-1),$maxNonCNV,${$orderedCNV_r}{$sample}{$Chrom}[$r],${$regionIndice_r}{${$orderedCNV_r}{$sample}{$Chrom}[$r]},\@{ ${$regionOrder_r}{$Chrom} },\%{ ${$Results_r}{$sample} },$Regions_r);
 						}
 					}
 				##overlapping samples
@@ -1561,10 +1558,18 @@ foreach my$sample (keys%{$Results_r}) {
 					if (exists${$CNV_opt_r}{"trueCNV"}{"conseC"} && $cnvOK >= (${$CNV_opt_r}{"trueCNV"}{"conseC"}-1)) { $true = 1; }
 					unless ($true) {
 						for (my$j=0;$j<=$cnvOK;$j++) {	##if at least 1 is true, all CNV ok
-							if (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"del"} && ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"} <= ${$CNV_opt_r}{"trueCNV"}{"level"}{"del"}) { $true = 1; last; }
-							elsif (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"dup"} && ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"} >= ${$CNV_opt_r}{"trueCNV"}{"level"}{"dup"}) { $true = 1; last; }
-							if (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"del"} && ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2spread"} <= ${$CNV_opt_r}{"trueCNV"}{"spread"}{"del"}) { $true = 1; last; }
-							elsif (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"dup"} && ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2spread"} >= ${$CNV_opt_r}{"trueCNV"}{"spread"}{"dup"}) { $true = 1; last; }
+							if (exists ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"}) {
+								if (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"del"} && ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"} <= ${$CNV_opt_r}{"trueCNV"}{"level"}{"del"})
+									{ $true = 1; last; }
+								elsif (exists${$CNV_opt_r}{"trueCNV"}{"level"}{"dup"} && ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"} >= ${$CNV_opt_r}{"trueCNV"}{"level"}{"dup"})
+									{ $true = 1; last; }
+								}
+							if (exists${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2spread"}) {
+								if (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"del"} && ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2spread"} <= ${$CNV_opt_r}{"trueCNV"}{"spread"}{"del"})
+									{ $true = 1; last; }
+								elsif (exists${$CNV_opt_r}{"trueCNV"}{"spread"}{"dup"} && ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2spread"} >= ${$CNV_opt_r}{"trueCNV"}{"spread"}{"dup"})
+									{ $true = 1; last; }
+								}
 							}
 						}
 					if ($true) { $qual = "high"; $fh_allI = $fh_allI_hi; }
@@ -1573,7 +1578,7 @@ foreach my$sample (keys%{$Results_r}) {
 				else { $qual = "high"; $fh_allI = $fh_allI_hi; }
 
 				##print patient's summary and allIntervals
-
+				my@cleanCNV = (); my@dirtyCNV = ();
 				if ($cnvOK == 0) {
 					$Result2{$qual}{$sample}{${$nextReg_r}[0]} = ${$Results_r}{$sample}{${$nextReg_r}[0]};
 					$Result3{$qual}{$sample}{${$nextReg_r}[0]}{"Type"} = ${$Results_r}{$sample}{${$nextReg_r}[0]};
@@ -1597,7 +1602,6 @@ foreach my$sample (keys%{$Results_r}) {
 					}
 
 				else {
-					my@cleanCNV = (); my@dirtyCNV = ();
 					for (my$j=0;$j<=$cnvOK;$j++) {
 						if (exists ${$Results_r}{$sample}{${$nextReg_r}[$j]}) {
 							$Result2{$qual}{$sample}{${$nextReg_r}[$j]} = ${$Results_r}{$sample}{${$nextReg_r}[$j]};
@@ -1662,7 +1666,7 @@ foreach my$sample (keys%{$Results_r}) {
 
 					}
 
-				if ($i >= 1) { $r += $i; }
+				if (scalar@cleanCNV > 1) { $r += scalar@cleanCNV; }
 				else { $r++; }
 				}
 			}
@@ -1997,7 +2001,7 @@ while ($ok) {
 	else { $ok=0; }
 	if ($maxI && $i>$maxI) { $ok=0; }
 	}
-return($i,$cnvOK,$nonCNVtot,\@nextReg);
+return($cnvOK,$nonCNVtot,\@nextReg);
 }
 
 
