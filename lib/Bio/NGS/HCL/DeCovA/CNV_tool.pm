@@ -769,7 +769,7 @@ my%Sexe;
 if ($fichier_sexe) {
 	open(PATIENTS, "<$fichier_sexe") or die "Fichier $fichier_sexe d'attribution des sexes inexistant ou impossible a lire\n";
 	foreach my $ligne (<PATIENTS>) {
-		$ligne =~ m/(\S+)\s+(\S+)/;
+		$ligne =~ m/(\S+)\s+:?\s*(\S+)/;
 		$Sexe{$1} = $2;
 	}
 	close(PATIENTS);
@@ -1534,14 +1534,15 @@ foreach my$sample (keys%{$Results_r}) {
 		if (exists ${$orderedCNV_r}{$sample}{$Chrom}) {
 			my$r=0;		##index in @{ ${$orderedCNV_r}{$sample}{$Chrom} }
 			while ($r < scalar@{ ${$orderedCNV_r}{$sample}{$Chrom} } ) {
-				##merge consecutive CNVs
-				my($cnvOK,$nonCNVtot,$nextReg_r) = mergeConsecutiveCNV("",$maxNonCNV,${$orderedCNV_r}{$sample}{$Chrom}[$r],${$regionIndice_r}{${$orderedCNV_r}{$sample}{$Chrom}[$r]},\@{ ${$regionOrder_r}{$Chrom} },\%{ ${$Results_r}{$sample} },$Regions_r);
-				if ($maxNonCNVrate) {
-					while (($nonCNVtot/($cnvOK+1)) > $maxNonCNVrate) {		##iteration, shortening CNV while too many nonCNVs
-						($cnvOK,$nonCNVtot,$nextReg_r) = mergeConsecutiveCNV(($cnvOK-1),$maxNonCNV,${$orderedCNV_r}{$sample}{$Chrom}[$r],${$regionIndice_r}{${$orderedCNV_r}{$sample}{$Chrom}[$r]},\@{ ${$regionOrder_r}{$Chrom} },\%{ ${$Results_r}{$sample} },$Regions_r);
+				## merge consecutive CNVs
+				## $cnvOK: indice of last CNV kept (starting from 0)
+				my($cnvOK,$nonCNVtot,$nextReg_r) = mergeConsecutiveCNV1($maxNonCNV,${$orderedCNV_r}{$sample}{$Chrom}[$r],${$regionIndice_r}{${$orderedCNV_r}{$sample}{$Chrom}[$r]},\@{ ${$regionOrder_r}{$Chrom} },\%{ ${$Results_r}{$sample} },$Regions_r);
+				if ($maxNonCNVrate && $cnvOK > 1) {
+					while (($nonCNVtot/($cnvOK+1)) > $maxNonCNVrate  && $cnvOK > 0) {		##iteration, shortening CNV while too many nonCNVs
+						($cnvOK,$nonCNVtot,$nextReg_r) = mergeConsecutiveCNV2(($cnvOK-1),$maxNonCNV,${$orderedCNV_r}{$sample}{$Chrom}[$r],${$regionIndice_r}{${$orderedCNV_r}{$sample}{$Chrom}[$r]},\@{ ${$regionOrder_r}{$Chrom} },\%{ ${$Results_r}{$sample} },$Regions_r);
 						}
 					}
-				##overlapping samples
+				## overlapping samples
 				my$overlapCNT=0; my%overlapSMPL=();
 				for (my$j=0;$j<=$cnvOK;$j++) {
 					foreach my$other (keys%{$Patients_r}) {
@@ -1676,6 +1677,71 @@ foreach my$sample (keys%{$Results_r}) {
 	if (exists ${$CNV_opt_r}{"trueCNV"}) { close $fh_allI_lo; }
 	}
 return(\%Result2,\%Result3,\%Result4);
+}
+
+####################
+sub mergeConsecutiveCNV1 {
+my($maxNonCNV,$orderedCNV,$regionIndice,$regionOrder_r,$Results_r,$Regions_r) = @_;
+my$ok=1; my$i=0; my$cnvOK=0; my$nonCNV=0; my$nonCNVtot=0;
+my@nextReg=($orderedCNV);
+while ($ok) {
+	$i++;
+	if (exists ${$regionOrder_r}[($regionIndice + $i)]) {
+		push(@nextReg, ${$regionOrder_r}[($regionIndice + $i)]);
+		if (exists ${$Results_r}{$nextReg[$i]}) {
+			## same CNV type ?
+			if(${$Results_r}{$nextReg[$i]} eq ${$Results_r}{$nextReg[0]}) {
+				$cnvOK = $i;
+				$nonCNVtot += $nonCNV;
+				$nonCNV=0;		##to reset
+				}
+			else { $ok=0; }
+			}
+		else {
+			if (!exists ${$Regions_r}[$nextReg[$i]]{"Appel"}) { 
+				if ($maxNonCNV) {
+					$nonCNV++;
+					if ($nonCNV > $maxNonCNV) { $ok=0; }
+					}
+				else { $ok=0; }
+				}
+			}
+		}
+	else { $ok=0; }
+	}
+return($cnvOK,$nonCNVtot,\@nextReg);
+}
+####################
+sub mergeConsecutiveCNV2 {
+my($maxI,$maxNonCNV,$orderedCNV,$regionIndice,$regionOrder_r,$Results_r,$Regions_r) = @_;
+my$ok=1; my$i=0; my$cnvOK=0; my$nonCNV=0; my$nonCNVtot=0;
+my@nextReg=($orderedCNV);
+while ($ok && $i < $maxI) {
+	$i++;
+	if (exists ${$regionOrder_r}[($regionIndice + $i)]) {
+		push(@nextReg, ${$regionOrder_r}[($regionIndice + $i)]);
+		if (exists ${$Results_r}{$nextReg[$i]}) {
+			## same CNV type ?
+			if(${$Results_r}{$nextReg[$i]} eq ${$Results_r}{$nextReg[0]}) {
+				$cnvOK = $i;
+				$nonCNVtot += $nonCNV;
+				$nonCNV=0;		##to reset
+				}
+			else { $ok=0; }
+			}
+		else {
+			if (!exists ${$Regions_r}[$nextReg[$i]]{"Appel"}) { 
+				if ($maxNonCNV) {
+					$nonCNV++;
+					if ($nonCNV > $maxNonCNV) { $ok=0; }
+					}
+				else { $ok=0; }
+				}
+			}
+		}
+	else { $ok=0; }
+	}
+return($cnvOK,$nonCNVtot,\@nextReg);
 }
 
 ####################
@@ -1968,41 +2034,6 @@ foreach my$val (@{ ${$CNV_opt_r}{"fields"} }) {
 return ($txt);
 }
 
-
-####################
-
-sub mergeConsecutiveCNV {
-my($maxI,$maxNonCNV,$orderedCNV,$regionIndice,$regionOrder_r,$Results_r,$Regions_r)=@_;
-my$ok=1; my$i=0; my$cnvOK=0; my$nonCNV=0; my$nonCNVtot=0;
-my@nextReg=($orderedCNV);
-while ($ok) {
-	$i++;
-	if (exists ${$regionOrder_r}[($regionIndice + $i)]) {
-		push(@nextReg, ${$regionOrder_r}[($regionIndice + $i)]);
-		if (exists ${$Results_r}{$nextReg[$i]}) {
-			## same CNV type ?
-			if(${$Results_r}{$nextReg[$i]} eq ${$Results_r}{$nextReg[0]}) {
-				$cnvOK = $i;
-				#$nonCNVtot += $nonCNV;
-				$nonCNV=0;		##to reset
-				}
-			else { $ok=0; }
-			}
-		else {
-			if (!exists ${$Regions_r}[$nextReg[$i]]{"Appel"}) { 
-				if ($maxNonCNV) {
-					$nonCNV++;
-					if ($nonCNV > $maxNonCNV) { $ok=0; }
-					}
-				else { $ok=0; }
-				}
-			}
-		}
-	else { $ok=0; }
-	if ($maxI && $i>$maxI) { $ok=0; }
-	}
-return($cnvOK,$nonCNVtot,\@nextReg);
-}
 
 
 ####################
