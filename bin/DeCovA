@@ -2550,9 +2550,9 @@ close ($fh);
 sub reAnnotBed3 {
 
 #print"re_annotating with transcripts overlapping bed file\n";
-my($bedFile,$outFile,$refFile,$chromOrderRf,$nonCod) = @_;	#refseq is in 0-based		if (exists ${$IDrf}{$nm})
+my($bedFile,$outFile,$refFile,$chromOrder_r,$nonCod) = @_;	#refseq is in 0-based		if (exists ${$IDrf}{$nm})
 
-my@chromOrder = @{$chromOrderRf};
+my@chromOrder = @{$chromOrder_r};
 #refFile in %RefCoord,%RefID
 #bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
 #830	NM_004557	chr6	-	32162619	32191844	32163213	32191705	30	32162619,32164100,32164701,32165075,32166197,32166425,32166702,32168607,32168893,32169852,32171546,32171913,32178528,32180250,32180600,32180911,32181464,32181886,32183002,32184721,32184929,32185771,32187368,32187905,32188181,32188532,32188754,32190287,32190781,32191632,  32163927,32164198,32164849,32165371,32166336,32166507,32166922,32168783,32169277,32170376,32171659,32172166,32178713,32180404,32180688,32181029,32181617,32182032,32183162,32184844,32185043,32185885,32187563,32188061,32188418,32188655,32189102,32190583,32190863,32191844,  0	NOTCH4	cmpl	cmpl	0,1,0,1,0,2,1,2,2,0,1,0,1,0,2,1,1,2,1,1,1,1,1,1,1,1,1,2,1,0,
@@ -2565,6 +2565,7 @@ while (my$line=<$fh>) {
 		if(($nonCod) || ($tab[6] != $tab[7])) {
 			$tab[2] =~ s/^chr//i;
 			push(@{ $RefCoord{$tab[2]}{$tab[4]}{$tab[5]} }, $tab[1]);
+			$RefID{$tab[1]}{"strand"} = $tab[3];
 			$RefID{$tab[1]}{"cdsStart"} = $tab[6];
 			$RefID{$tab[1]}{"cdsEnd"} = $tab[7];
 			@{ $RefID{$tab[1]}{"exonStarts"} } = split(/,/,$tab[9]);
@@ -2598,7 +2599,7 @@ while (my$line=<$fh>) {
 	}
 unless ($ok) { die "no bed formatted line in $bedFile file"; }
 close ($fh);
-unless (@{$chromOrderRf}) { @chromOrder = @tmpOrder; }
+unless (@{$chromOrder_r}) { @chromOrder = @tmpOrder; }
 
 
 foreach my$chr (keys%intervals) {
@@ -2740,32 +2741,42 @@ close ($fh);
 ####
 sub complete_intervalBed {
 
-my($chr,$bedstart,$bedEnd,$nm,$interval_rf,$RefID_rf) = @_;
+my($chr,$bedstart,$bedEnd,$nm,$interval_r,$RefID_r) = @_;
 my$i = 0;
-while ( ($i<(scalar@{ ${$RefID_rf}{$nm}{"exonStarts"} }-1)) && ($bedstart > ${$RefID_rf}{$nm}{"exonEnds"}[$i]) ) {
+my$N_exons = scalar@{ ${$RefID_r}{$nm}{"exonStarts"} };
+while ( ($i<($N_exons-1)) && ($bedstart > ${$RefID_r}{$nm}{"exonEnds"}[$i]) ) {
 	$i++;
 	}
-if ($bedEnd < ${$RefID_rf}{$nm}{"exonStarts"}[$i]) {
-	${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"intron"} = $i;
+if ($bedEnd < ${$RefID_r}{$nm}{"exonStarts"}[$i]) {
+	if (${$RefID_r}{$nm}{"strand"} eq "+") { 
+		${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"intron"} = $i; }
+	else { 
+		${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"intron"} = $N_exons-$i; }
 	}
 else {
-	while (($i<(scalar@{ ${$RefID_rf}{$nm}{"exonStarts"} }-1)) && ($bedEnd >= ${$RefID_rf}{$nm}{"exonStarts"}[$i])) {
-		push(@{ ${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1));
-		if ($bedstart >= ${$RefID_rf}{$nm}{"cdsEnd"}) {
-			${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
+	while ( ($i<($N_exons-1)) && ($bedEnd >= ${$RefID_r}{$nm}{"exonStarts"}[$i]) ) {
+		if (${$RefID_r}{$nm}{"strand"} eq "+") {
+			push(@{ ${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1)); }
+		else {
+			push(@{ ${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($N_exons-$i)); }
+		if ($bedstart >= ${$RefID_r}{$nm}{"cdsEnd"}) {
+			${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
 			}
-		if ($bedEnd <= ${$RefID_rf}{$nm}{"cdsStart"}) {
-			${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
+		if ($bedEnd <= ${$RefID_r}{$nm}{"cdsStart"}) {
+			${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
 			}
 		$i++
 		}
-	if ($bedEnd >= ${$RefID_rf}{$nm}{"exonStarts"}[$i]) {
-		push(@{ ${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1));
-		if ($bedstart >= ${$RefID_rf}{$nm}{"cdsEnd"}) {
-			${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
+	if ($bedEnd >= ${$RefID_r}{$nm}{"exonStarts"}[$i]) {
+		if (${$RefID_r}{$nm}{"strand"} eq "+") {
+			push(@{ ${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($i+1)); }
+		else {
+			push(@{ ${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"exon"} }, ($N_exons-$i)); }
+		if ($bedstart >= ${$RefID_r}{$nm}{"cdsEnd"}) {
+			${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
 			}
-		if ($bedEnd <= ${$RefID_rf}{$nm}{"cdsStart"}) {
-			${$interval_rf}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
+		if ($bedEnd <= ${$RefID_r}{$nm}{"cdsStart"}) {
+			${$interval_r}{$chr}{$bedstart}{$bedEnd}{"NM"}{$nm}{"NC"} = 1;
 			}
 		}
 	}
