@@ -2237,9 +2237,11 @@ if (!$jobs{"keepBed"}) {
 
 if ($jobs{"keepCov"}) {
 	if ($gatk) {
-		#open(my$fhOut, ">", "$outdir/gatk.all.cov.txt") or die "cannot create $outdir/gatk.all.cov.txt file\n";
-		#foreach (@{ $headers{"$outdir/all.cov"} }) { print $fhOut "$_"; }
-		#open(my$fhIn, "<", "$outdir/all.cov") or die "cannot read $outdir/all.cov\n";
+		#open(my$fhOut, ">>", "$outdir/gatk_all_cov.txt") or die "cannot create $outdir/gatk_all_cov.txt file\n";
+		#open(my$fhIn, "<", "$outdir/all_cov_headers.txt") or die "cannot read $outdir/all_cov_headers.txt\n";
+		#while (<$fhIn>) { print $fhOut "$_"; }
+		#close $fhIn;
+		#open($fhIn, "<", "$outdir/all.cov") or die "cannot read $outdir/all.cov\n";
 		#while (<$fhIn>) { print $fhOut "$_"; }
 		#close $fhIn; close $fhOut;
 		my$cmd = "cat $outdir/all.cov.headers.txt $outdir/all.cov > $outdir/gatk.all.cov.txt";
