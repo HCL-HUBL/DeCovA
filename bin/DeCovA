@@ -1316,11 +1316,6 @@ my($Mut);
 if ($mutFile) { 
 	print "reading $mutFile\n"; 
 	$Mut = readMut($mutFile);		## $Mut{$chr}{$startMut (1-based coord)} = $infoMut
-	if($jobs{"covMut"}) { 
-		if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"CNV"}) 
-			{ $keepTmp = 1; }
-		%tmpFile = depthMut($mutFile,\%path,$extenS,\@Files,\%fName,\%sName,\%sName2,$Mut,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$mbq,$dedup,$threads,$chromLength,$bedT,$bedTversion,$samT,$picard,$gatk,$genom);
-		}
 	}
 
 ##find and design transcripts:
@@ -1530,8 +1525,7 @@ foreach my$gene (keys%{$Genes_r}) {
 
 ###################
 #Job 2: bams analysis:
-my(%headers);
-
+#my%headers;
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"}) {
 
 	my$intervalName;
@@ -1544,24 +1538,34 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		my$allIntervals_r = mergeRegions($Regions{"raw"});
 		$intervalName = "regions";
 		printBed($intervalName,$allIntervals_r,\@chromOrder);
-		if ($bedFile || ($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
+		if ($bedFile || $mutFile || ($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
 			$intervalName = "merge";
-			open (MERGE, ">$outdir/$intervalName.bed") || die "can't create file $outdir/$intervalName.bed\n";
-			open (BED, "$outdir/regions_0Chr.bed") || die "can't open file $outdir/regions_0Chr.bed\n";
-			while (my$line=<BED>) { print MERGE $line; }
-			close BED;
+			open (my$fhO, ">", "$outdir/$intervalName.bed") || die "can't create file $outdir/$intervalName.bed ($!)\n";
+			open (my$fhI, "<", "$outdir/regions_0Chr.bed") || die "can't open file $outdir/regions_0Chr.bed ($!)\n";
+			while (my$line = <$fhI>) { print $fhO $line; }
+			close $fhI;
 			if ($bedFile) {
-				open (BED, "$outdir/original_0Chr.bed") || die "can't open file $outdir/original_0Chr.bed\n";
-				while (my$line=<BED>) { print MERGE $line; }
-				close BED;
+				open ($fhI, "<", "$outdir/original_0Chr.bed") || die "can't open file $outdir/original_0Chr.bed ($!)\n";
+				while (my$line = <$fhI>) { print $fhO $line; }
+				close $fhI;
 				}
 			if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
 				printBed("txtRegions",$coordBed_r,\@chromOrder);
-				open (BED, "$outdir/txtRegions_0Chr.bed") || die "can't open file $outdir/txtRegions_0Chr.bed\n";
-				while (my$line=<BED>) { print MERGE $line; }
-				close BED;
+				open ($fhI, "<", "$outdir/txtRegions_0Chr.bed") || die "can't open file $outdir/txtRegions_0Chr.bed ($!)\n";
+				while (my$line = <$fhI>) { print $fhO $line; }
+				close $fhI;
 				}
-			close MERGE; 
+			if ($mutFile) {
+				open ($fhI, "<", "$outdir/original_0Chr.bed") || die "can't open file $outdir/original_0Chr.bed ($!)\n";
+				while (my$line = <$fhI>) {
+					chomp $line;
+					my@tab = split(/\t/,$line);
+					$tab[0] =~ s/^chr//;
+					print $fhO $tab[0]."\t".($tab[1]-1)."\t".$tab[1]."\n";
+					}
+				close $fhI;
+				}
+			close $fhO; 
 			my$merge_r = readBed("$outdir/$intervalName.bed");
 			foreach my$chr (keys%{$merge_r})
 				{ %{ ${$merge_r}{$chr} } = mergeIntervals(\%{ ${$merge_r}{$chr} }); }
@@ -1618,18 +1622,68 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 
 	 else {
 		##perform depth analysis
+
+		##bamFilter
+		if (($gatk && $dedup eq "do") || (!$gatk && ($mmq || $dedup))) {
+			$cmd = "$samT view -u -L $outdir/$bedName$withChr $path$file$extenS";
+			if ($gatk && $dedup eq "do") {
+				foreach my$f (@{$Files}) {
+						my$cmd = "$samT view -bh -L $outdir/$bedName$withChr ".${$path}{$f}.${$fName}{$f}.$extenS." > $outdir/".${$fName}{$f}."_onBed.bam";
+						print "$cmd\n";
+						system "$cmd";
+						$cmd = "$picard MarkDuplicates I=$outdir/".${$fName}{$f}."_onBed.bam O=$outdir/".${$fName}{$f}."_dedup.bam M=$outdir/".${$fName}{$f}.".dedup-metrics CREATE_INDEX=true TMP_DIR=$outdir";
+						print "$cmd\n";
+						system "$cmd";
+						if ($?) { die "picard tools not happy\n"; }
+						$tmpFile{$f} = "$outdir/".${$fName}{$f}."_dedup.bam";
+						unlink "$outdir/".${$fName}{$f}.".dedup-metrics"; unlink "$outdir/".${$fName}{$f}."_onBed.bam"
+						}
+					}
+				}
+
+			elsif (!$gatk) {
+				my$cmd = "$samT view -bh -L $outdir/$bedName$withChr"
+				if ($mmq) { $cmd .= " -q $mmq"; }
+				$cmd .= " ".${$path}{$f}.${$fName}{$f}.$extenS." > $outdir/".${$fName}{$f}."_onBed.bam";
+			if ($dedup) { 
+				if ($mmq) { 
+					$cmd .= " > $outdir/tmp.bam";
+					print "$cmd\n";
+					system "$cmd";
+					if ($?) { die "samtools not happy\n"; }
+					$cmd = "$picard MarkDuplicates I=$outdir/tmp.bam O=/dev/stdout M=$outdir/$file.dedup-metrics REMOVE_DUPLICATES=true CREATE_INDEX=true"; 
+					}
+				else { $cmd = "$picard MarkDuplicates I=$path$file$extenS O=/dev/stdout M=$outdir/$file.dedup-metrics REMOVE_DUPLICATES=true CREATE_INDEX=true"; }
+				if ($keepTmp) {
+					$cmd .= " > $outdir/$file.tmp.bam";
+					print "$cmd\n";
+					system "$cmd";
+					if ($?) { die "picard tools not happy\n"; }
+					$tmpFile = "$outdir/$file.tmp.bam";
+					}
+				}
+
+
 		if ($gatk) {
 			my($r1,$r2) = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,\%sName,$outdir,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$threads,$gatk,$picard,$genom);
 			%gatkIdx = %$r1;
 			#@{ $headers{"$outdir/all.cov"} } = @$r2;
 			}
 		else {
-			$keepTmp = 0;
-			bedToolsCov($intervalName,\%path,$extenS,\@Files,\%fName,$outdir,\%withChr,$keepTmp,\%tmpFile,$mmq,$dedup,$chromLength,$bedT,$bedTversion,$samT,$picard);
+			bedToolsCov($intervalName,\%path,$extenS,\@Files,\%fName,$outdir,\%withChr,$mmq,$dedup,$chromLength,$bedT,$bedTversion,$samT,$picard);
 			}
 		}
 	}
 
+
+
+###################
+#depth Mut
+if ($mutFile) { 
+	if($jobs{"covMut"}) { 
+		depthMut($mutFile,\%path,$extenS,\@Files,\%fName,\%sName,\%sName2,$Mut,$outdir,\%withChr,$mmq,$mbq,$dedup,$threads,$chromLength,$bedT,$bedTversion,$samT,$picard,$gatk,$genom);
+		}
+	}
 
 ###################
 #Job 3: Graphs:
@@ -5376,7 +5430,7 @@ else {
 			if ( ($tab[1]+1) > ${$Intervals_r}{$Starts[-1]} )
 				{ $ok = 1; }
 			}
-		if ($ok) { last; }	
+		if ($ok) { last; }
 		}
 	}
 close COV;
