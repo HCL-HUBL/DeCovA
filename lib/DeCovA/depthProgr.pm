@@ -1,4 +1,4 @@
-package Bio::NGS::HCL::DeCovA::depthProgr;
+package DeCovA::depthProgr;
 
 
 use strict;
@@ -29,18 +29,19 @@ system "$cmd";
 
 sub bedToolsCov {
 
-my($intervalFile,$Files,$sName,$fName,$bam2Use,$outdir,$outName,$withChr,$chromLength,$bedT,$bedTversion) = @_;
+my($intervalFile,$Files,$sName,$fName,$bam2Use,$depthFile,$tmpDir,$withChr,$chromLength,$bedT,$bedTversion,$keepCov) = @_;
 
+my%covFiles;
 my%isChr;
 foreach my$f (@{$Files}) { 
 	if (${$withChr}{$f}) { $isChr{$f} = ${$withChr}{$f}; }
 	else { $isChr{$f} = "_0Chr.bed"; }
 	}
 foreach my$f1 (@{$Files}) {
-	my$outCovFile = "$outdir/".${$fName}{$f1}.".cov";
-	bedToolCmd("$outdir/$intervalFile".$isChr{$f1}, ${$bam2Use}{$f1}, $outCovFile, $chromLength, $bedT, $bedTversion);
+	$covFiles{$f1} = "$tmpDir/".${$fName}{$f1}."_cov.txt";
+	bedToolCmd($intervalFile.$isChr{$f1}, ${$bam2Use}{$f1}, $covFiles{$f1}, $chromLength, $bedT, $bedTversion);
 	unless (${$withChr}{$f1}) {	#test if cov == 0 at each base
-		open(my$fh, "<", "$outCovFile") || die "could not read $outCovFile ($!)\n";
+		open(my$fh, "<", $covFiles{$f1}) || die "could not read ".$covFiles{$f1}." ($!)\n";
 		my$ok=0;
 		while (my$line = <$fh>) {
 			chomp $line;
@@ -57,32 +58,35 @@ foreach my$f1 (@{$Files}) {
 					else { $isChr{$f2} = "_0Chr.bed"; }
 					} 
 				}
-			bedToolCmd("$outdir/$intervalFile".$isChr{$f1}, ${$bam2Use}{$f1}, $outCovFile, $chromLength, $bedT, $bedTversion);
+			bedToolCmd($intervalFile.$isChr{$f1}, ${$bam2Use}{$f1}, $covFiles{$f1}, $chromLength, $bedT, $bedTversion);
 			}
 		${$withChr}{$f1} = $isChr{$f1};
 		}
+	my$cmd = "sort -k 1,1 -k 2n,2n -k 4n,4n -T $tmpDir -o $covFiles{$f1} $covFiles{$f1}";
+	print "$cmd\n";
+	system "$cmd";
+	if ($?) { die "sort $covFiles{$f1} failed\n"; }
 	}
 
 ##make unique file, as the gatk one
-
-my$allSamplesCov = "$outdir/$outName";
+my$allSamplesCov = "$tmpDir/allSamples";
 my$headers = "Locus\tTotal_Depth\tAverage_Depth_sample\tDepth_for_".${$sName}{${$Files}[0]};
 my%smplIdx = ( ${$Files}[0]=>3 );
 open(my$fhNew, ">", "$allSamplesCov.0") || die "could not create $allSamplesCov.0 ($!)\n";
-open(my$fhSmpl, "<", "$outdir/".${$fName}{${$Files}[0]}.".cov") || die "could not read $outdir/".${$fName}{${$Files}[0]}.".cov ($!)\n";
+open(my$fhSmpl, "<", $covFiles{${$Files}[0]}) || die "could not read ".$covFiles{${$Files}[0]}.".cov ($!)\n";
 while (my $line = <$fhSmpl>) {
 	chomp $line;
 	my@tab = split(/\t/,$line);
 	print $fhNew  $tab[0].":".($tab[1]+$tab[3])."\t.\t.\t".$tab[-1]."\n";
 	}
 close $fhNew; close $fhSmpl;
+unlink $covFiles{${$Files}[0]};
 for my$i (1..$#{$Files}) {
 	$headers .= "\tDepth_for_".${$sName}{${$Files}[$i]};
 	$smplIdx{${$Files}[$i]} = 3+$i;
-	my$smplCovFile = "$outdir/".${$fName}{${$Files}[$i]}.".cov";
 	open(my$fhOld, "<", "$allSamplesCov.".($i-1)) || die "could not write into $allSamplesCov.".($i-1)." ($!)\n";
 	open($fhNew, ">", "$allSamplesCov.$i") || die "could not write into $allSamplesCov.$i ($!)\n";
-	open($fhSmpl, "<", "$smplCovFile") || die "could not read $smplCovFile ($!)\n";
+	open($fhSmpl, "<", $covFiles{${$Files}[$i]}) || die "could not read ".$covFiles{${$Files}[$i]}." ($!)\n";
 #	while (! eof $fhOld and ! eof $fhSmpl) {
 	while (my$line1 = <$fhOld>) {
 		chomp $line1;
@@ -93,19 +97,44 @@ for my$i (1..$#{$Files}) {
 		}
 	close $fhOld; close $fhNew; close $fhSmpl;
 	unlink "$allSamplesCov.".($i-1);
+	unlink $covFiles{${$Files}[$i]};
 	}
-use File::Copy qw/move/;
+use File::Copy qw(move);
 move("$allSamplesCov.".$#{$Files} , "$allSamplesCov") or die "move failed: $!\n";
 
-my$cmd = "sort -k 1,1 -k 2n,2n -k 4n,4n -T $outdir -o $allSamplesCov $allSamplesCov";
-print "$cmd\n";
-system "$cmd";
-
-open($fhNew, ">", "$outdir/$outName.headers.txt") || die "could not create $outdir/$outName.headers.txt ($!)\n";
+##make 1 file / chr
+open($fhNew, ">", $depthFile) || die "could not create $depthFile ($!)\n";
 print $fhNew "$headers\n";
+my$currentChr = "";
+my$fhChr;
+my%depthFilePerChr;
+open(my$fhIn, "<", $allSamplesCov) || die "could not read $allSamplesCov ($!)\n";
+while (my$line = <$fhIn>) {
+	print $fhNew $line;
+	$line =~ /^(\w+):\d+\t/;
+	my$chr = $1; $chr =~ s/^chr//i;
+	if ($chr ne $currentChr) {
+		if ($currentChr ne "") { close $fhChr; }
+		$currentChr = $chr;
+		$depthFilePerChr{"raw"}{$chr} = "$tmpDir/$chr"."_cov.txt";
+		open($fhChr, ">", $depthFilePerChr{"raw"}{$chr}) || die "could not create ".$depthFilePerChr{"raw"}{$chr}." ($!)\n";
+		}
+	if (defined $fhChr) {
+		$line =~ s/^\w+://;
+		print $fhChr $line;
+		}
+	}
+close $fhIn;
 close $fhNew;
+unlink $allSamplesCov;
 
-return(\%smplIdx);
+if ($keepCov) {
+	use IO::Compress::Gzip qw(gzip $GzipError) ;
+	gzip $depthFile => "$depthFile.gz" or die "gzip failed: $GzipError\n";
+	}
+unlink $depthFile;
+
+return(\%smplIdx, \%depthFilePerChr);
 
 }
 
@@ -128,12 +157,13 @@ if ($?) { die "bedtools not happy\n"; }
 
 ####################
 
-#%gatkIdx = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,$outdir,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$gatk,$picard,$genom);
+#%gatkIdx = gatkCov($intervalName,\%path,$extenS,\@Files,\%fName,"all.cov",$withChr{"all"},$mmq,$mbq,$dedup,$gatk,$picard,$genom);
 sub gatkCov {
 
-my($intervalFile,$Files,$sName,$bam2Use,$outdir,$outName,$withChr,$mmq,$mbq,$dedup,$threads,$gatk,$genom) = @_;
+my($intervalFile,$Files,$sName,$bam2Use,$depthFile,$tmpDir,$withChr,$mmq,$mbq,$dedup,$threads,$gatk,$genom,$keepCov) = @_;
 
-my$cmd = "$gatk -T DepthOfCoverage -R $genom -L $outdir/$intervalFile$withChr";
+my$allSamplesCov = "$tmpDir/allSamples";
+my$cmd = "$gatk -T DepthOfCoverage -R $genom -L $intervalFile$withChr";
 foreach my$f (@{$Files}) { $cmd .= " -I ".${$bam2Use}{$f}; }
 unless ($dedup) { $cmd .= " -drf DuplicateRead"; }
 if ($threads) { $cmd .= " -nt $threads"; }
@@ -143,14 +173,15 @@ else { $cmd .= "0"; }
 $cmd .= " -mmq ";
 if ($mmq) { $cmd .= "$mmq"; }
 else { $cmd .= "0"; }
-$cmd .= " --countType COUNT_FRAGMENTS -omitLocusTable -omitSampleSummary -omitIntervals -o $outdir/$outName";
+$cmd .= " --countType COUNT_FRAGMENTS -omitLocusTable -omitSampleSummary -omitIntervals -o $allSamplesCov";
 print "$cmd\n";
 system "$cmd";
 if ($?) { die "GATK not happy\n"; }
 
-my%gatkIdx;
-open(my$fh, "<","$outdir/$outName") or die "could not read $outdir/$outName ($?)\n";
-my$firstLine = <$fh>;
+##get smplIdx, make 1 file / chr
+my(%gatkIdx,%depthFilePerChr);
+open(my$fhIn, "<", $allSamplesCov) or die "could not read $allSamplesCov ($!)\n";
+my$firstLine = <$fhIn>;
 print $firstLine;
 chomp $firstLine;
 my@header_cov = split(/\t/,$firstLine);
@@ -160,15 +191,31 @@ foreach my$f (@{$Files}) {
 			{ $gatkIdx{$f} = $i; last; }
 		}
 	}
-close $fh;
+my$currentChr = "";
+my$fhChr;
+while (my$line = <$fhIn>) {
+	$line =~ /^(\w+):\d+\t/;
+	my$chr = $1; $chr =~ s/^chr//i;
+	if ($chr ne $currentChr) {
+		if ($currentChr ne "") { close $fhChr; }
+		$currentChr = $chr;
+		$depthFilePerChr{"raw"}{$chr} = "$tmpDir/$chr"."_cov.txt";
+		open($fhChr, ">", $depthFilePerChr{"raw"}{$chr}) || die "could not create ".$depthFilePerChr{"raw"}{$chr}." ($!)\n";
+		}
+	if (defined $fhChr) {
+		$line =~ s/^\w+://;
+		print $fhChr $line;
+		}
+	}
+close $fhChr; close $fhIn;
 
-$cmd = "head -n 1 $outdir/$outName > $outdir/$outName.headers.txt";
-print "$cmd\n";
-system "$cmd";
-$cmd = "tail -n +2 $outdir/$outName > $outdir/tmpTail; mv $outdir/tmpTail $outdir/$outName";
-print "$cmd\n";
-system "$cmd";
-return(\%gatkIdx);
+if ($keepCov) {
+	use IO::Compress::Gzip qw(gzip $GzipError) ;
+	gzip $allSamplesCov => "$depthFile.gz" or die "gzip failed: $GzipError\n";
+	}
+unlink $allSamplesCov;
+
+return(\%gatkIdx, \%depthFilePerChr);
 
 }
 

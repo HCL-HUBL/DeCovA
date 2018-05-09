@@ -1,11 +1,11 @@
-package Bio::NGS::HCL::DeCovA::CNV_tool;
+package DeCovA::CNV_tool;
 
 
 use strict;
 use warnings;
 
 #############
-#@hashSub = Bio::NGS::HCL::DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$fichier_sexe,\%CNV_opt,$refBedLines,\@ChromOrder);
+#@hashSub = DeCovA::CNV_tool::CNV_detect(\@Files,\%sName2,"$outdir/CNV_analysis",$fichier_sexe,\%CNV_opt,$refBedLines,\@ChromOrder);
 sub CNV_detect {
 
 my($Files_r,$sampleName_r,$outdir,$fichier_sexe,$CNV_opt_r,$Regions_r,$chromOrder_r,$chromName_r) = @_;
