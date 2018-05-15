@@ -210,34 +210,6 @@ for (my$i=0;$i<scalar@allLines;$i++) {
 close $fh1; 
 if ($toReseq) { close $fh2; }
 
-open($fh1, ">", "$outdir/$bedName\_report.txt") || die "can't create file $outdir/$bedName\_report.txt($!)\n";
-print $fh1 "$bedName.bed\n";
-print $fh1 "total length : $TotLength bp\n\n";
-print $fh1 "samples\t% cov >=$threshold"."x\tmean depth";
-for my$frac (10,5,2) {
-	print $fh1 "\t% cov >=(mean depth/$frac)x";
-	}
-print $fh1 "\n";
-foreach my$file (@{$Files_r}) {
-	my$fracCov = ${$TotByCov}{$file} / $TotLength;
-	my$totMean = ${$TotBases}{$file} / $TotLength;
-	my%fracMean;
-	for my$frac (10,5,2) {
-		my$fracMean = 0;
-		for (my$d=0;$d<=int($totMean / $frac);$d++) {
-			if (exists ${$TotByDepth}{$file}{$d}) { $fracMean += ${$TotByDepth}{$file}{$d}; }
-			}
-		$fracMean{$frac} = $fracMean / $TotLength;
-		}
-	print $fh1 ${$sName_r}{$file}."\t".100*(sprintf("%.3f", $fracCov))." %\t".sprintf("%.1f", $totMean)." x";
-	for my$frac (10,5,2) {
-		print $fh1 "\t".100*(sprintf("%.3f", $fracMean{$frac}));
-		}
-	print $fh1 "\n";
-	}
-close $fh1;
-
-
 if ($bedReport && $threshold) {
 	foreach my$file (@{$Files_r}) {
 		open($fh1, ">$outdir/cov\_${$sName_r}{$file}/$bedName.${$sName_r}{$file}.notCov.txt") || die "can't create file $outdir/cov\_${$sName_r}{$file}/$bedName.${$sName_r}{$file}.notCov.bed\n";
@@ -260,7 +232,7 @@ if ($bedReport && $threshold) {
 		}
 	}
 
-return(\@bedLines,$TotByDepth,$TotLength);
+return(\@bedLines,$TotLength,$TotByDepth,$TotByCov,$TotBases);
 }
 
 

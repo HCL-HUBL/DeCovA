@@ -340,17 +340,19 @@ if (exists $opt{"ref"}) {
 	else { die $opt{"ref"}." not found\n"; }
 	}
 my$refFmt = "";
-if (exists $opt{fmt}) {
-	if ($opt{fmt} =~ /ucsc/i) { $refFmt = "ucsc"; }
-	elsif ($opt{fmt} =~ /gtf/i) { $refFmt = "gtf"; }
-	elsif ($opt{fmt} =~ /gff/i) { $refFmt = "gff3"; }
-	else { die $opt{fmt}." format not recognized (ucsc / gtf/ gff3)\n"; }
-	}
-else {
-	if ($refFile =~ /.txt(.gz)?$/) { $refFmt = "ucsc"; }
-	elsif ($refFile =~ /.gtf(.gz)?$/) { $refFmt = "gtf"; }
-	elsif ($refFile =~ /.gff3(.gz)?$/) { $refFmt = "gff3"; }
-	else { die "$refFile format not recognized\n"; }
+if ($refFile) {
+	if (exists $opt{fmt}) {
+		if ($opt{fmt} =~ /ucsc/i) { $refFmt = "ucsc"; }
+		elsif ($opt{fmt} =~ /gtf/i) { $refFmt = "gtf"; }
+		elsif ($opt{fmt} =~ /gff/i) { $refFmt = "gff3"; }
+		else { die $opt{fmt}." format not recognized (ucsc / gtf/ gff3)\n"; }
+		}
+	else {
+		if ($refFile =~ /.txt(.gz)?$/) { $refFmt = "ucsc"; }
+		elsif ($refFile =~ /.gtf(.gz)?$/) { $refFmt = "gtf"; }
+		elsif ($refFile =~ /.gff3(.gz)?$/) { $refFmt = "gff3"; }
+		else { die "$refFile format not recognized\n"; }
+		}
 	}
 
 my($bedFile,$bedName);
@@ -2282,15 +2284,15 @@ target regions: exons\n";
 ###################
 #Job 4: cov of each bed interval
 
-my($bedLines_r,$histDepth,$totLength);
+my($bedLines_r,$totLength,$depthCount,$covBases,$totBases);
 
 if ($jobs{"covBed"}) {
 	use DeCovA::bedCov;
 	if ($bedFile) {
-		($bedLines_r,$histDepth,$totLength) = DeCovA::bedCov::Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,$Bed_r,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,\%{ ${$depthFilePerChr}{"raw"} },$smplIdx,\%CNV_opt);
+		($bedLines_r,$totLength,$depthCount,$covBases,$totBases) = DeCovA::bedCov::Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,$Bed_r,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,\%{ ${$depthFilePerChr}{"raw"} },$smplIdx,\%CNV_opt);
 		}
 	else {
-		($bedLines_r,$histDepth,$totLength) = DeCovA::bedCov::Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,$coordBed_r,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,\%{ ${$depthFilePerChr}{"raw"} },$smplIdx,\%CNV_opt);
+		($bedLines_r,$totLength,$depthCount,$covBases,$totBases) = DeCovA::bedCov::Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,$coordBed_r,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,\%{ ${$depthFilePerChr}{"raw"} },$smplIdx,\%CNV_opt);
 		}
 	}
 
@@ -2310,10 +2312,10 @@ if ($jobs{"covPlot"} || $jobs{"interSplot"}) {
 	#classiq
 	if ($jobs{"covPlot"}) {
 		if (!$bedFile || $jobs{"genePlot"}) {
-			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,"all_Genes_Regions",\@Files,\%sName2,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$coordBed_r,$histDepth,$totLength);
+			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,"all_Genes_Regions",\@Files,\%sName2,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$coordBed_r,$pThreshold,$totLength,$depthCount,$covBases,$totBases);
 			}
 		if ($bedFile) {
-			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,$bedName,\@Files,\%fName,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$Bed_r,$histDepth,$totLength);
+			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,$bedName,\@Files,\%fName,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$Bed_r,$pThreshold,$totLength,$depthCount,$covBases,$totBases);
 			}
 		}
 

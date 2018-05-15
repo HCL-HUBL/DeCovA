@@ -16,14 +16,19 @@ use warnings;
 
 sub covPlot {
 
-my($bin,$maxPl,$outdir,$outName,$Files,$smplName,$smplIdx,$depthFilePerChr,$allInterval_r,$depthCount,$lengthBed)=@_;
+my($bin,$maxPl,$outdir,$outName,$Files,$smplName,$smplIdx,$depthFilePerChr,$allInterval_r,$threshold,$lengthBed,$depthCount,$covBases,$totBases)=@_;
 
 print "\n\n####\n\ndoing depthPlot for $outName (by samples and avg of all samples)\n\n####\n";
 
-print "\n\tper bin depth count tab and cumulative depth count\n";
+## ${$depthCount}{$file}{depth value} = nber pos with this depth
+unless ($depthCount) {
+	($lengthBed,$depthCount,$covBases,$totBases) = intersectForHist($Files,$smplIdx,$depthFilePerChr,$allInterval_r,$threshold);
+	}
+
+print "\n\t## printing per bin depth count and cumulative depth count tab files\n";
+
 open(my$fhBin, ">", "$outdir/$outName\_binCovPlot.txt") || die "can't create $outdir/$outName\_binCovPlot.txt ($!)\n";
 open(my$fhSum, ">", "$outdir/$outName\_sumCovPlot.txt") || die "can't create $outdir/$outName\_sumCovPlot.txt ($!)\n";
-
 print $fhBin "depth\t";
 print $fhSum "depth\t";
 my$i=0;
@@ -35,22 +40,22 @@ while ( ($i*$bin) <= $maxPl ) {
 print $fhBin ">=$maxPl\n";
 print $fhSum "\n";
 
-## ${$hist_r}{$file}{depth value} = nber pos with this depth
-unless ($depthCount) {
-	($lengthBed,$depthCount) = intersectForHist($Files,$smplIdx,$depthFilePerChr,$maxPl,$allInterval_r);
-	}
-
 foreach my$file (@{$Files}) {
-	print "\tanalysing ".${$smplName}{$file}." for plot on $outName\n";
+	print "\t\tanalysing ".${$smplName}{$file}." for plot on $outName\n";
 
 	my%histD;
-	foreach (keys%{ ${$depthCount}{$file} }) {
-		$histD{$file}{$_} = ${$depthCount}{$file}{$_} / $lengthBed;
+	foreach my$d (keys%{ ${$depthCount}{$file} }) {
+		if ($maxPl && $d > $maxPl) { $histD{$file}{($maxPl+1)} += ${$depthCount}{$file}{$d}; }
+		else { $histD{$file}{$d} = ${$depthCount}{$file}{$d} / $lengthBed; }
+		}
+	if ($maxPl) {
+		if (exists $histD{$file}{($maxPl+1)}) { $histD{$file}{($maxPl+1)} /= $lengthBed; }
+		else { $histD{$file}{($maxPl+1)} = 0; }
 		}
 
 	print $fhBin "sample_".${$smplName}{$file}."\t";
 	my$histCount;
-	my$i=0;
+	$i=0;
 	while ( ($i*$bin) <= $maxPl ) {
 		$histCount=0;
 		for (my$j=($bin*$i);$j<($bin*($i+1));$j++) {
@@ -93,43 +98,8 @@ if (scalar@{$Files} > 1) {
 #R barplot -sum, 1graph / sample
 allCovPlot($bin,$maxPl,$outdir,$outName,$lengthBed,$Files,$smplName);
 
-=pod
-my$minD;
-my$maxD = 0;
-foreach my$file (@{$Files}) {
-	foreach my$d (keys%{ ${$depthCount}{$file} }) {
-		if ($d > $maxD) { $maxD = $d; }
-		if (defined $minD) {
-			if ($d < $minD) { $minD = $d; }
-			}
-		else { $minD = $d; }
-		}
-	}
-open(my$fhOut, ">", "$outdir/$outName\_perDepth.txt") || die "can't create $outdir/$outName\_perDepth.txt ($!)\n";
-print $fhOut "depth";
-foreach my$file (@{$Files}) { print $fhOut "\t".${$smplName}{$file}; }
-print $fhOut "\n";
-for my$d (0..$maxD) {		##($minD..$maxD) ?
-	print $fhOut "$d";
-	foreach my$file (@{$Files}) {
-		if (exists ${$depthCount}{$file}{$d}) { print $fhOut "\t".${$depthCount}{$file}{$d}; }
-		else { print $fhOut "\t0"; }
-		}
-	print $fhOut "\n";
-	}
-close($fhOut);
+depthBoxPlot($outdir,$outName,$Files,$smplName,$threshold,$lengthBed,$depthCount,$covBases,$totBases);
 
-print "\n## doing depth boxPlot\n";
-open ($fhOut, ">", "$outdir/plot_temp.R") || die "can't create $outdir/plot_temp.R ($!)\n";
-print $fhOut "#!/usr/bin/env Rscript\n\n" ;
-print $fhOut "pdf(\"$outdir/$outName\_depth_boxplot.pdf\", width=11.69, height=4.135)
-df <- read.table(\"$outdir/$outName\_perDepth.txt\",header=T)
-boxplot(df, main=\"\", xlab=\"samples\", ylab=\"depth\", ylim=c(0,$maxD), col=\"blue\", axis.lty=1las = 2, cex.axis = 0.75)
-dev.off();warnings();\n";
-close($fhOut);
-system "Rscript $outdir/plot_temp.R";
-unlink "$outdir/plot_temp.R";
-=cut
 
 }
 
@@ -138,11 +108,11 @@ unlink "$outdir/plot_temp.R";
 ## ($lengthBed,$hist_r) = intersectForHist($Files,$smplIdx,$depthFilePerChr,$maxPl,$allInterval_r);
 
 sub intersectForHist {
-print "\n##intersecting plot target regions with depth Files\n";
-my($Files,$smplIdx,$depthFilePerChr,$maxPl,$Intervals_r) = @_;
+print "\n\t##intersecting plot target regions with depth Files\n";
+my($Files,$smplIdx,$depthFilePerChr,$Intervals_r,$threshold) = @_;
 
 my$lengthBed = 0;
-my%allDepth;		#for hist depth : $allDepth{$file}{depth value} = nber pos with this depth
+my(%allDepth,%covBases,%totBases);		#for hist depth : $allDepth{$file}{depth value} = nber pos with this depth
 
 foreach my$chr (keys%{$Intervals_r}) {
 	my@Starts = sort{$a<=>$b}(keys%{ ${$Intervals_r}{$chr} });
@@ -152,29 +122,29 @@ foreach my$chr (keys%{$Intervals_r}) {
 		chomp $line;
 		my@tab = split(/\t/,$line);
 		my$pos = $tab[0];
-		while ( ($pos > ${$Intervals_r}{$chr}{$Starts[$c]}) && ($c < $#Starts) )
-			{ $c++; }
+		while ( ($pos > ${$Intervals_r}{$chr}{$Starts[$c]}) && ($c < $#Starts) ) { $c++; }
 		if ( ($pos >= $Starts[$c]) && ($pos <= ${$Intervals_r}{$chr}{$Starts[$c]}) ) {
 			$lengthBed++;
 			foreach my$f (@{$Files}) {
 				my$depth = $tab[${$smplIdx}{$f}];
-				if ($maxPl) { if ($depth > $maxPl) { $depth = ($maxPl+1); } }
+				$totBases{$f} += $depth;
 				$allDepth{$f}{$depth}++;
+				if ($threshold && $depth >= $threshold) { $covBases{$f}++; }
 				}
 			}
 		if ( $pos > ${$Intervals_r}{$chr}{$Starts[-1]} ) { last; }
 		}
 	}
 
-return($lengthBed,\%allDepth);
+return($lengthBed,\%allDepth,\%covBases,\%totBases);
 
 }
 
-
 ##########
+
 sub meanCovPlot {
 my($bin,$maxPl,$outdir,$outName,$lengthBed) = @_;
-print "\n## doing meanCovPlot\n";
+print "\n\t## doing meanCovPlot\n";
 my$line="";
 my$i=0;
 while ( ($i*$bin) <= $maxPl ) {
@@ -207,7 +177,7 @@ unlink "$outdir/plot_temp.R";
 ##########
 sub allCovPlot {
 my($bin,$maxPl,$outdir,$outName,$lengthBed,$Files,$smplName) = @_;
-print "\n## doing allCovPlot\n";
+print "\n\t## doing allCovPlot\n";
 my$line="";
 my$i=0;
 while ( ($i*$bin) <= $maxPl ) {
@@ -244,6 +214,7 @@ unlink "$outdir/hist_temp.R";
 ##########
 #R barplot -bin , mean of all samples
 #binCovPlot($bin,$maxPl,$outdir,$outName,$lengthBed);
+
 sub binCovPlot {
 my($bin,$maxPl,$outdir,$outName,$lengthBed) = @_;
 print "doing binCovPlot\n";
@@ -280,6 +251,7 @@ unlink "$outdir/plot_temp.R";
 ##########
 #R barplot -bin , 1graph / sample
 #allBinCovPlot($bin,$maxPl,$outdir,$outName,$lengthBed,\@Files,\%sName2);
+
 sub allBinCovPlot {
 my($bin,$maxPl,$outdir,$outName,$lengthBed,$h1,$h2) = @_;
 my@Files = @$h1;
@@ -310,6 +282,135 @@ close CMDR;
 system "Rscript $outdir/plot_temp.R";
 unlink "$outdir/plot_temp.R";
 }
+
+
+##########
+#depthBoxPlot($outdir,$outName,$Files,$smplName,$threshold,$lengthBed,$depthCount,$covBases,$totBases);
+
+sub depthBoxPlot {
+
+my($outdir,$outName,$Files,$smplName,$threshold,$lengthBed,$depthCount,$covBases,$totBases) = @_;
+
+print "\n\t## doing depth boxPlot\n";
+my%Vals;
+foreach my$file (@{$Files}) {
+	my@Depths = sort{$a<=>$b}(keys%{ ${$depthCount}{$file} });
+	$Vals{"min"}{$file} = $Depths[0];
+	$Vals{"max"}{$file} = $Depths[-1];
+	$Vals{"median"}{$file} = medianFromHistog($lengthBed,\@Depths,\%{ ${$depthCount}{$file} });
+	my($q1Length,@q1Set,$q3Length,@q3Set);
+	foreach (@Depths) {
+		if ($_ < $Vals{"median"}{$file}) {
+			push(@q1Set, $_);
+			$q1Length += ${$depthCount}{$file}{$_};
+			}
+		elsif ($_ > $Vals{"median"}{$file}) {
+			push(@q3Set, $_);
+			$q3Length += ${$depthCount}{$file}{$_};
+			}
+		}
+	$Vals{"Q1"}{$file} = medianFromHistog($q1Length,\@q1Set,\%{ ${$depthCount}{$file} });
+	$Vals{"Q3"}{$file} = medianFromHistog($q3Length,\@q3Set,\%{ ${$depthCount}{$file} });
+	$Vals{"lower_wsk"}{$file} = $Vals{"Q1"}{$file} - 1.5*($Vals{"Q3"}{$file}-$Vals{"Q1"}{$file});
+	if ($Vals{"lower_wsk"}{$file} < $Vals{"min"}{$file}) { $Vals{"lower_wsk"}{$file} = $Vals{"min"}{$file} ; }
+	$Vals{"upper_wsk"}{$file} = $Vals{"Q3"}{$file} + 1.5*($Vals{"Q3"}{$file}-$Vals{"Q1"}{$file});
+	if ($Vals{"upper_wsk"}{$file} > $Vals{"max"}{$file}) { $Vals{"upper_wsk"}{$file} = $Vals{"max"}{$file} ; }
+	}
+
+my@fracOfMean = (10,5,2);
+open(my$fhOut, ">", "$outdir/$outName\_depthReport.txt") || die "can't create file $outdir/$outName\_depthReport.txt($!)\n";
+print $fhOut "$outName.bed :\n\n";
+print $fhOut "total length : $lengthBed bp\n\n";
+print $fhOut "samples\tmin\tQ1\tmedian\tQ3\tmax\tmean";
+foreach my$frac (@fracOfMean) { print $fhOut "\t%"."cov <=(mean depth/$frac)x"; }
+if ($threshold) { print $fhOut "\t%"."cov >=".$threshold."x"; }
+print $fhOut "\n";
+foreach my$file (@{$Files}) {
+	print $fhOut ${$smplName}{$file}."\t".$Vals{"min"}{$file}."\t".$Vals{"Q1"}{$file}."\t".$Vals{"median"}{$file}."\t".$Vals{"Q3"}{$file}."\t".$Vals{"max"}{$file};
+	my$totMean = ${$totBases}{$file} / $lengthBed;
+	print $fhOut "\t".sprintf("%.1f", $totMean);
+	my%fracMean;
+	foreach my$frac (@fracOfMean) {
+		my$fracMean = 0;
+		for (my$d=0;$d<=int($totMean / $frac);$d++) {
+			if (exists ${$depthCount}{$file}{$d}) { $fracMean += ${$depthCount}{$file}{$d}; }
+			}
+		$fracMean{$frac} = $fracMean / $lengthBed;
+		print $fhOut "\t".100*(sprintf("%.3f", $fracMean{$frac}));
+		}
+	if ($threshold && exists ${$covBases}{$file}) { print $fhOut "\t".100*(sprintf("%.3f", (${$covBases}{$file} / $lengthBed))); }
+	else { print $fhOut "\t0",}
+	print $fhOut "\n";
+	}
+close $fhOut;
+
+
+
+my$Rtxt = "#!/usr/bin/env Rscript\n
+pdf(\"$outdir/$outName\_depth_boxplot.pdf\", width=11.69, height=4.135)\n";
+#Vals <- list( stats=matrix(c(lower_whisker{1},Q1{1},Median{1},Q3{1},upper_whisker{1},lower_whisker{2},Q1{2},Median{2},Q3{2},upper_whisker{2})), ncol=2) , n=c(tot,tot) , out=c(min{1},max{1},min{2},max{2}) , group=c(1,1,2,2), names=c(\"smpl1\",\"smpl2\") )
+$Rtxt .= "Vals <- list( stats=matrix(c(";
+foreach (@{$Files}) { $Rtxt .= $Vals{"lower_wsk"}{$_}.",".$Vals{"Q1"}{$_}.",".$Vals{"median"}{$_}.",".$Vals{"Q3"}{$_}.",".$Vals{"upper_wsk"}{$_}.","; }
+chop $Rtxt;
+$Rtxt .= "),ncol=".scalar(@{$Files}).") , n=c(";
+foreach (@{$Files}) { $Rtxt .= $lengthBed.","; }
+chop $Rtxt;
+$Rtxt .= ") , out=c(";
+foreach (@{$Files}) { $Rtxt .= $Vals{"min"}{$_}.",".$Vals{"max"}{$_}.","; }
+chop $Rtxt;
+$Rtxt .= ") , group=c(";
+my$i = 1;
+foreach (@{$Files}) { $Rtxt .= $i.",".$i.","; $i++; }
+chop $Rtxt;
+$Rtxt .= ") , names=c(";
+foreach (@{$Files}) { $Rtxt .= "\"".${$smplName}{$_}."\","; }
+chop $Rtxt;
+$Rtxt .= ") )
+bxp(Vals, outline=TRUE , show.names = TRUE)
+dev.off();\n";
+
+open ($fhOut, ">", "$outdir/plot_temp.R") || die "can't create $outdir/plot_temp.R ($!)\n";
+print $fhOut "$Rtxt";
+close($fhOut);
+system "Rscript $outdir/plot_temp.R";
+unlink "$outdir/plot_temp.R";
+
+}
+#####
+sub medianFromHistog {
+my($length,$Depths,$depthCount) = @_;
+my$median;
+my$countD = 0;
+#odd?
+if($length%2) {
+	foreach my$d (@{$Depths}) {
+		$countD += ${$depthCount}{$d};
+		if ($countD > $length/2) {
+			$median = $d;
+			last;
+			}
+		}
+	}
+#even
+else {
+	for my$i (0..$#{$Depths}) {
+		$countD += ${$depthCount}{${$Depths}[$i]};
+		if ($countD >= $length/2) {
+			if ($countD == $length/2) {
+				$median = (${$Depths}[$i] + ${$Depths}[$i+1]) / 2;
+				last;
+				}
+			else {
+				$median = ${$Depths}[$i];
+				last;
+				}
+			}
+		}
+	}
+return($median);
+
+}
+
 
 
 ############################
@@ -354,11 +455,11 @@ if (scalar(keys%{$intervals_r}) != 0) {
 				}
 			}
 		## %allDepth: depth foreach position in intervals from %allInterval : ${$allDepth}{$file}{$loc} = depth
-		print "\n##intersecting plot target regions with $chr depth File\n";
+		print "\n\t##intersecting plot target regions with $chr depth File\n";
 		my$allDepth_r = DeCovA::covByRegion::intersectCovFile($Files_r,$smplIdx,${$depthFilePerChr}{$chr},$maxGr,\@allBins,\%{ ${$intervals_r}{$chr} },"");
 
 		foreach my$file (@{$Files_r}) {
-			print "\tanalysing $file\n";
+			print "\t\tanalysing $file\n";
 			# -> @{ $regCov{$threshold}{$nReg} } = [nber of covered samples foreach pos]
 			foreach my$threshold (@allBins) {
 				DeCovA::covByRegion::covByThreshold($threshold,\%{ ${$intervals_r}{$chr} },\%{ ${$allDepth_r}{$file} },\%{ $regCov{$threshold} });
@@ -402,7 +503,7 @@ if (scalar(keys%{$intervals_r}) != 0) {
 ##########
 sub interPlot {
 my($bin,$maxPl,$lengthBed,$outdir,$outName) = @_;
-print "\n## doing inter-samples CovPlot\n";
+print "\n\t## doing inter-samples CovPlot\n";
 my$line="";
 my$i=0;
 while ( ($i*$bin) <= $maxPl ) {
