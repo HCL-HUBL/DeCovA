@@ -1403,7 +1403,7 @@ use DeCovA::geneRegion;
 unless ($IDinRef) {
 	#@IDs = DeCovA::refIDs::geneFromBed($idFile,$refFile,$refFmt,$Bed_r);
 	$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$Bed_r,\%chromName);
-	undef $ALLinRef;
+	#undef $ALLinRef;
 	}
 
 ##for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
@@ -2361,53 +2361,49 @@ if ($jobs{"CNV"}) {
 			use DeCovA::covByRegion;
 			use DeCovA::geneGraph;
 
-			#get transcripts and genes overlapping bed CNV results
-			my(%IDs,%CNVbed,%CNV_Genes);
-			open (MERGE, ">$outdir/allCNVs.bed") || die "can't create file $outdir/allCNVs.bed\n";
+			## get transcripts and genes overlapping bed CNV results
+			unless ($ALLinRef) {
+				$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
+				}
+			my(%CNV_IDs,%CNV_bed,%CNV_Genes);
+			open (my$fh, ">", "$outdir/allCNVs.bed") || die "can't create file $outdir/allCNVs.bed ($!)\n";
 			##cnv_Results{$Chrom}{Start}{End} = "DEL/DUP	foldRatio"
 			foreach my$file (keys%{$cnv_Results_r}) {
-#				print "\tfor $file\t";
-				#open (BED, "$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt") || die "can't open $outdir/CNV_analysis/CNV_$sName2{$file}.txt\n";
-				#while (my$line=<BED>) { print MERGE $line; }
-				#close BED;
-				#%{ $CNVbed{$file} } = DeCovA::bedProcessing::readBed("$outdir/CNV_analysis/$sName2{$file}/CNV_$sName2{$file}.txt");
 				foreach my$chrom (keys%{ ${$cnv_Results_r}{$file} }) {
 					foreach my$start (keys%{ ${$cnv_Results_r}{$file}{$chrom} }) {
 						foreach my$end (keys%{ ${$cnv_Results_r}{$file}{$chrom}{$start} }) {
 							my$chr = $chrom; $chr =~ s/^chr//i;
-							print MERGE "$chr\t$start\t$end\n";
-							if (exists $CNVbed{$file}{$chr}{($start+1)}) {
-								if ($end > $CNVbed{$file}{$chr}{($start+1)}) 
-									{ $CNVbed{$file}{$chr}{($start+1)} = $end; }	
+							print $fh "$chr\t$start\t$end\n";
+							if (exists $CNV_bed{$file}{$chr}{($start+1)}) {
+								if ($end > $CNV_bed{$file}{$chr}{($start+1)}) 
+									{ $CNV_bed{$file}{$chr}{($start+1)} = $end; }	
 								}
-							else
-								{ $CNVbed{$file}{$chr}{($start+1)} = $end; }
+							else {
+								$CNV_bed{$file}{$chr}{($start+1)} = $end;
+								}
 							}
 						}
 					}
-				foreach my$chr (keys%{ $CNVbed{$file} }) {
-					%{ $CNVbed{$file}{$chr} } = mergeIntervals(\%{ $CNVbed{$file}{$chr} });	
+				foreach my$chr (keys%{ $CNV_bed{$file} }) {
+					%{ $CNV_bed{$file}{$chr} } = mergeIntervals(\%{ $CNV_bed{$file}{$chr} });
 					}
-				@{ $IDs{$file} } = DeCovA::refIDs::bed2IDs("$outdir/id.tmp",$refFile,\%{ $CNVbed{$file} },\%chromName);
-				unlink "$outdir/id.tmp";
-				foreach (@{ $IDs{$file} }) {
-					if (exists ${$NMgene_r}{$_} && exists ${$Genes_r}{${$NMgene_r}{$_}})
-						{ $CNV_Genes{$file}{${$NMgene_r}{$_}} = 1; }
+				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName);
+				foreach (keys%{ ${CNV_IDs}{$file} }) {
+					$CNV_Genes{$file}{${CNV_IDs}{$file}{$_}{"gene"}} = 1;
 					}
 				}
-			close MERGE;
-			$CNVbed{"allFiles"} = DeCovA::bedProcessing::readBed("$outdir/allCNVs.bed");
-			foreach my$chr (keys%{ $CNVbed{"allFiles"} }) {
-				%{ $CNVbed{"allFiles"}->{$chr} } = mergeIntervals(\%{ $CNVbed{"allFiles"}->{$chr} }); 
-				}
-			@{ $IDs{"allFiles"} } = DeCovA::refIDs::bed2IDs("$outdir/id.tmp",$refFile,$CNVbed{"allFiles"},\%chromName);
-			unlink "$outdir/id.tmp";
+			close $fh;
+			$CNV_bed{"allFiles"} = DeCovA::bedProcessing::readBed("$outdir/allCNVs.bed");
 			unlink "$outdir/allCNVs.bed";
-			foreach (@{ $IDs{"allFiles"} }) {
-				if (exists ${$NMgene_r}{$_} && exists ${$Genes_r}{${$NMgene_r}{$_}})
-					{ $CNV_Genes{"allFiles"}{${$NMgene_r}{$_}} = 1; }
+			foreach my$chr (keys%{ $CNV_bed{"allFiles"} }) {
+				%{ $CNV_bed{"allFiles"}->{$chr} } = mergeIntervals(\%{ $CNV_bed{"allFiles"}->{$chr} }); 
 				}
-			#change cov file with $Patients{$file}{"Ref_Profondeur_Patient"}
+			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName);
+			foreach (keys%{ ${CNV_IDs}{"allFiles"} })  {
+				$CNV_Genes{"allFiles"}{${CNV_IDs}{"allFiles"}{$_}{"gene"}} = 1;
+				}
+
+			## change cov file with $Patients{$file}{"Ref_Profondeur_Patient"}
 			my%covIdx2File;	#$covIdx{$file} = $i;
 			foreach (keys%{$smplIdx}) { $covIdx2File{${$smplIdx}{$_}} = $_; }	#$covIdx2File{$i} = $file;
 			foreach my$chr (@chromOrder) {
@@ -2428,12 +2424,11 @@ if ($jobs{"CNV"}) {
 				close $fhIn; close $fhOut;
 				}
 
-
-			#compute as in graphs by genes
+			## compute as in graphs by genes
 			my(%CNV_NMdepth,%CNV_maxCov);
 			foreach my$gene (keys%{ $CNV_Genes{"allFiles"} }) {
 
-				print "analysing cov in $gene\n";
+				print "\tanalysing cov in $gene\n";
 				my@NMs =  @{ ${$geneNM_r}{$gene} };
 				my$chr = ${$NMchr_r}{$NMs[0]};
 				my$sens = ${$NMsens_r}{$NMs[0]};
@@ -2466,9 +2461,9 @@ if ($jobs{"CNV"}) {
 						%{ $CNV_NMdepth{$gene}->{$file} } = %tmp;
 						}
 					}
-
 				}
-			#print graphs
+
+			## print graphs
 			foreach my$file (@Files) {
 				foreach my$gene (sort(keys%{ $CNV_Genes{$file} })) {
 					#print "printing CNV graph for $sName2{$file}, in $gene\n";
@@ -2478,6 +2473,7 @@ if ($jobs{"CNV"}) {
 					DeCovA::geneGraph::CNVgraphByGene($file,$suff,"$outdir/CNV_analysis/$sName2{$file}",$gene,$sens,$maxGr,$Rev,$chr,$CNV_maxCov{$gene},$pThreshold,$NMlength{$gene},\@Files,\%sName2,$Regions{"raw"},$Regions{"rev"},\@NMs,$NM_Ex{"rev"},$RegBed{"rev"},$intron{"rev"},$UTR{"rev"},$Cod{"rev"},$CNV_NMdepth{$gene});
 					}
 				}
+
 			}
 
 		}
