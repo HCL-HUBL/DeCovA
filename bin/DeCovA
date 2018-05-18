@@ -1413,7 +1413,7 @@ unless ($IDinRef) {
 #return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
 $geneNM_r = $hashSub[0];		# @{ $geneNM{$gene} } = [$NM1,...]
 $NMgene_r = $hashSub[1];		# $NMgene{$NM} = $gene;
-$NMchr_r = $hashSub[2];		# %NMchr : key = NM, value = chr
+$NMchr_r = $hashSub[2];			# %NMchr : key = NM, value = chr
 $NMsens_r = $hashSub[3];		# %NMsens : key = NM, value = "+" or "-"
 $NMstartCod{"raw"} = $hashSub[4];		# ${$NMstartCod_r}{"raw"} = $hashSub[4];		# %NMstartCod : key = NM, value = start of coding sequence
 $NMendCod{"raw"} = $hashSub[5];		# ${$NMendCod_r}{"raw"} = %{$hashSub[5]};		# %NMendCod : key = NM, value = end of coding sequence
@@ -2490,10 +2490,11 @@ if (-d $tmpDir ) {
 	}
 
 if (!$jobs{"keepBed"}) {
-	if ($jobs{"covBed"} && !$bedFile)
-		{ unlink "$outdir/$bedName.bed"; }
-	if ($lenForBed || %reAnnotBed || $splitBed || $rmOverlapBed || $cutBed)
-		{ unlink $bedFile; }
+#	if ($jobs{"covBed"} && !$bedFile) {
+#		unlink "$outdir/$bedName.bed";
+#		}
+	if ($id2Bed) { unlink $id2Bed; }
+	if ($bedFile && ($lenForBed || %reAnnotBed || $splitBed || $rmOverlapBed || $cutBed) ) { unlink $bedFile; }
 	}
 
 #if ($gatk) {

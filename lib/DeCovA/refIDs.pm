@@ -14,7 +14,7 @@ sub UCSC2Ids {
 my($refFile,$IDs,$chromName)=@_;
 
 #@IDs in hash %target
-my%targets;
+my(%targets,%foundIds);
 foreach my$id (@{$IDs}) {
 	$id = uc($id);
 	$targets{$id} = 1;
@@ -59,7 +59,11 @@ while (my$line = <$fhIn>) {
 		my$chr = $tab[$idx{"chr"}];
 		$chr =~ s/^chr//i;
 		${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
-		if (exists $targets{$transcript_id} || exists $targets{$gene_name} || exists $targets{$Id_noExt}) {
+		my$match = 0;
+		if (exists $targets{$transcript_id}) { $foundIds{$transcript_id} = 1; $match = 1; }
+		elsif (exists $targets{$gene_name}) { $foundIds{$gene_name} = 1; $match = 1; }
+		elsif (exists $targets{$Id_noExt}) { $foundIds{$Id_noExt} = 1; $match = 1; }
+		if ($match) {
 			$allRefs{$transcript_id}{"chr"} = $chr;
 			$allRefs{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
 			if ($tab[$idx{"cdsStart"}] != $tab[$idx{"cdsEnd"}]) {
@@ -76,7 +80,7 @@ while (my$line = <$fhIn>) {
 close($fhIn);
 
 foreach my$id (keys%targets) {
-	if (!exists $allRefs{$id}) { die "$id not found in $refFile file\n"; }
+	if (!exists $foundIds{$id}) { die "$id not found in $refFile file\n"; }
 	}
 
 return(\%allRefs);
