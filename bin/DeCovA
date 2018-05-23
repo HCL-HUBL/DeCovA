@@ -1432,7 +1432,7 @@ if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 	$bedName = $keepBedName;
 	$id2Bed = "$outdir/$bedName.bed";
 	}
-@hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$splitBedFromId,$mergeBedFromId,$nonCod,$UTRinTxt,$id2Bed,\@chromOrder,\%chromName);
+@hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$splitBedFromId,$mergeBedFromId,$UTRinTxt,$id2Bed,\@chromOrder,\%chromName);
 $txtRegions_r = $hashSub[6];		# as %Regions, but for summary txt file
 $txt_NM_Ex_r = $hashSub[7];		# as %NM_Ex, but for summary txt file
 $coordBed_r = $hashSub[9];		# as %Bed, but for coordPlot and cov_Bed if no bedfile
