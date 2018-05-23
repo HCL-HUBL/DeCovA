@@ -401,7 +401,7 @@ elsif ($rmOverlapBed) {
 	}
 if ($cutBed) {
 	print "\n\tcutting intervals from $currentBed 
-(above ".${$cutB_opt_r}{"maxL"}." bp ; in ".${$cutB_opt_r}{"cutL"}." bp pieces , if longer than ".${$cutB_opt_r}{"minL"}." bp , else ";
+		(above ".${$cutB_opt_r}{"maxL"}." bp ; in ".${$cutB_opt_r}{"cutL"}." bp pieces , if longer than ".${$cutB_opt_r}{"minL"}." bp , else ";
 	if (${$cutB_opt_r}{"keepLast"} eq "merge") { print "merge 2 last)\n"; }
 	elsif (${$cutB_opt_r}{"keepLast"} eq "half") { print "keep 2 last with half of their sum)\n"; }
 	else { print "through it)\n"; }

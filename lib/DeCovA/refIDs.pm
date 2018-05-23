@@ -580,7 +580,7 @@ return(\%allRefs);
 
 sub bed2IDs {
 
-my($allRefs,$refFile,$refFmt,$interval_r,$chromName) = @_;
+my($allRefs,$refFile,$refFmt,$interval_r,$chromName,$nonCod) = @_;
 #my%interval ->	#$Bed{$chr}{$start} = $end , in 1-based
 
 print "\n\tlooking for genes/transcripts overlapping bed file intervals\n";
@@ -599,37 +599,42 @@ if (!$allRefs) {
 		}
 	}
 if ($refFmt eq "ucsc") {
-	if (!$allRefs) { $allRefs = UCSCfile2hash($fhIn,$chromName); }
+	unless ($allRefs) { $allRefs = UCSCfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{${$allRefs}{"transcript"}{$nm}{"ex_starts"}[0]}{${$allRefs}{"transcript"}{$nm}{"ex_ends"}[-1]} }, $nm);
+		if ($nonCod || (!$nonCod && exists ${$allRefs}{$nm}{"CDS_start"}) {
+			push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{${$allRefs}{"transcript"}{$nm}{"ex_starts"}[0]}{${$allRefs}{"transcript"}{$nm}{"ex_ends"}[-1]} }, $nm);
+			}
 		}
 	}
 elsif ($refFmt eq "gtf") {
-	if (!$allRefs) { $allRefs = GTFfile2hash($fhIn,$chromName); }
+	unless ($allRefs) { $allRefs = GTFfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		my@ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-		delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
-		@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
-		my@ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-		delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
-		@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
-		push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
+		if ($nonCod || (!$nonCod && exists ${$allRefs}{$nm}{"CDS_start"}) {
+			my@ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
+			delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
+			@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
+			my@ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
+			delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
+			@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
+			push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
+			}
 		}
 	}
 elsif ($refFmt eq "gff3") {
-	if (!$allRefs) { $allRefs = GFFfile2hash($fhIn,$chromName); }
+	unless ($allRefs) { $allRefs = GFFfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		my@ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-		delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
-		@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
-		my@ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-		delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
-		@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
-		push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
+		if ($nonCod || (!$nonCod && exists ${$allRefs}{$nm}{"CDS_start"}) {
+			my@ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
+			delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
+			@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
+			my@ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
+			delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
+			@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
+			push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
+			}
 		}
 	}
 if ($fhIn) { close($fhIn); }
-
 
 my%targets;
 foreach my$chr (sort(keys%{$interval_r})) {
@@ -811,7 +816,7 @@ return(\%targets);
 
 sub Id2Coord {
 
-my($IDinRef,$len5,$len3,$upstream,$downstream,$noOverlap,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,$chromOrder_r,$chromName_r) = @_;
+my($IDinRef,$len5,$len3,$upstream,$downstream,$noOverlap,$mergeBedFromId,$wUTR,$id2Bed,$chromOrder_r,$chromName_r) = @_;
 
 print "\n\tgetting positions from gene IDs\n";
 
@@ -820,191 +825,185 @@ my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%ha
 foreach my$NM (keys%{$IDinRef}) {
 	my$chr = ${$IDinRef}{$NM}{"chr"};
 	my$gene = ${$IDinRef}{$NM}{"gene"};
-#	${$chromName_r}{"refId"}{$chr} = $tab[$chrIdx];
+
 	## if same gene name on different chr? add -chr. at the end of this gene
 #	if ( (exists $geneNM{$gene}) && ($chr ne $NMchr{$geneNM{$gene}[0]}) ) { $tab[$geneIdx] .= "-$chr"; }
-	my$ok=1;
 	##if same transcript on different chr ? skip this one
 #	if (exists $NMchr{$NM}) {
 #		if ($chr =~ /^$NMchr{$NM}.+/) { $ok = 0; }
 #		unless ($NMchr{$NM} =~ /$chr.+/) { $ok = 0; }
 #		}
-	##if only coding transcript: cdsStar != cdsEnd
-	if (!$nonCod) {
-		if (!exists ${$IDinRef}{$NM}{"CDS_start"}) { $ok = 0; }
+
+	$NMgene{$NM} = $gene;
+	push(@{ $geneNM{$gene} }, $NM);
+	$NMchr{$NM} = $chr;
+	$NMsens{$NM} = ${$IDinRef}{$NM}{"strand"};
+	my@Starts = @{ ${$IDinRef}{$NM}{"ex_starts"} };
+	my@Ends = @{ ${$IDinRef}{$NM}{"ex_ends"} };
+	if (exists ${$IDinRef}{$NM}{"CDS_start"}) {
+		$NMstartCod{$NM} = ${$IDinRef}{$NM}{"CDS_start"};
+		$NMendCod{$NM} = ${$IDinRef}{$NM}{"CDS_end"};
 		}
-	if ($ok) {
-		$NMgene{$NM} = $gene;
-		push(@{ $geneNM{$gene} }, $NM);
-		$NMchr{$NM} = $chr;
-		$NMsens{$NM} = ${$IDinRef}{$NM}{"strand"};
-		my@Starts = @{ ${$IDinRef}{$NM}{"ex_starts"} };
-		my@Ends = @{ ${$IDinRef}{$NM}{"ex_ends"} };
-		if (exists ${$IDinRef}{$NM}{"CDS_start"}) {
-			$NMstartCod{$NM} = ${$IDinRef}{$NM}{"CDS_start"};
-			$NMendCod{$NM} = ${$IDinRef}{$NM}{"CDS_end"};
+	else {
+		$NMstartCod{$NM} = $Ends[-1];
+		$NMendCod{$NM} = $Ends[-1];
+		}
+
+	my(%interval,$firstCodingEx,$lastCodingEx,$minLen,$plusLen,$exonNb); # %interval in 1-based coord
+	if ($NMsens{$NM} eq "+") { $minLen = $len5; $plusLen = $len3; }
+	else { $minLen = $len3; $plusLen = $len5; }
+
+	#expand exons +/-length:
+	if ($wUTR) {
+
+		##intervals
+		if ($upstream) { $interval{($Starts[0]-$upstream)} = $Ends[0]+$plusLen; }
+		else { $interval{($Starts[0]-$minLen)} = $Ends[0]+$plusLen; }
+		for (my$i=1;$i<$#Starts;$i++) {
+			$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
 			}
-		else {
-			$NMstartCod{$NM} = $Ends[-1];
-			$NMendCod{$NM} = $Ends[-1];
-			}
+		if ($downstream) { $interval{($Starts[-1]-$minLen)} = $Ends[-1]+$downstream; }
+		else { $interval{($Starts[-1]-$minLen)} = $Ends[-1]+$plusLen; }
 
-		my(%interval,$firstCodingEx,$lastCodingEx,$minLen,$plusLen,$exonNb); # %interval in 1-based coord
-		if ($NMsens{$NM} eq "+") { $minLen = $len5; $plusLen = $len3; }
-		else { $minLen = $len3; $plusLen = $len5; }
-
-		#expand exons +/-length:
-		if ($wUTR) {
-
-			##intervals
-			if ($upstream) { $interval{($Starts[0]-$upstream)} = $Ends[0]+$plusLen; }
-			else { $interval{($Starts[0]-$minLen)} = $Ends[0]+$plusLen; }
-			for (my$i=1;$i<$#Starts;$i++) {
-				$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
+		##bed
+		if ($id2Bed) {
+			if ($NMsens{$NM} eq "+" && $upstream) {
+				$printBed{$chr}{($Starts[0]-1-$upstream)}{($Starts[0]-1-$minLen)}{$gene}{$NM} = "upstream";
 				}
-			if ($downstream) { $interval{($Starts[-1]-$minLen)} = $Ends[-1]+$downstream; }
-			else { $interval{($Starts[-1]-$minLen)} = $Ends[-1]+$plusLen; }
-
-			##bed
-			if ($id2Bed) {
-				if ($NMsens{$NM} eq "+" && $upstream) {
-					$printBed{$chr}{($Starts[0]-1-$upstream)}{($Starts[0]-1-$minLen)}{$gene}{$NM} = "upstream";
-					}
-				elsif ($NMsens{$NM} eq "-" && $downstream) {
-					$printBed{$chr}{($Starts[0]-1-$downstream)}{($Starts[0]-1-$minLen)}{$gene}{$NM} = "downstream";
-					}
-				for (my$i=0;$i<scalar(@Starts);$i++) {
-					if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-1-$minLen)) {
-						my$ecart  = ($Starts[$i+1]-1-$Ends[$i]) / 2;
-						$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
-						$Starts[$i+1] = int($Starts[$i+1]-1-$ecart+$minLen);
-						}
-					if ($NMsens{$NM} eq "+") { $exonNb = ($i+1); }
-					else { $exonNb = (scalar(@Starts)-$i); }
-					$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-					if (($Ends[$i] < $NMstartCod{$NM}) || (($Starts[$i]-1) > $NMendCod{$NM})) {
-						$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} .= ".NC";
-						}
-					}
-				if ($NMsens{$NM} eq "+" && $downstream) {
-					$printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$downstream)}{$gene}{$NM} = "downstream";
-					}
-				elsif ($NMsens{$NM} eq "-" && $upstream) {
-					$printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$upstream)}{$gene}{$NM} = "upstream";
-					}
+			elsif ($NMsens{$NM} eq "-" && $downstream) {
+				$printBed{$chr}{($Starts[0]-1-$downstream)}{($Starts[0]-1-$minLen)}{$gene}{$NM} = "downstream";
 				}
-			}
-
-		else {
-
-			##intervals
 			for (my$i=0;$i<scalar(@Starts);$i++) {
+				if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-1-$minLen)) {
+					my$ecart  = ($Starts[$i+1]-1-$Ends[$i]) / 2;
+					$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
+					$Starts[$i+1] = int($Starts[$i+1]-1-$ecart+$minLen);
+					}
+				if ($NMsens{$NM} eq "+") { $exonNb = ($i+1); }
+				else { $exonNb = (scalar(@Starts)-$i); }
+				$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+				if (($Ends[$i] < $NMstartCod{$NM}) || (($Starts[$i]-1) > $NMendCod{$NM})) {
+					$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} .= ".NC";
+					}
+				}
+			if ($NMsens{$NM} eq "+" && $downstream) {
+				$printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$downstream)}{$gene}{$NM} = "downstream";
+				}
+			elsif ($NMsens{$NM} eq "-" && $upstream) {
+				$printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$upstream)}{$gene}{$NM} = "upstream";
+				}
+			}
+		}
+
+	else {
+
+		##intervals
+		for (my$i=0;$i<scalar(@Starts);$i++) {
+			if ($Ends[$i] < $NMstartCod{$NM}) { next; }
+			elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] < $NMstartCod{$NM}) ) {
+				$firstCodingEx = $i;
+				if ($Ends[$i] > $NMendCod{$NM}) {
+					$interval{($NMstartCod{$NM}-$minLen)} = $NMendCod{$NM}+$plusLen;
+					}
+				else {
+					$interval{($NMstartCod{$NM}-$minLen)} = $Ends[$i]+$plusLen;
+					}
+				}
+			elsif ( ($Starts[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
+				if ($Ends[$i] < $NMendCod{$NM}) {
+					$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
+					}
+				else {
+					$lastCodingEx = $i;
+					$interval{($Starts[$i]-$minLen)} = $NMendCod{$NM}+$plusLen;
+					}
+				}
+			else { last; }
+			}
+
+		##bed
+		if ($id2Bed) {
+			for (my$i=0;$i<scalar(@Starts);$i++) {
+				if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-1-$minLen)) {
+					my$ecart  = ($Starts[$i+1]-1-$Ends[$i]) / 2;
+					$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
+					$Starts[$i+1] = int($Starts[$i+1]-1-$ecart+$minLen);
+					}
+				if ($NMsens{$NM} eq "+") { $exonNb = ($i+1); }
+				else { $exonNb = (scalar(@Starts)-$i); }
 				if ($Ends[$i] < $NMstartCod{$NM}) { next; }
 				elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] < $NMstartCod{$NM}) ) {
 					$firstCodingEx = $i;
 					if ($Ends[$i] > $NMendCod{$NM}) {
-						$interval{($NMstartCod{$NM}-$minLen)} = $NMendCod{$NM}+$plusLen;
+						$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
 						}
 					else {
-						$interval{($NMstartCod{$NM}-$minLen)} = $Ends[$i]+$plusLen;
+						$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
 						}
 					}
 				elsif ( ($Starts[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
 					if ($Ends[$i] < $NMendCod{$NM}) {
-						$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
+						$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
 						}
 					else {
 						$lastCodingEx = $i;
-						$interval{($Starts[$i]-$minLen)} = $NMendCod{$NM}+$plusLen;
+						$printBed{$chr}{($Starts[$i]-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
 						}
 					}
 				else { last; }
 				}
+			}
+		}
 
-			##bed
-			if ($id2Bed) {
-				for (my$i=0;$i<scalar(@Starts);$i++) {
-					if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-1-$minLen)) {
-						my$ecart  = ($Starts[$i+1]-1-$Ends[$i]) / 2;
-						$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
-						$Starts[$i+1] = int($Starts[$i+1]-1-$ecart+$minLen);
-						}
-					if ($NMsens{$NM} eq "+") { $exonNb = ($i+1); }
-					else { $exonNb = (scalar(@Starts)-$i); }
-					if ($Ends[$i] < $NMstartCod{$NM}) { next; }
-					elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] < $NMstartCod{$NM}) ) {
-						$firstCodingEx = $i;
-						if ($Ends[$i] > $NMendCod{$NM}) {
-							$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-							}
-						else {
-							$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-							}
-						}
-					elsif ( ($Starts[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
-						if ($Ends[$i] < $NMendCod{$NM}) {
-							$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-							}
-						else {
-							$lastCodingEx = $i;
-							$printBed{$chr}{($Starts[$i]-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-							}
-						}
-					else { last; }
-					}
+	#eventually merges overlapping intervals of regions
+	#associates real exons to intervals
+	my@Starts2 = sort{$a<=>$b}(keys%interval);
+	my%interval2;
+	my$start = $Starts2[0];
+	my$end = $interval{$start};
+	if ($wUTR) {
+		$NM_Ex{$NM}{$start}{$Starts[0]} = $Ends[0];
+		for (my$i=1;$i<scalar(@Starts2);$i++) {
+			if ($Starts2[$i] <= $end) { 
+				$end = $interval{$Starts2[$i]}; 
+				$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
+				}
+			else { 
+				$interval2{$start} = $end;
+				$start = $Starts2[$i];
+				$end = $interval{$start};
+				$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
 				}
 			}
-
-		#eventually merges overlapping intervals of regions
-		#associates real exons to intervals
-		my@Starts2 = sort{$a<=>$b}(keys%interval);
-		my%interval2;
-		my$start = $Starts2[0];
-		my$end = $interval{$start};
-		if ($wUTR) {
-			$NM_Ex{$NM}{$start}{$Starts[0]} = $Ends[0];
-			for (my$i=1;$i<scalar(@Starts2);$i++) {
-				if ($Starts2[$i] <= $end) { 
-					$end = $interval{$Starts2[$i]}; 
-					$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
-					}
-				else { 
-					$interval2{$start} = $end;
-					$start = $Starts2[$i];
-					$end = $interval{$start};
-					$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
-					}
+		$interval2{$start} = $end;
+		$NM_Ex{$NM}{$start}{$Starts[-1]} = $Ends[-1];
+		}
+	else {
+		$NM_Ex{$NM}{$start}{$NMstartCod{$NM}} = $Ends[$firstCodingEx];
+		for (my$i=1;$i<scalar(@Starts2);$i++) {
+			if ($Starts2[$i] <= $end) { 
+				$end = $interval{$Starts2[$i]}; 
+				$NM_Ex{$NM}{$start}{$Starts[$i+$firstCodingEx]} = $Ends[$i+$firstCodingEx];
 				}
-			$interval2{$start} = $end;
-			$NM_Ex{$NM}{$start}{$Starts[-1]} = $Ends[-1];
+			else { 
+				$interval2{$start} = $end;
+				$start = $Starts2[$i];
+				$end = $interval{$start};
+				$NM_Ex{$NM}{$start}{$Starts[$i+$firstCodingEx]} = $Ends[$i+$firstCodingEx];
+				}
 			}
-		else {
-			$NM_Ex{$NM}{$start}{$NMstartCod{$NM}} = $Ends[$firstCodingEx];
-			for (my$i=1;$i<scalar(@Starts2);$i++) {
-				if ($Starts2[$i] <= $end) { 
-					$end = $interval{$Starts2[$i]}; 
-					$NM_Ex{$NM}{$start}{$Starts[$i+$firstCodingEx]} = $Ends[$i+$firstCodingEx];
-					}
-				else { 
-					$interval2{$start} = $end;
-					$start = $Starts2[$i];
-					$end = $interval{$start};
-					$NM_Ex{$NM}{$start}{$Starts[$i+$firstCodingEx]} = $Ends[$i+$firstCodingEx];
-					}
-				}
-			$interval2{$start} = $end;
-			$NM_Ex{$NM}{$start}{$Starts[$lastCodingEx]} = $NMendCod{$NM};
-			}
-		%{ $Regions{$chr}{$NM} } = %interval2;
-		foreach (keys%interval2) {
-			if ( exists $hashBed{$chr}{$_} ) {
-				if ( $interval2{$_} > $hashBed{$chr}{$_}) {
-					$hashBed{$chr}{$_} = $interval2{$_};
-					}
-				}
-			else {
+		$interval2{$start} = $end;
+		$NM_Ex{$NM}{$start}{$Starts[$lastCodingEx]} = $NMendCod{$NM};
+		}
+	%{ $Regions{$chr}{$NM} } = %interval2;
+	foreach (keys%interval2) {
+		if ( exists $hashBed{$chr}{$_} ) {
+			if ( $interval2{$_} > $hashBed{$chr}{$_}) {
 				$hashBed{$chr}{$_} = $interval2{$_};
 				}
+			}
+		else {
+			$hashBed{$chr}{$_} = $interval2{$_};
 			}
 		}
 	}

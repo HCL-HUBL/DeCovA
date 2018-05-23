@@ -1402,13 +1402,13 @@ use DeCovA::geneRegion;
 ##if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
 unless ($IDinRef) {
 	#@IDs = DeCovA::refIDs::geneFromBed($idFile,$refFile,$refFmt,$Bed_r);
-	$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$Bed_r,\%chromName);
+	$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$Bed_r,\%chromName,$nonCod);
 	#undef $ALLinRef;
 	}
 
 ##for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
-@hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,\@chromOrder,\%chromName);
+@hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wUTR,$id2Bed,\@chromOrder,\%chromName);
 #($geneNM_r, $NMgene_r, $NMchr_r, $NMsens_r, $NMstartCod{"raw"}, $NMendCod{"raw"}, $Regions{"raw"}, $NM_Ex{"raw"}, $Genes_r) = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,\@chromOrder);
 #return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
 $geneNM_r = $hashSub[0];		# @{ $geneNM{$gene} } = [$NM1,...]
@@ -2387,7 +2387,7 @@ if ($jobs{"CNV"}) {
 				foreach my$chr (keys%{ $CNV_bed{$file} }) {
 					%{ $CNV_bed{$file}{$chr} } = mergeIntervals(\%{ $CNV_bed{$file}{$chr} });
 					}
-				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName);
+				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$nonCod);
 				foreach (keys%{ ${CNV_IDs}{$file} }) {
 					$CNV_Genes{$file}{${CNV_IDs}{$file}{$_}{"gene"}} = 1;
 					}
@@ -2398,7 +2398,7 @@ if ($jobs{"CNV"}) {
 			foreach my$chr (keys%{ $CNV_bed{"allFiles"} }) {
 				%{ $CNV_bed{"allFiles"}->{$chr} } = mergeIntervals(\%{ $CNV_bed{"allFiles"}->{$chr} }); 
 				}
-			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName);
+			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName,$nonCod);
 			foreach (keys%{ ${CNV_IDs}{"allFiles"} })  {
 				$CNV_Genes{"allFiles"}{${CNV_IDs}{"allFiles"}{$_}{"gene"}} = 1;
 				}
