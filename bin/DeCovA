@@ -2437,7 +2437,7 @@ if ($jobs{"CNV"}) {
 				my$allDepth_r = DeCovA::covByRegion::intersectCovFile(\@Files,$smplIdx,${$depthFilePerChr}{"norm"}{$chr},$maxGr,\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$gene} },"");
 
 				foreach my$file (@Files) {
-					print "\tfor $file\n";
+					print "\t\tfor $file\n";
 					## %NMdepth: key = $file, value = %(key = $NM, value = %( key = $ex, value = @(cov foreach ordered bp of exon) ) )
 					## @{ $CNV_NMdepth{$gene}->{$file}{$eachReg} } = [ depth foreach ordered bp of Reg ]
 					$CNV_NMdepth{$gene}->{$file} = DeCovA::covByRegion::depthLine(\%{ $Regions{"raw"}->{$chr}{$gene} },\%{ $allDepth_r->{$file} });
