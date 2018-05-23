@@ -601,7 +601,7 @@ if (!$allRefs) {
 if ($refFmt eq "ucsc") {
 	unless ($allRefs) { $allRefs = UCSCfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($nonCod || (!$nonCod && exists ${$allRefs}{$nm}{"CDS_start"})) {
+		if ($nonCod || (!$nonCod && exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"})) {
 			push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{${$allRefs}{"transcript"}{$nm}{"ex_starts"}[0]}{${$allRefs}{"transcript"}{$nm}{"ex_ends"}[-1]} }, $nm);
 			}
 		}
@@ -609,7 +609,7 @@ if ($refFmt eq "ucsc") {
 elsif ($refFmt eq "gtf") {
 	unless ($allRefs) { $allRefs = GTFfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($nonCod || (!$nonCod && exists ${$allRefs}{$nm}{"CDS_start"})) {
+		if ($nonCod || (!$nonCod && exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"})) {
 			my@ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
 			delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
 			@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
@@ -623,7 +623,7 @@ elsif ($refFmt eq "gtf") {
 elsif ($refFmt eq "gff3") {
 	unless ($allRefs) { $allRefs = GFFfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($nonCod || (!$nonCod && exists ${$allRefs}{$nm}{"CDS_start"})) {
+		if ($nonCod || (!$nonCod && exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"})) {
 			my@ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
 			delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
 			@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
