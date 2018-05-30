@@ -298,7 +298,8 @@ foreach my$file (@{$Files}) {
 	$Vals{"min"}{$file} = $Depths[0];
 	$Vals{"max"}{$file} = $Depths[-1];
 	$Vals{"median"}{$file} = medianFromHistog($lengthBed,\@Depths,\%{ ${$depthCount}{$file} });
-	my($q1Length,@q1Set,$q3Length,@q3Set);
+	my(@q1Set,@q3Set);
+	my$q1Length = 0; my$q3Length = 0;
 	foreach (@Depths) {
 		if ($_ < $Vals{"median"}{$file}) {
 			push(@q1Set, $_);
@@ -309,20 +310,23 @@ foreach my$file (@{$Files}) {
 			$q3Length += ${$depthCount}{$file}{$_};
 			}
 		}
-	$Vals{"Q1"}{$file} = medianFromHistog($q1Length,\@q1Set,\%{ ${$depthCount}{$file} });
-	$Vals{"Q3"}{$file} = medianFromHistog($q3Length,\@q3Set,\%{ ${$depthCount}{$file} });
+	if ($q1Length) { $Vals{"Q1"}{$file} = medianFromHistog($q1Length,\@q1Set,\%{ ${$depthCount}{$file} }); }
+	else { $Vals{"Q1"}{$file} = 0; }
+	if ($q3Length) { $Vals{"Q3"}{$file} = medianFromHistog($q3Length,\@q3Set,\%{ ${$depthCount}{$file} }); }
+	else { $Vals{"Q3"}{$file} = 0; }
+
 	$Vals{"lower_wsk"}{$file} = $Vals{"Q1"}{$file} - 1.5*($Vals{"Q3"}{$file}-$Vals{"Q1"}{$file});
 	if ($Vals{"lower_wsk"}{$file} < $Vals{"min"}{$file}) { $Vals{"lower_wsk"}{$file} = $Vals{"min"}{$file} ; }
 	$Vals{"upper_wsk"}{$file} = $Vals{"Q3"}{$file} + 1.5*($Vals{"Q3"}{$file}-$Vals{"Q1"}{$file});
 	if ($Vals{"upper_wsk"}{$file} > $Vals{"max"}{$file}) { $Vals{"upper_wsk"}{$file} = $Vals{"max"}{$file} ; }
 	}
 
-my@fracOfMean = (10,5,2);
+my@fracOfMean = (10,5,2,1);
 open(my$fhOut, ">", "$outdir/$outName\_depthReport.txt") || die "can't create file $outdir/$outName\_depthReport.txt($!)\n";
 print $fhOut "$outName.bed :\n\n";
 print $fhOut "total length : $lengthBed bp\n\n";
 print $fhOut "samples\tmin\tQ1\tmedian\tQ3\tmax\tmean";
-foreach my$frac (@fracOfMean) { print $fhOut "\t%"."cov <=(mean depth/$frac)x"; }
+foreach my$frac (@fracOfMean) { print $fhOut "\t%"."cov >=(mean depth/$frac)x"; }
 if ($threshold) { print $fhOut "\t%"."cov >=".$threshold."x"; }
 print $fhOut "\n";
 foreach my$file (@{$Files}) {
@@ -332,10 +336,11 @@ foreach my$file (@{$Files}) {
 	my%fracMean;
 	foreach my$frac (@fracOfMean) {
 		my$fracMean = 0;
-		for (my$d=0;$d<=int($totMean / $frac);$d++) {
+		for (my$d=0;$d<int($totMean / $frac);$d++) {
 			if (exists ${$depthCount}{$file}{$d}) { $fracMean += ${$depthCount}{$file}{$d}; }
 			}
-		$fracMean{$frac} = $fracMean / $lengthBed;
+		#$fracMean{$frac} = $fracMean / $lengthBed;
+		$fracMean{$frac} = ($lengthBed - $fracMean) / $lengthBed;
 		print $fhOut "\t".100*(sprintf("%.3f", $fracMean{$frac}));
 		}
 	if ($threshold && exists ${$covBases}{$file}) { print $fhOut "\t".100*(sprintf("%.3f", (${$covBases}{$file} / $lengthBed))); }
@@ -344,7 +349,12 @@ foreach my$file (@{$Files}) {
 	}
 close $fhOut;
 
-
+## char length labels
+my$maxXlength = 1; my$maxYlength  =1;
+foreach (@{$Files}) {
+	if(length($Vals{"max"}{$_}) > $maxYlength) { $maxYlength = length($Vals{"max"}{$_}); }
+	if(length(${$smplName}{$_}) > $maxXlength) { $maxXlength = length(${$smplName}{$_}); }
+	}
 
 my$Rtxt = "#!/usr/bin/env Rscript\n
 pdf(\"$outdir/$outName\_depth_boxplot.pdf\", width=11.69, height=4.135)\n";
@@ -362,11 +372,21 @@ $Rtxt .= ") , group=c(";
 my$i = 1;
 foreach (@{$Files}) { $Rtxt .= $i.",".$i.","; $i++; }
 chop $Rtxt;
-$Rtxt .= ") , names=c(";
+#$Rtxt .= ") , names=c(";
+#foreach (@{$Files}) { $Rtxt .= "\"".${$smplName}{$_}."\","; }
+#chop $Rtxt;		# if show.names = TRUE
+$Rtxt .= ") )
+bxp(Vals, outline=TRUE , show.names = FALSE, main=\"sequencing depth distributions\", cex.main=1, las=2, cex.axis=";
+if ($maxYlength>5) { $Rtxt .= log(5)/log($maxYlength); }
+else { $Rtxt .= "1"; }
+$Rtxt .= ", xaxt=\"n\")\n";
+$Rtxt .= "axis(1, at=(1:".scalar@{$Files}."), labels=c(";
 foreach (@{$Files}) { $Rtxt .= "\"".${$smplName}{$_}."\","; }
 chop $Rtxt;
-$Rtxt .= ") )
-bxp(Vals, outline=TRUE , show.names = TRUE)
+$Rtxt .= "), tick=TRUE, las=2, cex.axis=";
+if ($maxXlength>5) { $Rtxt .= log(5)/log($maxXlength); }
+else { $Rtxt .= "1"; }
+$Rtxt .= ")
 dev.off();\n";
 
 open ($fhOut, ">", "$outdir/plot_temp.R") || die "can't create $outdir/plot_temp.R ($!)\n";

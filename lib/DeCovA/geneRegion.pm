@@ -205,146 +205,334 @@ $RegionG3{$startReg} = $endReg;
 
 sub changeRegionG {
 
-my($NM_r,$interval1,$NM_Ex_r,$Bed_r) = @_;
-my(%interval2,%NM_Ex2,%RegBed1);
+my($gene2NM,$Regions_r,$NM_Ex_r,$Bed_r) = @_;
+# @{ ${$gene2NM}{$gene} } = [$NM1,...]
+# ${$Regions_r}{chr}{NM}{start of region} = end of region
+# ${$NM_Ex_r}{NM}{start of region}{start of exon} = end of exon
+# ${$Bed_r}{$chr}{$start} = $end;
+my%RegBed;	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
 
-my@Starts = sort{$a<=>$b}(keys%{$interval1});
-my$c=0;	#$c: count of @StartInterval			
-my@startBed = sort{$a<=>$b}keys%{$Bed_r};
-my$endBed = ${$Bed_r}{$startBed[0]};
-for (my$i=0;$i<scalar@startBed;$i++) {
-	if ($startBed[$i] > ${$interval1}{$Starts[-1]})	#if bed keep going on after end of region
-		{ last; }
-	$endBed = ${$Bed_r}{$startBed[$i]};	
-	if ( $endBed < $Starts[0] )
-		{ next; }
-	if ( $endBed < $Starts[$c] ) {
-		if ($startBed[$i] > ${$interval1}{$Starts[$c-1]})
-			{ 
-			$interval2{$startBed[$i]} = $endBed; 
-			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			next;
-			}
-		else { $c--; }
-		}
-	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] > ${$interval1}{$Starts[$c]}) ) { 
-		$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
-		foreach my$NM (@{$NM_r}) {
-			foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
-				{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
-			}
-		$c++; 
-		}
-	if ( $startBed[$i] > ${$interval1}{$Starts[$c]} ) { #for current $c
-		$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
-		foreach my$NM (@{$NM_r}) {
-			foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
-				{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
-			} 
-		}
-	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] <= ${$interval1}{$Starts[$c]}) && ($endBed >= $Starts[$c]) ) {
-		if ($startBed[$i] < $Starts[$c]) {
-			if ($endBed > ${$interval1}{$Starts[$c]})
-				{ $interval2{$startBed[$i]} = $endBed; }
-			else
-				{ $interval2{$startBed[$i]} = ${$interval1}{$Starts[$c]}; }
-			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			foreach my$NM (@{$NM_r}) {
-				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
-					{ $NM_Ex2{$NM}{$startBed[$i]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
-				}
-			}
-		else {
-			if ($endBed > ${$interval1}{$Starts[$c]})
-				{ $interval2{$Starts[$c]} = $endBed; }
-			else
-				{ $interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]}; }
-			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
-			foreach my$NM (@{$NM_r}) {
-				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
-					{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
-				}
-			}
-		$c++;
-		}
-	if ( ($startBed[$i] <= ${$interval1}{$Starts[$c]}) && ($endBed >= $Starts[$c]) ) {	#for current $c
-		if ($startBed[$i] < $Starts[$c]) {
-			if ($endBed > ${$interval1}{$Starts[$c]})
-				{ $interval2{$startBed[$i]} = $endBed; }
-			else
-				{ $interval2{$startBed[$i]} = ${$interval1}{$Starts[$c]}; }
-			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			foreach my$NM (@{$NM_r}) {
-				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
-					{ $NM_Ex2{$NM}{$startBed[$i]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
-				}
-			}
-		else {
-			if ($endBed > ${$interval1}{$Starts[$c]})
-				{ $interval2{$Starts[$c]} = $endBed; }
-			else
-				{ $interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]}; }
-			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
-			foreach my$NM (@{$NM_r}) {
-				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
-					{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
-				}
-			}
-		}
-	}
-#if region keep going on after end of bed
-while ( ($c < scalar@Starts) && ($Starts[$c] > $endBed) ) {
-	$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
-	foreach my$NM (@{$NM_r}) {
-		foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$Starts[$c]} })
-			{ $NM_Ex2{$NM}{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$Starts[$c]}{$startEx}; }
-		}
-	$c++; 
-	}
+foreach my$chr (keys%{$Regions_r}) {
 
-#merge intervals
-my(%interval3,%NM_Ex3,%RegBed2);
-my@Starts2 = sort{$a<=>$b}(keys%interval2);
-my$startReg = $Starts2[0];
-my$endReg = $interval2{$startReg};
-foreach my$NM (keys%NM_Ex2) {
-	foreach my$startEx (keys%{ $NM_Ex2{$NM}{$startReg} })
-		{ $NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$startReg}{$startEx}; }
-	}
-foreach my$startBed (keys%{ $RegBed1{$startReg} })
-	{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
-for (my$i=1;$i<scalar(@Starts2);$i++) {
-	if ($Starts2[$i] <= $endReg) { 
-		if ($interval2{$Starts2[$i]} > $endReg)
-			{ $endReg = $interval2{$Starts2[$i]}; }
+	my@bedStarts = sort{$a<=>$b}keys%{ ${$Bed_r}{$chr} };
+	my$i1=0;		# idx within @bedStarts
+
+	my%Genes = ();
+	foreach my$gene (keys%{ ${$Regions_r}{$chr} }) {
+		@{ $Genes{$gene}{"starts"} } = sort{$a<=>$b}(keys%{ ${$Regions_r}{$chr}{$gene} });
+		}
+	my@Genes = sort { $Genes{$a}{"starts"}[0]<=>$Genes{$b}{"starts"}[0] } (keys%Genes);	##sort by 1st start pos
+
+	foreach my$gene (@Genes) {
+
+		my(%interval2,%NM_Ex2,%RegBed1);
+
+		my@regStarts = @{ $Genes{$gene}{"starts"} };
+		my$c = 0;	#$c: idx within @regStarts
+
+		while ( ($i1 < $#bedStarts) && (${$Bed_r}{$chr}{$bedStarts[$i1]} < $regStarts[0]) ) { $i1++; }	##reg progression to reach current bed interval
+
+		my$i2 = $i1;
+		my$endBed;
+		while ( ($i2 < scalar@bedStarts) && ($bedStarts[$i2] <= ${$Regions_r}{$chr}{$gene}{$regStarts[-1]}) ) {
+			$endBed = ${$Bed_r}{$chr}{$bedStarts[$i2]};
+			if ( $endBed < $regStarts[$c] ) {
+				if ($bedStarts[$i2] > ${$Regions_r}{$chr}{$gene}{$regStarts[$c-1]}) { 
+					$interval2{$bedStarts[$i2]} = $endBed; 
+					$RegBed1{$bedStarts[$i2]}{$bedStarts[$i2]} = $endBed;
+					$i2++;
+					next;
+					}
+				else { $c--; }
+				}
+			while ( ($c < $#regStarts) && ($bedStarts[$i2] > ${$Regions_r}{$chr}{$gene}{$regStarts[$c]}) ) {	##reg progression to reach current bed interval
+				$interval2{$regStarts[$c]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c]};
+				foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+					foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c]} }) {
+						$NM_Ex2{$NM}{$regStarts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c]}{$startEx};
+						}
+					}
+				$c++; 
+				}
+			if ( $bedStarts[$i2] > ${$Regions_r}{$chr}{$gene}{$regStarts[$c]} ) { #for current $c
+				$interval2{$regStarts[$c]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c]};
+				foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+					foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c]} }) {
+						$NM_Ex2{$NM}{$regStarts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c]}{$startEx};
+						}
+					} 
+				}
+			while ( ($c < scalar@regStarts) && ($bedStarts[$i2] <= ${$Regions_r}{$chr}{$gene}{$regStarts[$c]}) && ($endBed >= $regStarts[$c]) ) {
+				if ($bedStarts[$i2] < $regStarts[$c]) {
+					if ($endBed > ${$Regions_r}{$chr}{$gene}{$regStarts[$c]}) {
+						$interval2{$bedStarts[$i2]} = $endBed;
+						}
+					else {
+						$interval2{$bedStarts[$i2]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c]};
+						}
+					$RegBed1{$bedStarts[$i2]}{$bedStarts[$i2]} = $endBed;
+					foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+						foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c]} }) {
+							$NM_Ex2{$NM}{$bedStarts[$i2]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c]}{$startEx};
+							}
+						}
+					}
+				else {
+					if ($endBed > ${$Regions_r}{$chr}{$gene}{$regStarts[$c]}) {
+						$interval2{$regStarts[$c]} = $endBed;
+						}
+					else {
+						$interval2{$regStarts[$c]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c]};
+						}
+					$RegBed1{$regStarts[$c]}{$bedStarts[$i2]} = $endBed;
+					foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+						foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c]} }) {
+							$NM_Ex2{$NM}{$regStarts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c]}{$startEx};
+							}
+						}
+					}
+				$c++;
+				}
+			$i2++;
+			}
+		#if region keep going on after end of last bed interval
+		while ( ($c < scalar@regStarts) && ($regStarts[$c] > $endBed) ) {
+			$interval2{$regStarts[$c]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c]};
+			foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+				foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c]} }) {
+					$NM_Ex2{$NM}{$regStarts[$c]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c]}{$startEx};
+					}
+				}
+			$c++; 
+			}
+
+		#merge intervals
+		my(%interval3,%NM_Ex3,%RegBed2);
+		my@regStart2 = sort{$a<=>$b}(keys%interval2);
+		my$startReg = $regStart2[0];
+		my$endReg = $interval2{$startReg};
 		foreach my$NM (keys%NM_Ex2) {
-			foreach my$startEx (keys%{ $NM_Ex2{$NM}{$Starts2[$i]} })
-				{ $NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$Starts2[$i]}{$startEx}; }
+			foreach my$startEx (keys%{ $NM_Ex2{$NM}{$startReg} }) {
+				$NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$startReg}{$startEx};
+				}
 			}
-		foreach my$startBed (keys%{ $RegBed1{$Starts2[$i]} })
-			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$Starts2[$i]}{$startBed}; }
-		}
-	else { 
+		foreach my$startBed (keys%{ $RegBed1{$startReg} }) {
+			$RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed};
+			}
+		for (my$i=1;$i<scalar(@regStart2);$i++) {
+			if ($regStart2[$i] <= $endReg) { 
+				if ($interval2{$regStart2[$i]} > $endReg) {
+					$endReg = $interval2{$regStart2[$i]};
+					}
+				foreach my$NM (keys%NM_Ex2) {
+					foreach my$startEx (keys%{ $NM_Ex2{$NM}{$regStart2[$i]} }) {
+						$NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$regStart2[$i]}{$startEx};
+						}
+					}
+				foreach my$startBed (keys%{ $RegBed1{$regStart2[$i]} }) {
+					$RegBed2{$startReg}{$startBed} = $RegBed1{$regStart2[$i]}{$startBed};
+					}
+				}
+			else { 
+				$interval3{$startReg} = $endReg;
+				$startReg = $regStart2[$i];
+				$endReg = $interval2{$startReg};
+				foreach my$NM (keys%NM_Ex2) {
+					foreach my$startEx (keys%{ $NM_Ex2{$NM}{$startReg} }) {
+						$NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$startReg}{$startEx};
+						}
+					}
+				foreach my$startBed (keys%{ $RegBed1{$startReg} }) {
+					$RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed};
+					}
+				}
+			}
 		$interval3{$startReg} = $endReg;
-		$startReg = $Starts2[$i];
-		$endReg = $interval2{$startReg};
-		foreach my$NM (keys%NM_Ex2)
-			{
-			foreach my$startEx (keys%{ $NM_Ex2{$NM}{$startReg} })
-				{ $NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$startReg}{$startEx}; }
+
+		%{ ${$Regions_r}{$chr}{$gene} }  = %interval3;
+		foreach my$NM (keys%NM_Ex3) {
+			%{ ${$NM_Ex_r}{$NM} } = %{ $NM_Ex3{$NM} };
 			}
-		foreach my$startBed (keys%{ $RegBed1{$startReg} })
-			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
+		%{ $RegBed{$gene} } = %RegBed2;
+
 		}
 	}
-$interval3{$startReg} = $endReg;
 
-%{$interval1} = %interval3;
+return(\%RegBed);
+}
 
-foreach my$NM (keys%NM_Ex3)
-	{ %{ ${$NM_Ex_r}{$NM} } = %{ $NM_Ex3{$NM} }; }
+#########################
+#extract bed from file, and intersect with %Regions (regions of selected genes) 
+#create 1 hash :
+#@hashSub = changeRegion2G(\@NMs,\%{ $Regions{"raw"}{$chr}{$gene} },\%{ $NM_Ex{"raw"} },\%{ $Bed{$chr} });
+#%{ $RegBed{"raw"}{$gene} } = %{$hashSub[0]};	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
 
-return(\%RegBed2);
+sub changeRegionG2 {
+
+my($gene2NM,$Regions_r,$NM_Ex_r,$Bed_r) = @_;
+# @{ ${$gene2NM}{$gene} } = [$NM1,...]
+# ${$Regions_r}{chr}{NM}{start of region} = end of region
+# ${$NM_Ex_r}{NM}{start of region}{start of exon} = end of exon
+# ${$Bed_r}{$chr}{$start} = $end;
+my%RegBed;	#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
+
+foreach my$chr (keys%{$Regions_r}) {
+
+	my@bedStarts = sort{$a<=>$b}keys%{ ${$Bed_r}{$chr} };
+	my$i1=0;		# idx within @bedStarts
+
+	my%Genes = ();
+	foreach my$gene (keys%{ ${$Regions_r}{$chr} }) {
+		@{ $Genes{$gene}{"starts"} } = sort{$a<=>$b}(keys%{ ${$Regions_r}{$chr}{$gene} });
+		}
+	my@Genes = sort { $Genes{$a}{"starts"}[0]<=>$Genes{$b}{"starts"}[0] } (keys%Genes);	##sort by 1st start pos
+
+	foreach my$gene (@Genes) {
+
+		my(%interval2,%NM_Ex2,%RegBed1);
+
+		my@regStarts = @{ $Genes{$gene}{"starts"} };
+		my$c1 = 0;	#$c: idx within @regStarts
+
+		I1LOOP: while ( ($i1 < $#bedStarts) && (${$Bed_r}{$chr}{$bedStarts[$i1]} < $regStarts[0]) ) { $i1++; }			##bed progression to reach 1st reg interval
+
+		my$i2 = $i1;
+		my$endBed;
+		I2LOOP: while ( ($i2 < scalar@bedStarts) && ($bedStarts[$i2] <= ${$Regions_r}{$chr}{$gene}{$regStarts[-1]}) ) {
+
+			$endBed = ${$Bed_r}{$chr}{$bedStarts[$i2]};
+
+			C1LOOP: while ( ($c1 < $#regStarts) && ($bedStarts[$i2] > ${$Regions_r}{$chr}{$gene}{$regStarts[$c1]}) ) {	##reg progression to reach current bed interval
+				if ( $endBed < $regStarts[$c1+1] ) {			## bed interval between 2 reg intervals
+					$interval2{$bedStarts[$i2]} = $endBed; 
+					$RegBed1{$bedStarts[$i2]}{$bedStarts[$i2]} = $endBed;
+					$i2++;
+					next I2LOOP;
+					}
+				else {
+					unless (exists $interval2{$regStarts[$c1]}) {
+						$interval2{$regStarts[$c1]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c1]};
+						foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+							foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c1]} }) {
+								$NM_Ex2{$NM}{$regStarts[$c1]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c1]}{$startEx};
+								}
+							}
+						}
+					}
+				$c1++; 
+				}
+			if ( $bedStarts[$i2] > ${$Regions_r}{$chr}{$gene}{$regStarts[$c1]} ) { #for last $c
+				unless (exists $interval2{$regStarts[$c1]}) {
+					$interval2{$regStarts[$c1]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c1]};
+					foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+						foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c1]} }) {
+							$NM_Ex2{$NM}{$regStarts[$c1]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c1]}{$startEx};
+							}
+						}
+					}
+				}
+
+			my$c2 = $c1;
+			C2LOOP: while ( ($c2 < scalar@regStarts) && ($bedStarts[$i2] <= ${$Regions_r}{$chr}{$gene}{$regStarts[$c2]}) && ($endBed >= $regStarts[$c2]) ) {
+				if ($bedStarts[$i2] < $regStarts[$c2]) {
+					if ($endBed > ${$Regions_r}{$chr}{$gene}{$regStarts[$c2]}) {
+						$interval2{$bedStarts[$i2]} = $endBed;
+						}
+					else {
+						$interval2{$bedStarts[$i2]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c2]};
+						}
+					$RegBed1{$bedStarts[$i2]}{$bedStarts[$i2]} = $endBed;
+					foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+						foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c2]} }) {
+							$NM_Ex2{$NM}{$bedStarts[$i2]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c2]}{$startEx};
+							}
+						}
+					}
+				else {
+					if ($endBed > ${$Regions_r}{$chr}{$gene}{$regStarts[$c2]}) {
+						$interval2{$regStarts[$c2]} = $endBed;
+						}
+					else {
+						$interval2{$regStarts[$c2]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c2]};
+						}
+					$RegBed1{$regStarts[$c2]}{$bedStarts[$i2]} = $endBed;
+					foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+						foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c2]} }) {
+							$NM_Ex2{$NM}{$regStarts[$c2]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c2]}{$startEx};
+							}
+						}
+					}
+				$c2++;
+				}
+			$i2++;
+			}
+
+		#if region keep going on after end of last bed interval
+		while ($c1 < scalar@regStarts) {
+			if ($regStarts[$c1] > $endBed) {
+				$interval2{$regStarts[$c1]} = ${$Regions_r}{$chr}{$gene}{$regStarts[$c1]};
+				foreach my$NM (@{ ${$gene2NM}{$gene} }) {
+					foreach my$startEx (keys%{ ${$NM_Ex_r}{$NM}{$regStarts[$c1]} }) {
+						$NM_Ex2{$NM}{$regStarts[$c1]}{$startEx} = ${$NM_Ex_r}{$NM}{$regStarts[$c1]}{$startEx};
+						}
+					}
+				}
+			$c1++; 
+			}
+
+		#merge intervals
+		my(%interval3,%NM_Ex3,%RegBed2);
+		my@regStart2 = sort{$a<=>$b}(keys%interval2);
+		my$startReg = $regStart2[0];
+		my$endReg = $interval2{$startReg};
+		foreach my$NM (keys%NM_Ex2) {
+			foreach my$startEx (keys%{ $NM_Ex2{$NM}{$startReg} }) {
+				$NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$startReg}{$startEx};
+				}
+			}
+		foreach my$startBed (keys%{ $RegBed1{$startReg} }) {
+			$RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed};
+			}
+		for (my$i=1;$i<scalar(@regStart2);$i++) {
+			if ($regStart2[$i] <= $endReg) { 
+				if ($interval2{$regStart2[$i]} > $endReg) {
+					$endReg = $interval2{$regStart2[$i]};
+					}
+				foreach my$NM (keys%NM_Ex2) {
+					foreach my$startEx (keys%{ $NM_Ex2{$NM}{$regStart2[$i]} }) {
+						$NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$regStart2[$i]}{$startEx};
+						}
+					}
+				foreach my$startBed (keys%{ $RegBed1{$regStart2[$i]} }) {
+					$RegBed2{$startReg}{$startBed} = $RegBed1{$regStart2[$i]}{$startBed};
+					}
+				}
+			else { 
+				$interval3{$startReg} = $endReg;
+				$startReg = $regStart2[$i];
+				$endReg = $interval2{$startReg};
+				foreach my$NM (keys%NM_Ex2) {
+					foreach my$startEx (keys%{ $NM_Ex2{$NM}{$startReg} }) {
+						$NM_Ex3{$NM}{$startReg}{$startEx} = $NM_Ex2{$NM}{$startReg}{$startEx};
+						}
+					}
+				foreach my$startBed (keys%{ $RegBed1{$startReg} }) {
+					$RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed};
+					}
+				}
+			}
+		$interval3{$startReg} = $endReg;
+
+		%{ ${$Regions_r}{$chr}{$gene} }  = %interval3;
+		foreach my$NM (keys%NM_Ex3) {
+			%{ ${$NM_Ex_r}{$NM} } = %{ $NM_Ex3{$NM} };
+			}
+		%{ $RegBed{$gene} } = %RegBed2;
+
+		}
+	}
+
+return(\%RegBed);
 }
 
 
@@ -354,140 +542,299 @@ return(\%RegBed2);
 #@hashSub = changeRegion2N(\%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} },\%{ $NM_Ex{"raw"}{$NM} },\%{ $Bed{$NMchr{$NM}} });
 #%{ $RegBed{"raw"}{$NM} } = %{$hashSub[0]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
 
+sub changeRegionN2 {
+
+my($Regions_r,$NM_Ex_r,$Bed_r) = @_;
+# ${$Regions_r}{chr}{NM}{start of region} = end of region
+# ${$NM_Ex_r}{NM}{start of region}{start of exon} = end of exon
+# ${$Bed_r}{$chr}{$start} = $end;
+my%RegBed;	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
+
+foreach my$chr (keys%{$Regions_r}) {
+
+	my@bedStarts = sort{$a<=>$b}keys%{ ${$Bed_r}{$chr} };
+	my$i1=0;		# idx within @bedStarts
+
+	my%NMs = ();
+	foreach my$nm (keys%{ ${$Regions_r}{$chr} }) {
+		@{ $NMs{$nm}{"starts"} } = sort{$a<=>$b}(keys%{ ${$Regions_r}{$chr}{$nm} });
+		}
+	my@NMs = sort { $NMs{$a}{"starts"}[0]<=>$NMs{$b}{"starts"}[0] } (keys%NMs);	##sort by 1st start pos
+
+	foreach my$nm (@NMs) {
+
+		my(%interval2,%NM_Ex2,%RegBed1);
+
+		my@regStarts = @{ $NMs{$nm}{"starts"} };
+		my$c1 = 0;	#$c: idx within @regStarts
+
+		I1LOOP: while ( ($i1 < $#bedStarts) && (${$Bed_r}{$chr}{$bedStarts[$i1]} < $regStarts[0]) ) { $i1++; }			##bed progression to reach 1st reg interval
+
+		my$i2 = $i1;
+		my$endBed;
+
+		I2LOOP: while ( ($i2 < scalar@bedStarts) && ($bedStarts[$i2] <= ${$Regions_r}{$chr}{$nm}{$regStarts[-1]}) ) {
+
+			$endBed = ${$Bed_r}{$chr}{$bedStarts[$i2]};
+
+			C1LOOP: while ( ($c1 < $#regStarts) && ($bedStarts[$i2] > ${$Regions_r}{$chr}{$nm}{$regStarts[$c1]}) ) {	##reg progression to reach current bed interval
+				if ( $endBed < $regStarts[$c1+1] ) {			## bed interval between 2 reg intervals
+					$interval2{$bedStarts[$i2]} = $endBed; 
+					$RegBed1{$bedStarts[$i2]}{$bedStarts[$i2]} = $endBed;
+					$i2++;
+					next I2LOOP;
+					}
+				else {
+					unless (exists $interval2{$regStarts[$c1]}) {
+						$interval2{$regStarts[$c1]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c1]};
+						foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c1]} }) {
+							$NM_Ex2{$regStarts[$c1]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c1]}{$startEx};
+							}
+						}
+					}
+				$c1++; 
+				}
+			if ( $bedStarts[$i2] > ${$Regions_r}{$chr}{$nm}{$regStarts[$c1]} ) { #for last $c
+				unless (exists $interval2{$regStarts[$c1]}) {
+					$interval2{$regStarts[$c1]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c1]};
+					foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c1]} }) {
+						$NM_Ex2{$regStarts[$c1]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c1]}{$startEx};
+						}
+					}
+				}
+
+			my$c2 = $c1;
+			C2LOOP: while ( ($c2 < scalar@regStarts) && ($bedStarts[$i2] <= ${$Regions_r}{$chr}{$nm}{$regStarts[$c2]}) && ($endBed >= $regStarts[$c2]) ) {
+				if ($bedStarts[$i2] < $regStarts[$c2]) {
+					if ($endBed > ${$Regions_r}{$chr}{$nm}{$regStarts[$c2]}) {
+						$interval2{$bedStarts[$i2]} = $endBed;
+						}
+					else {
+						$interval2{$bedStarts[$i2]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c2]};
+						}
+					$RegBed1{$bedStarts[$i2]}{$bedStarts[$i2]} = $endBed;
+					foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c2]} }) {
+						$NM_Ex2{$bedStarts[$i2]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c2]}{$startEx};
+						}
+					}
+				else {
+					if ($endBed > ${$Regions_r}{$chr}{$nm}{$regStarts[$c2]}) {
+						$interval2{$regStarts[$c2]} = $endBed;
+						}
+					else {
+						$interval2{$regStarts[$c2]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c2]};
+						}
+					$RegBed1{$regStarts[$c2]}{$bedStarts[$i2]} = $endBed;
+					foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c2]} }) {
+						$NM_Ex2{$regStarts[$c2]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c2]}{$startEx};
+						}
+					}
+				$c2++;
+				}
+			$i2++;
+			}
+		#if region keep going on after end of bed
+		while ($c1 < scalar@regStarts) {
+			if ($regStarts[$c1] > $endBed) {
+				$interval2{$regStarts[$c1]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c1]};
+				foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c1]} }) {
+					$NM_Ex2{$regStarts[$c1]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c1]}{$startEx};
+					}
+				}
+			$c1++; 
+			}
+
+		#merge intervals
+		my(%interval3,%NM_Ex3,%RegBed2);
+		my@regStart2 = sort{$a<=>$b}(keys%interval2);
+		my$startReg = $regStart2[0];
+		my$endReg = $interval2{$startReg};
+		foreach my$startEx (keys%{ $NM_Ex2{$startReg} }) {
+			$NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$startReg}{$startEx};
+			}
+		foreach my$startBed (keys%{ $RegBed1{$startReg} }) {
+			$RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed};
+			}
+		for (my$i=1;$i<scalar(@regStart2);$i++) {
+			if ($regStart2[$i] <= $endReg) { 
+				if ($interval2{$regStart2[$i]} > $endReg) {
+					$endReg = $interval2{$regStart2[$i]};
+					}
+				foreach my$startEx (keys%{ $NM_Ex2{$regStart2[$i]} }) {
+					$NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$regStart2[$i]}{$startEx};
+					}
+				foreach my$startBed (keys%{ $RegBed1{$regStart2[$i]} }) {
+					$RegBed2{$startReg}{$startBed} = $RegBed1{$regStart2[$i]}{$startBed};
+					}
+				}
+			else { 
+				$interval3{$startReg} = $endReg;
+				$startReg = $regStart2[$i];
+				$endReg = $interval2{$startReg};
+				foreach my$startEx (keys%{ $NM_Ex2{$startReg} }) {
+					$NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$startReg}{$startEx};
+					}
+				foreach my$startBed (keys%{ $RegBed1{$startReg} }) {
+					$RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed};
+					}
+				}
+			}
+		$interval3{$startReg} = $endReg;
+
+		%{ ${$Regions_r}{$chr}{$nm} }  = %interval3;
+		%{ ${$NM_Ex_r}{$nm} } = %NM_Ex3;
+		%{ $RegBed{$nm} } = %RegBed2;
+
+		}
+	}
+
+return(\%RegBed);
+}
+
+#########################
+#extract bed from file, and intersect with %Regions (regions of selected genes) 
+#create 1 hash :
+#@hashSub = changeRegion2N(\%{ $Regions{"raw"}{$NMchr{$NM}}{$NM} },\%{ $NM_Ex{"raw"}{$NM} },\%{ $Bed{$NMchr{$NM}} });
+#%{ $RegBed{"raw"}{$NM} } = %{$hashSub[0]};	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
+
 sub changeRegionN {
 
-my($interval1,$NM_Ex_r,$Bed_r) = @_;
-my(%interval2,%NM_Ex2,%RegBed1);
+my($Regions_r,$NM_Ex_r,$Bed_r) = @_;
+# ${$Regions_r}{chr}{NM}{start of region} = end of region
+# ${$NM_Ex_r}{NM}{start of region}{start of exon} = end of exon
+# ${$Bed_r}{$chr}{$start} = $end;
+my%RegBed;	#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
 
-my@Starts = sort{$a<=>$b}(keys%{$interval1});
-my$c=0;	#$c: count of @StartInterval			
-my@startBed = sort{$a<=>$b}keys%{$Bed_r};
-my$endBed = ${$Bed_r}{$startBed[0]};
-for (my$i=0;$i<scalar@startBed;$i++)
-	{
-	if ($startBed[$i] > ${$interval1}{$Starts[-1]})	#if bed keep going on after end of region
-		{ last; }
-	$endBed = ${$Bed_r}{$startBed[$i]};	
-	if ( $endBed < $Starts[0] )
-		{ next; }
-	if ( $endBed < $Starts[$c] )
-		{
-		if ($startBed[$i] > ${$interval1}{$Starts[$c-1]})
-			{ 
-			$interval2{$startBed[$i]} = $endBed; 
-			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			next;
-			}
-		else { $c--; }
-		}
-	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] > ${$interval1}{$Starts[$c]}) )
-		{ 
-		$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
-		foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
-			{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
-		$c++; 
-		}
-	if ( $startBed[$i] > ${$interval1}{$Starts[$c]} )	#for current $c
-		{ 
-		$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
-		foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
-			{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
-		}
-	while ( ($c < (scalar@Starts -1)) && ($startBed[$i] <= ${$interval1}{$Starts[$c]}) && ($endBed >= $Starts[$c]) )
-		{
-		if ($startBed[$i] < $Starts[$c])
-			{
-			if ($endBed > ${$interval1}{$Starts[$c]})
-				{ $interval2{$startBed[$i]} = $endBed; }
-			else
-				{ $interval2{$startBed[$i]} = ${$interval1}{$Starts[$c]}; }
-			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
-				{ $NM_Ex2{$startBed[$i]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
-			}
-		else
-			{
-			if ($endBed > ${$interval1}{$Starts[$c]})
-				{ $interval2{$Starts[$c]} = $endBed; }
-			else
-				{ $interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]}; }
-			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
-			foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
-				{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
-			}
-		$c++;
-		}
-	if ( ($startBed[$i] <= ${$interval1}{$Starts[$c]}) && ($endBed >= $Starts[$c]) )	#for current $c
-		{
-		if ($startBed[$i] < $Starts[$c])
-			{
-			if ($endBed > ${$interval1}{$Starts[$c]})
-				{ $interval2{$startBed[$i]} = $endBed; }
-			else
-				{ $interval2{$startBed[$i]} = ${$interval1}{$Starts[$c]}; }
-			$RegBed1{$startBed[$i]}{$startBed[$i]} = $endBed;
-			foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
-				{ $NM_Ex2{$startBed[$i]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
-			}
-		else
-			{
-			if ($endBed > ${$interval1}{$Starts[$c]})
-				{ $interval2{$Starts[$c]} = $endBed; }
-			else
-				{ $interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]}; }
-			$RegBed1{$Starts[$c]}{$startBed[$i]} = $endBed;
-			foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
-				{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
-			}
-		}
-	}
-#if region keep going on after end of bed
-while ( ($c < scalar@Starts) && ($Starts[$c] > $endBed) )
-	{
-	$interval2{$Starts[$c]} = ${$interval1}{$Starts[$c]};
-	foreach my$startEx (keys%{ ${$NM_Ex_r}{$Starts[$c]} })
-		{ $NM_Ex2{$Starts[$c]}{$startEx} = ${$NM_Ex_r}{$Starts[$c]}{$startEx}; }
-	$c++; 
-	}
+foreach my$chr (keys%{$Regions_r}) {
 
-#merge intervals
-my(%interval3,%NM_Ex3,%RegBed2);
-my@Starts2 = sort{$a<=>$b}(keys%interval2);
-my$startReg = $Starts2[0];
-my$endReg = $interval2{$startReg};
-foreach my$startEx (keys%{ $NM_Ex2{$startReg} })
-	{ $NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$startReg}{$startEx}; }
-foreach my$startBed (keys%{ $RegBed1{$startReg} })
-	{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
-for (my$i=1;$i<scalar(@Starts2);$i++)
-	{
-	if ($Starts2[$i] <= $endReg)
-		{ 
-		if ($interval2{$Starts2[$i]} > $endReg)
-			{ $endReg = $interval2{$Starts2[$i]}; }
-		foreach my$startEx (keys%{ $NM_Ex2{$Starts2[$i]} })
-			{ $NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$Starts2[$i]}{$startEx}; }
-		foreach my$startBed (keys%{ $RegBed1{$Starts2[$i]} })
-			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$Starts2[$i]}{$startBed}; }
+	my@bedStarts = sort{$a<=>$b}keys%{ ${$Bed_r}{$chr} };
+	my$i1=0;		# idx within @bedStarts
+
+	my%NMs = ();
+	foreach my$nm (keys%{ ${$Regions_r}{$chr} }) {
+		@{ $NMs{$nm}{"starts"} } = sort{$a<=>$b}(keys%{ ${$Regions_r}{$chr}{$nm} });
 		}
-	else
-		{ 
+	my@NMs = sort { $NMs{$a}{"starts"}[0]<=>$NMs{$b}{"starts"}[0] } (keys%NMs);	##sort by 1st start pos
+
+	foreach my$nm (@NMs) {
+
+		my(%interval2,%NM_Ex2,%RegBed1);
+
+		my@regStarts = @{ $NMs{$nm}{"starts"} };
+		my$c = 0;	#$c: idx within @regStarts
+
+		while ( ($i1 < $#bedStarts) && (${$Bed_r}{$chr}{$bedStarts[$i1]} < $regStarts[0]) ) { $i1++; }
+
+		my$i2 = $i1;
+		my$endBed;
+
+		while ( ($i2 < scalar@bedStarts) && ($bedStarts[$i2] <= ${$Regions_r}{$chr}{$nm}{$regStarts[-1]}) ) {
+			$endBed = ${$Bed_r}{$chr}{$bedStarts[$i2]};
+			if ( $endBed < $regStarts[$c] ) {
+				if ($bedStarts[$i2] > ${$Regions_r}{$chr}{$nm}{$regStarts[$c-1]}) { 
+					$interval2{$bedStarts[$i2]} = $endBed; 
+					$RegBed1{$bedStarts[$i2]}{$bedStarts[$i2]} = $endBed;
+					$i2++;
+					next;
+					}
+				else { $c--; }
+				}
+			while ( ($c < $#regStarts) && ($bedStarts[$i2] > ${$Regions_r}{$chr}{$nm}{$regStarts[$c]}) ) { 
+				$interval2{$regStarts[$c]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c]};
+				foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c]} }) {
+					$NM_Ex2{$regStarts[$c]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c]}{$startEx};
+					}
+				$c++; 
+				}
+			if ( $bedStarts[$i2] > ${$Regions_r}{$chr}{$nm}{$regStarts[$c]} ) {	#for current $c 
+				$interval2{$regStarts[$c]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c]};
+				foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c]} }) {
+					$NM_Ex2{$regStarts[$c]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c]}{$startEx};
+					}
+				}
+
+			while ( ($c < scalar@regStarts) && ($bedStarts[$i2] <= ${$Regions_r}{$chr}{$nm}{$regStarts[$c]}) && ($endBed >= $regStarts[$c]) ) {
+				if ($bedStarts[$i2] < $regStarts[$c]) {
+					if ($endBed > ${$Regions_r}{$chr}{$nm}{$regStarts[$c]}) {
+						$interval2{$bedStarts[$i2]} = $endBed;
+						}
+					else {
+						$interval2{$bedStarts[$i2]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c]};
+						}
+					$RegBed1{$bedStarts[$i2]}{$bedStarts[$i2]} = $endBed;
+					foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c]} }) {
+						$NM_Ex2{$bedStarts[$i2]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c]}{$startEx};
+						}
+					}
+				else {
+					if ($endBed > ${$Regions_r}{$chr}{$nm}{$regStarts[$c]}) {
+						$interval2{$regStarts[$c]} = $endBed;
+						}
+					else {
+						$interval2{$regStarts[$c]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c]};
+						}
+					$RegBed1{$regStarts[$c]}{$bedStarts[$i2]} = $endBed;
+					foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c]} }) {
+						$NM_Ex2{$regStarts[$c]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c]}{$startEx};
+						}
+					}
+				$c++;
+				}
+			}
+		#if region keep going on after end of bed
+		while ( ($c < scalar@regStarts) && ($regStarts[$c] > $endBed) ) {
+			$interval2{$regStarts[$c]} = ${$Regions_r}{$chr}{$nm}{$regStarts[$c]};
+			foreach my$startEx (keys%{ ${$NM_Ex_r}{$nm}{$regStarts[$c]} }) {
+				$NM_Ex2{$regStarts[$c]}{$startEx} = ${$NM_Ex_r}{$nm}{$regStarts[$c]}{$startEx};
+				}
+			$c++; 
+			}
+
+		#merge intervals
+		my(%interval3,%NM_Ex3,%RegBed2);
+		my@regStart2 = sort{$a<=>$b}(keys%interval2);
+		my$startReg = $regStart2[0];
+		my$endReg = $interval2{$startReg};
+		foreach my$startEx (keys%{ $NM_Ex2{$startReg} }) {
+			$NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$startReg}{$startEx};
+			}
+		foreach my$startBed (keys%{ $RegBed1{$startReg} }) {
+			$RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed};
+			}
+		for (my$i=1;$i<scalar(@regStart2);$i++) {
+			if ($regStart2[$i] <= $endReg) { 
+				if ($interval2{$regStart2[$i]} > $endReg) {
+					$endReg = $interval2{$regStart2[$i]};
+					}
+				foreach my$startEx (keys%{ $NM_Ex2{$regStart2[$i]} }) {
+					$NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$regStart2[$i]}{$startEx};
+					}
+				foreach my$startBed (keys%{ $RegBed1{$regStart2[$i]} }) {
+					$RegBed2{$startReg}{$startBed} = $RegBed1{$regStart2[$i]}{$startBed};
+					}
+				}
+			else { 
+				$interval3{$startReg} = $endReg;
+				$startReg = $regStart2[$i];
+				$endReg = $interval2{$startReg};
+				foreach my$startEx (keys%{ $NM_Ex2{$startReg} }) {
+					$NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$startReg}{$startEx};
+					}
+				foreach my$startBed (keys%{ $RegBed1{$startReg} }) {
+					$RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed};
+					}
+				}
+			}
 		$interval3{$startReg} = $endReg;
-		$startReg = $Starts2[$i];
-		$endReg = $interval2{$startReg};
-		foreach my$startEx (keys%{ $NM_Ex2{$startReg} })
-			{ $NM_Ex3{$startReg}{$startEx} = $NM_Ex2{$startReg}{$startEx}; }
-		foreach my$startBed (keys%{ $RegBed1{$startReg} })
-			{ $RegBed2{$startReg}{$startBed} = $RegBed1{$startReg}{$startBed}; }
+
+		%{ ${$Regions_r}{$chr}{$nm} }  = %interval3;
+		%{ ${$NM_Ex_r}{$nm} } = %NM_Ex3;
+		%{ $RegBed{$nm} } = %RegBed2;
+
 		}
 	}
-$interval3{$startReg} = $endReg;
 
-%{$interval1} = %interval3;
-
-%{$NM_Ex_r} = %NM_Ex3;
-
-return(\%RegBed2);
+return(\%RegBed);
 }
 
 
@@ -500,50 +847,59 @@ return(\%RegBed2);
 sub linkBed {
 
 my($interval,$Bed_r) = @_;
+			
+my%RegBed;			# $RegBed{$NM}{$startRegion}{$startBed} = $endBed;
 
-#my%covBed2;			
-my%RegBed;			#$RegBed{$NM}{$startRegion}{$startBed} = $endBed;
-my$c=0;			#idx of $startByChr = sort{$a<=>$b}(keys%{ $allInterval{$chr} });
 foreach my$chr (keys%{$interval}) {
+
+	my@bedStarts = sort{$a<=>$b}keys%{ ${$Bed_r}{$chr} };
+	my$i1 = 0;		# idx of @bedStarts
+
+	my%NMs = ();
 	foreach my$NM (keys%{ ${$interval}{$chr} }) {
-		my@Starts = sort{$a<=>$b}(keys%{ ${$interval}{$chr}{$NM} });
-		my$c=0;
-		foreach my$start (sort{$a<=>$b}keys%{ ${$Bed_r}{$chr} }) {
-			my$end = ${$Bed_r}{$chr}{$start};
-			if ( $end < $Starts[$c] )
-				{ next; }
-			while ( ($c < (scalar(@Starts)-1)) && ($start > ${$interval}{$chr}{$NM}{$Starts[$c]}) )
-				{ $c++; }
-			my$c2=$c;
-			while ( ($c2 < scalar@Starts) && ($start <= ${$interval}{$chr}{$NM}{$Starts[$c2]}) && ($end >= $Starts[$c2]) ) { 
+		@{ $NMs{$NM}{"starts"} } = sort{$a<=>$b}(keys%{ ${$interval}{$chr}{$NM} });
+		}
+	my@NMs = sort { $NMs{$a}{"starts"}[0]<=>$NMs{$b}{"starts"}[0] } (keys%NMs);	##sort en fonction du pemrier start
+	
+	foreach my$NM (@NMs) {
+
+		while ( ($i1 < $#bedStarts) && (${$Bed_r}{$chr}{$bedStarts[$i1]} < $NMs{$NM}{"starts"}[0]) ) { $i1++; }
+
+		my$c = 0;		# idx of @{ $NMs{$NM}{"starts"} }
+		my$i2 = $i1;			# idx of @bedStarts within NM loop
+
+		while ($i2 < scalar@bedStarts) {
+
+			my$bedEnd = ${$Bed_r}{$chr}{$bedStarts[$i2]};
+
+			while ( ($c < (scalar@{ $NMs{$NM}{"starts"} } - 1)) && ($bedStarts[$i2] > ${$interval}{$chr}{$NM}{$NMs{$NM}{"starts"}[$c]}) ) { $c++; }
+
+			my$c2 = $c;			# idx of @{ $NMs{$NM}{"starts"} within i2 loop
+			while ( ($c2 < scalar@{ $NMs{$NM}{"starts"} }) && ($bedStarts[$i2] <= ${$interval}{$chr}{$NM}{$NMs{$NM}{"starts"}[$c2]}) && ($bedEnd >= $NMs{$NM}{"starts"}[$c2]) ) { 
 				#eventually restrict %Bed
-				if ($start < $Starts[$c2]) {
-					if ($end > ${$interval}{$chr}{$NM}{$Starts[$c2]}) { 
-						#$covBed2{$chr}{$Starts[$c2]} = ${$interval}{$chr}{$NM}{$Starts[$c2]};
-						$RegBed{$NM}{$Starts[$c2]}{$Starts[$c2]} = ${$interval}{$chr}{$NM}{$Starts[$c2]};
+				if ($bedStarts[$i2] < $NMs{$NM}{"starts"}[$c2]) {
+					if ($bedEnd > ${$interval}{$chr}{$NM}{$NMs{$NM}{"starts"}[$c2]}) { 
+						$RegBed{$NM}{$NMs{$NM}{"starts"}[$c2]}{$NMs{$NM}{"starts"}[$c2]} = ${$interval}{$chr}{$NM}{$NMs{$NM}{"starts"}[$c2]};
 						}
 					else { 
-						#$covBed2{$chr}{$Starts[$c2]} = $end;
-						$RegBed{$NM}{$Starts[$c2]}{$Starts[$c2]} = $end;
+						$RegBed{$NM}{$NMs{$NM}{"starts"}[$c2]}{$NMs{$NM}{"starts"}[$c2]} = $bedEnd;
 						}
 					}
-				else
-					{
-					if ($end > ${$interval}{$chr}{$NM}{$Starts[$c2]}) { 
-						#$covBed2{$chr}{$start} = ${$interval}{$chr}{$NM}{$Starts[$c2]}; 
-						$RegBed{$NM}{$Starts[$c2]}{$start} = ${$interval}{$chr}{$NM}{$Starts[$c2]};
+				else {
+					if ($bedEnd > ${$interval}{$chr}{$NM}{$NMs{$NM}{"starts"}[$c2]}) { 
+						$RegBed{$NM}{$NMs{$NM}{"starts"}[$c2]}{$bedStarts[$i2]} = ${$interval}{$chr}{$NM}{$NMs{$NM}{"starts"}[$c2]};
 						}
 					else {
-						#$covBed2{$chr}{$start} = $end; 
-						$RegBed{$NM}{$Starts[$c2]}{$start} = $end;
+						$RegBed{$NM}{$NMs{$NM}{"starts"}[$c2]}{$bedStarts[$i2]} = $bedEnd;
 						}
 					}
 				$c2++;
 				}
+			$i2++;
 			}
 		}
 	}
-#return(\%covBed2,\%RegBed);
+
 return(\%RegBed);
 }
 
@@ -555,6 +911,7 @@ return(\%RegBed);
 sub notAnalysedG {
 
 my($geneNM_r,$Gene_r,$Region_r,$NM_Ex_r,$RegBed_r) = @_;
+=pod
 my(@Not,%Genes2,%Regions2,%NM_Ex2,%RegBed2);
 
 foreach my$gene (keys%{$Gene_r}) {
@@ -585,8 +942,21 @@ foreach my$chr (sort(keys%{$Region_r})) {
 %{$Region_r} = %Regions2;
 %{$NM_Ex_r} = %NM_Ex2;
 %{$RegBed_r} = %RegBed2;
+=cut
+
+foreach my$chr (sort(keys%{$Region_r})) {
+	foreach my$gene (sort(keys%{ ${$Region_r}{$chr} })) {
+		if (scalar(keys%{ ${$RegBed_r}{$gene} }) == 0) {
+			delete(${$Gene_r}{$gene});
+			delete(${$Region_r}{$chr}{$gene});
+			foreach (@{ ${$geneNM_r}{$gene}}) { delete(${$NM_Ex_r}{$_}); }
+			delete(${$RegBed_r}{$gene});
+			}
+		}
+	}
 
 }
+
 
 #############
 #eliminates $NM with no corresponding cov bed
@@ -595,6 +965,7 @@ foreach my$chr (sort(keys%{$Region_r})) {
 sub notAnalysedN {
 
 my($Gene_r,$NMgene_r,$Region_r,$NM_Ex_r,$RegBed_r) = @_;
+=pod
 my(@Not,%Genes2,%Regions2,%NM_Ex2,%RegBed2);
 
 foreach my$NM (keys%{$NM_Ex_r}) {
@@ -624,8 +995,21 @@ foreach my$chr (sort(keys%{$Region_r})) {
 %{$Region_r} = %Regions2;
 %{$NM_Ex_r} = %NM_Ex2;
 %{$RegBed_r} = %RegBed2;
+=cut
+
+foreach my$chr (sort(keys%{$Region_r})) {
+	foreach my$NM (sort(keys%{ ${$Region_r}{$chr} })) {
+		if (scalar(keys%{ ${$RegBed_r}{$NM} }) == 0) {
+			delete(${$Gene_r}{${$NMgene_r}{$NM}});
+			delete(${$Region_r}{$chr}{$NM});
+			delete(${$NM_Ex_r}{$NM});
+			delete(${$RegBed_r}{$NM});
+			}
+		}
+	}
 
 }
+
 
 #########################
 ## %{ $RegMut{"raw"} } = linkMut(\%{ $Regions{"raw"} },\%Mut);

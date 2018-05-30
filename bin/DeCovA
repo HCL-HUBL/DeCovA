@@ -14,7 +14,7 @@
 #You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>
 
 
-our $VERSION="1.6.1";
+our $VERSION="1.6.2";
 
 use warnings;
 use strict;
@@ -264,6 +264,7 @@ parameters:
 }
 
 ##inputs:
+print "\n\n####\n\nchecking input files\n\n####\n";
 
 #-d: directory
 my@dir = ();
@@ -329,8 +330,8 @@ if (@Files) {
 		else { die $path{$_}.$fName{$_}.$extenS." file not found\n"; }
 		}
 	}
-
 print "\n";
+
 my$refFile = "";
 if (exists $opt{"ref"}) { 
 	if (-f $opt{"ref"}) {
@@ -932,6 +933,7 @@ unless ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} |
 
 ###################
 #check progr installation and db existence
+print "\n\n####\n\nchecking dependencies\n\n####\n";
 
 #genome index
 my(@chromOrder,%chromName,%chromLength,%withChr);		#%faIdx
@@ -1327,8 +1329,8 @@ if (@IDs) {
 
 
 
-##if bedFile provided:
-my$Bed_r;		##bed in %hash : $Bed{$chr}{$start} = $end , in 1-based
+## if bedFile provided:
+my($bed_Intervals,$mergedBed_Intervals);		##bed in %hash : $Bed{$chr}{$start} = $end , in 1-based
 if ($bedFile) {
 	print "\n\n####\n\nprocessing $bedFile\n\n####\n";
 	my$currentBed = "$bedFile";
@@ -1360,13 +1362,13 @@ if ($bedFile) {
 		}
 	if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"} ) {
 		#transform in 1-based coord; keep longest intervals
-		$Bed_r = DeCovA::bedProcessing::readBed($currentBed);
+		$bed_Intervals = DeCovA::bedProcessing::readBed($currentBed);
 		#merge overlapping intervals
-		foreach my$chr (keys%{$Bed_r}) {
-			%{ ${$Bed_r}{$chr} } = mergeIntervals(\%{ ${$Bed_r}{$chr} });
+		foreach my$chr (keys%{$bed_Intervals}) {
+			%{ ${$mergedBed_Intervals}{$chr} } = mergeIntervals(\%{ ${$bed_Intervals}{$chr} });
 			}
-		#print merged bed
-		DeCovA::bedProcessing::printBed("$tmpDir/original",$Bed_r,\@chromOrder);
+		#print merged bed, for depth analysis
+		DeCovA::bedProcessing::printBed("$tmpDir/original",$mergedBed_Intervals,\@chromOrder);
 		}
 	#eventually slice bed intervals : split_Bed, rm_Overlap_Bed, cut_Bed
 	my$currentBed2 = DeCovA::bedProcessing::sliceBedIntervals($currentBed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@chromOrder,\%chromName);
@@ -1382,7 +1384,7 @@ if ($bedFile) {
 	}
 
 
-##if file of known mutations provided (in 1-based coordinates)
+## if file of known mutations provided (in 1-based coordinates)
 my($Mut);
 if ($mutFile) { 
 	print "\n## reading $mutFile\n\n"; 
@@ -1390,8 +1392,8 @@ if ($mutFile) {
 	}
 
 
-##find and design transcripts:
-my(@hashSub,$geneNM_r,$NMgene_r,$NMchr_r,$NMsens_r,%NMstartCod,%NMendCod,%Regions,$txtRegions_r,%NM_Ex,$txt_NM_Ex_r,$Genes_r,%RegBed,%NMlength,%intron,%UTR,%Cod,%RegMut,$coordBed_r,$id2Bed);	#	$NMstartCod{"raw"}->{} %{ ${$NMstartCod_r}{"raw"} }
+## find and design transcripts:
+my(@hashSub,$geneNM_r,$NMgene_r,$NMchr_r,$NMsens_r,%NMstartCod,%NMendCod,%Regions,$txtRegions_r,%NM_Ex,$txt_NM_Ex_r,$Genes_r,%RegBed,%NMlength,%intron,%UTR,%Cod,%RegMut,$ref_Intervals,$id2Bed);	#	$NMstartCod{"raw"}->{} %{ ${$NMstartCod_r}{"raw"} }
 
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || (@IDs && !$bedFile) || $jobs{"genePlot"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"})) {
 
@@ -1399,14 +1401,13 @@ print "\n\n####\n\nprocessing intervals to analyse\n\n####\n";
 
 use DeCovA::geneRegion;
 
-##if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
+## if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
 unless ($IDinRef) {
-	#@IDs = DeCovA::refIDs::geneFromBed($idFile,$refFile,$refFmt,$Bed_r);
-	$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$Bed_r,\%chromName,$nonCod);
+	$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$mergedBed_Intervals,\%chromName,$nonCod);
 	#undef $ALLinRef;
 	}
 
-##for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
+## for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
 @hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wUTR,$id2Bed,\@chromOrder,\%chromName);
 #($geneNM_r, $NMgene_r, $NMchr_r, $NMsens_r, $NMstartCod{"raw"}, $NMendCod{"raw"}, $Regions{"raw"}, $NM_Ex{"raw"}, $Genes_r) = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,\@chromOrder);
@@ -1421,13 +1422,13 @@ $Regions{"raw"} = $hashSub[6];		# $Regions{chr}{NM}{start of region} = end of re
 $NM_Ex{"raw"} = $hashSub[7];		# %NM_Ex{NM}{start of region}{start of exon} = end of exon
 $Genes_r = $hashSub[8]; 
 unless ($bedFile) { 			#-> bed from id's locations
-	$Bed_r = $hashSub[9];		# $Bed{$chr}{$start} = $end; 
-	foreach my$chr (keys%{$Bed_r}) {
-		%{ ${$Bed_r}{$chr} } = mergeIntervals(\%{ ${$Bed_r}{$chr} });
+	$bed_Intervals = $hashSub[9];		# $Bed{$chr}{$start} = $end; 
+	foreach my$chr (keys%{$bed_Intervals}) {
+		%{ ${$mergedBed_Intervals}{$chr} } = mergeIntervals(\%{ ${$bed_Intervals}{$chr} });
 		}
 	}
 
-##for summary txt file:
+## for summary txt file:
 if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 	$bedName = $keepBedName;
 	$id2Bed = "$outdir/$bedName.bed";
@@ -1435,15 +1436,15 @@ if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 @hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$splitBedFromId,$mergeBedFromId,$UTRinTxt,$id2Bed,\@chromOrder,\%chromName);
 $txtRegions_r = $hashSub[6];		# as %Regions, but for summary txt file
 $txt_NM_Ex_r = $hashSub[7];		# as %NM_Ex, but for summary txt file
-$coordBed_r = $hashSub[9];		# as %Bed, but for coordPlot and cov_Bed if no bedfile
-foreach my$chr (keys%{$coordBed_r}) {
-	%{ ${$coordBed_r}{$chr} } = mergeIntervals(\%{ ${$coordBed_r}{$chr} });
+$ref_Intervals = $hashSub[9];		# as %Bed, but for coordPlot and cov_Bed if no bedfile
+foreach my$chr (keys%{$ref_Intervals}) {
+	%{ ${$ref_Intervals}{$chr} } = mergeIntervals(\%{ ${$ref_Intervals}{$chr} });
 	}
 if ($id2Bed) {
 	$id2Bed = DeCovA::bedProcessing::sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@chromOrder,\%chromName);
 	}
 
-#changes Regions{gene} according to each NM (without -A N)
+## changes Regions{gene} according to each NM (without -A N)
 if ($AllTranscripts) {
 	print "\n\tchange region intervals according to each transcript\n";
 
@@ -1453,31 +1454,24 @@ if ($AllTranscripts) {
 
 	}
 
-#links bed intervals to Regions, eventually changes Regions according to bed (with -L Y)
+## links bed intervals to Regions, eventually changes Regions according to bed (with -L Y)
 if ($Expand) {
 	print "\n\tchange region intervals according to bed\n";
 	if($AllTranscripts) {
-		foreach my$gene(keys%{$Genes_r})
-			{
-			my@NMs =  @{ ${$geneNM_r}{$gene} };
-			my$chr = ${$NMchr_r}{$NMs[0]};
-			$RegBed{"raw"}->{$gene} = DeCovA::geneRegion::changeRegionG(\@NMs,\%{ $Regions{"raw"}->{$chr}{$gene} },$NM_Ex{"raw"},\%{ ${$Bed_r}{$chr} });
-			#$RegBed{$gene}{$startReg}{$startBed} = $endBed;
-			}
+		$RegBed{"raw"} = DeCovA::geneRegion::changeRegionG2($geneNM_r,$Regions{"raw"},$NM_Ex{"raw"},$bed_Intervals);
 		}
 	else {
-		foreach my$NM (keys%NM_Ex) {
-			$RegBed{"raw"}->{$NM} = DeCovA::geneRegion::changeRegionN(\%{ $Regions{"raw"}->{${$NMchr_r}{$NM}}{$NM} },\%{ $NM_Ex{"raw"}->{$NM} },\%{ ${$Bed_r}{${$NMchr_r}{$NM}} });
-			#$RegBed{$NM}{$startReg}{$startBed} = $endBed;
-			}
+		$RegBed{"raw"} = DeCovA::geneRegion::changeRegionN2($Regions{"raw"},$NM_Ex{"raw"},$bed_Intervals);
 		}
 	}
 else {
 	print "\n\tchange bed intervals according to genes\n";
-	$RegBed{"raw"} = DeCovA::geneRegion::linkBed($Regions{"raw"},$Bed_r);
+	$RegBed{"raw"} = DeCovA::geneRegion::linkBed($Regions{"raw"},$bed_Intervals);
 	}
 
-#eliminates $NM with no corresponding cov bed
+## eliminates $NM with no corresponding cov bed
+## this because 1st overlap  between gene coord and bed only took into account the whole transcript, not the exon;
+## so removes genes if bed interval fall into introns
 print "\n\teliminates transcripts with no corresponding bed intervals\n";
 if ($AllTranscripts) {
 	DeCovA::geneRegion::notAnalysedG($geneNM_r,$Genes_r,$Regions{"raw"},$NM_Ex{"raw"},$RegBed{"raw"});
@@ -1486,10 +1480,9 @@ else  {
 	DeCovA::geneRegion::notAnalysedN($Genes_r,$NMgene_r,$Regions{"raw"},$NM_Ex{"raw"},$RegBed{"raw"});
 	}
 
-
-#transposition and splicing, for exons of transcripts: 
-#1st position of 1st exon = 0, 
-#for end of exon = x, start of next exon = x
+## transposition and splicing, for exons of transcripts: 
+## 1st position of 1st exon = 0, 
+## for end of exon = x, start of next exon = x
 print "\n\ttransposition and splicing of transcript exon coordinates\n";
 @hashSub = DeCovA::geneRegion::transposeReg($spacer,$Regions{"raw"});
 $spacer = $hashSub[0];
@@ -1518,8 +1511,8 @@ else {
 		}
 	}
 
-#make arrays for starts of non coding exons, before and after coding exons
-#and arrays for starts of extragenic regions, before and after exons
+## make arrays for starts of non coding exons, before and after coding exons
+## and arrays for starts of extragenic regions, before and after exons
 print "\n\tUTR-CDS-introns region coordinates in arrays\n";
 if ($AllTranscripts) {
 	@hashSub = DeCovA::geneRegion::designExons1($wUTR,$Genes_r,$geneNM_r,$Regions{"coord0"},$NM_Ex{"coord0"},$NMstartCod{"coord0"},$NMendCod{"coord0"});
@@ -1636,7 +1629,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 				close $fhI;
 				}
 			if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
-				DeCovA::bedProcessing::printBed("$tmpDir/txtRegions",$coordBed_r,\@chromOrder);
+				DeCovA::bedProcessing::printBed("$tmpDir/txtRegions",$ref_Intervals,\@chromOrder);
 				open ($fhI, "<", "$tmpDir/txtRegions_0Chr.bed") || die "can't open file $tmpDir/txtRegions_0Chr.bed ($!)\n";
 				while (my$line = <$fhI>) { print $fhO $line; }
 				close $fhI;
@@ -2276,7 +2269,7 @@ target regions: exons\n";
 				}
 			}
 		close OUT;
-		}							
+		}
 	}
 
 
@@ -2289,10 +2282,10 @@ my($bedLines_r,$totLength,$depthCount,$covBases,$totBases);
 if ($jobs{"covBed"}) {
 	use DeCovA::bedCov;
 	if ($bedFile) {
-		($bedLines_r,$totLength,$depthCount,$covBases,$totBases) = DeCovA::bedCov::Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,$Bed_r,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,\%{ ${$depthFilePerChr}{"raw"} },$smplIdx,\%CNV_opt);
+		($bedLines_r,$totLength,$depthCount,$covBases,$totBases) = DeCovA::bedCov::Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$bedFile,$bedName,$mergedBed_Intervals,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,\%{ ${$depthFilePerChr}{"raw"} },$smplIdx,\%CNV_opt);
 		}
 	else {
-		($bedLines_r,$totLength,$depthCount,$covBases,$totBases) = DeCovA::bedCov::Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,$coordBed_r,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,\%{ ${$depthFilePerChr}{"raw"} },$smplIdx,\%CNV_opt);
+		($bedLines_r,$totLength,$depthCount,$covBases,$totBases) = DeCovA::bedCov::Bed_Cov(\@Files,\%fName,\%sName2,$outdir,$id2Bed,$bedName,$ref_Intervals,$pThreshold,$jobs{"2Reseq"},$jobs{"bedReport"},\@covFields,\%{ ${$depthFilePerChr}{"raw"} },$smplIdx,\%CNV_opt);
 		}
 	}
 
@@ -2312,10 +2305,10 @@ if ($jobs{"covPlot"} || $jobs{"interSplot"}) {
 	#classiq
 	if ($jobs{"covPlot"}) {
 		if (!$bedFile || $jobs{"genePlot"}) {
-			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,"all_Genes_Regions",\@Files,\%sName2,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$coordBed_r,$pThreshold,$totLength,$depthCount,$covBases,$totBases);
+			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,"all_Genes_Regions",\@Files,\%sName2,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$ref_Intervals,$pThreshold,$totLength,$depthCount,$covBases,$totBases);
 			}
 		if ($bedFile) {
-			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,$bedName,\@Files,\%fName,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$Bed_r,$pThreshold,$totLength,$depthCount,$covBases,$totBases);
+			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,$bedName,\@Files,\%fName,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$mergedBed_Intervals,$pThreshold,$totLength,$depthCount,$covBases,$totBases);
 			}
 		}
 
@@ -2323,10 +2316,10 @@ if ($jobs{"covPlot"} || $jobs{"interSplot"}) {
 	if ($jobs{"interSplot"}) {
 		use DeCovA::covByRegion;
 		if (!$bedFile || $jobs{"genePlot"}) { 
-			DeCovA::histCov::InterS($bin,$maxPl,$maxGr,$outPlotDir,"all_Genes_Regions",\@Files,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$coordBed_r); 
+			DeCovA::histCov::InterS($bin,$maxPl,$maxGr,$outPlotDir,"all_Genes_Regions",\@Files,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$ref_Intervals); 
 			}
 		if ($bedFile) {
-			DeCovA::histCov::InterS($bin,$maxPl,$maxGr,$outPlotDir,$bedName,\@Files,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$Bed_r);
+			DeCovA::histCov::InterS($bin,$maxPl,$maxGr,$outPlotDir,$bedName,\@Files,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$mergedBed_Intervals);
 			}
 		}
 
@@ -2357,11 +2350,12 @@ if ($jobs{"CNV"}) {
 
 		if ($CNV_opt{"geneGraph"} && keys%{$cnv_Results_r}) {
 
-			print "\n\n####\n\ncnv geneGraph\n\n####\n\n";
+			print "\n\n####\n\ncnv geneGraph\n\n####\n";
 			use DeCovA::covByRegion;
 			use DeCovA::geneGraph;
 
 			## get transcripts and genes overlapping bed CNV results
+			print "\n\tgetting genes/transcripts overlapping bed CNV results\n";
 			unless ($ALLinRef) {
 				$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
 				}
@@ -2375,8 +2369,9 @@ if ($jobs{"CNV"}) {
 							my$chr = $chrom; $chr =~ s/^chr//i;
 							print $fh "$chr\t$start\t$end\n";
 							if (exists $CNV_bed{$file}{$chr}{($start+1)}) {
-								if ($end > $CNV_bed{$file}{$chr}{($start+1)}) 
-									{ $CNV_bed{$file}{$chr}{($start+1)} = $end; }	
+								if ($end > $CNV_bed{$file}{$chr}{($start+1)}) {
+									$CNV_bed{$file}{$chr}{($start+1)} = $end;
+									}
 								}
 							else {
 								$CNV_bed{$file}{$chr}{($start+1)} = $end;
@@ -2389,7 +2384,11 @@ if ($jobs{"CNV"}) {
 					}
 				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$nonCod);
 				foreach (keys%{ ${CNV_IDs}{$file} }) {
-					$CNV_Genes{$file}{${CNV_IDs}{$file}{$_}{"gene"}} = 1;
+					my$gene = ${CNV_IDs}{$file}{$_}{"gene"};
+					my$chr = ${CNV_IDs}{$file}{$_}{"chr"};
+					if (exists $Regions{"raw"}->{$chr}{$gene}) {
+						$CNV_Genes{$file}{$gene} = 1;
+						}
 					}
 				}
 			close $fh;
@@ -2399,8 +2398,12 @@ if ($jobs{"CNV"}) {
 				%{ $CNV_bed{"allFiles"}->{$chr} } = mergeIntervals(\%{ $CNV_bed{"allFiles"}->{$chr} }); 
 				}
 			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName,$nonCod);
-			foreach (keys%{ ${CNV_IDs}{"allFiles"} })  {
-				$CNV_Genes{"allFiles"}{${CNV_IDs}{"allFiles"}{$_}{"gene"}} = 1;
+			foreach (keys%{ ${CNV_IDs}{"allFiles"} }) {
+				my$gene = ${CNV_IDs}{"allFiles"}{$_}{"gene"};
+				my$chr = ${CNV_IDs}{"allFiles"}{$_}{"chr"};
+				if (exists $Regions{"raw"}->{$chr}{$gene}) {
+					$CNV_Genes{"allFiles"}{$gene} = 1;
+					}
 				}
 
 			## change cov file with $Patients{$file}{"Ref_Profondeur_Patient"}

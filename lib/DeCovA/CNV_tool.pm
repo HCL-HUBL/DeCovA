@@ -3295,20 +3295,20 @@ foreach my$CNV (sort{$a<=>$b}keys%{ ${$Result3_r}{$patient} }) {
 	if (exists ${$Regions_r}[$CNV]{"normByR_depth"}->{$center}) {
 		$centerDepth = centerDepth(\@CNVset,"normByR_depth",$center,$Regions_r);
 		$cmdR .= "text(x = 0, y = $ploidy, labels = \"$center depth: $centerDepth X\", adj = c(0.2,-0.5), col = \"purple\"";
-		if ($Nbr_Reg>5) { $cmdR .= ", cex = ".(log(5)/log($Nbr_Reg)).")\n" }
-		else { $cmdR .= ", cex = 1)\n" }
+		if ($Nbr_Reg>5) { $cmdR .= ", cex = ".(log(5)/log($Nbr_Reg)).")\n"; }
+		else { $cmdR .= ", cex = 1)\n"; }
 		}
 	else {
 		if ($Chrom !~ /^Y$/i) {
 			$centerDepth = centerDepth(\@CNVset,"normByR_depth_fem",$center,$Regions_r);
 			$cmdR .= "text(x = 0, y = $ploidy, labels = \"$center depth (F): $centerDepth X\", adj = c(0.2,-0.5), col = \"purple\"";
-			if ($Nbr_Reg>5) { $cmdR .= ", cex = ".(log(5)/log($Nbr_Reg)).")\n" }
-			else { $cmdR .= ", cex = 1)\n" }
+			if ($Nbr_Reg>5) { $cmdR .= ", cex = ".(log(5)/log($Nbr_Reg)).")\n"; }
+			else { $cmdR .= ", cex = 1)\n"; }
 			}
 		$centerDepth = centerDepth(\@CNVset,"normByR_depth_males",$center,$Regions_r);
 		$cmdR .= "text(x = 0, y = $ploidy, labels = \"$center depth (M): $centerDepth X\", adj = c(0.2,1.5), col = \"purple\"";
-		if ($Nbr_Reg>5) { $cmdR .= ", cex = ".(log(5)/log($Nbr_Reg)).")\n" }
-		else { $cmdR .= ", cex = 1)\n" }
+		if ($Nbr_Reg>5) { $cmdR .= ", cex = ".(log(5)/log($Nbr_Reg)).")\n"; }
+		else { $cmdR .= ", cex = 1)\n"; }
 		}
 
 	print CMDR "$cmdR";
