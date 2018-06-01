@@ -663,7 +663,7 @@ foreach my$chr (sort(keys%{$interval_r})) {
 		if (${$interval_r}{$chr}{$bedstart} >= $refStarts[$c2]) {
 			foreach my$end (@RefEnds) {
 				if ($bedstart <= $end) { 
-					foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end}{"NM"} }) {
+					foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end} }) {
 						%{ $targets{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
 						}
 					}
