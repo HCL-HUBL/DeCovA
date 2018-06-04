@@ -551,9 +551,9 @@ else {
 	if ($pThreshold) { @Thresholds = ($pThreshold); }
 	}
 ##regions extent
-my$nonCod = "";
+my$wNonCod = "";
 if (exists $opt{nonCoding})
-	{ $nonCod = 1; }
+	{ $wNonCod = 1; }
 
 my$wUTR = 1;
 if (exists $opt{noUTR})
@@ -561,7 +561,7 @@ if (exists $opt{noUTR})
 my$UTRinTxt = 1;
 if (exists $opt{noUTRinTxt})
 	{ $UTRinTxt = 0; }
-if ($nonCod && (!$wUTR || !$UTRinTxt))
+if ($wNonCod && (!$wUTR || !$UTRinTxt))
 	{ die "nonCoding inclusion not compatible with UTR exclusion\n"; }
 
 my$maxGr = ""; #max depth for graphs
@@ -1322,9 +1322,9 @@ if ($jobs{"keepBed"} && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs
 my($IDinRef,$ALLinRef);
 if (@IDs) {
 	print "\n\n####\n\nselecting lines within $refFile matching provided gene/transcript IDs\n\n####\n";
-	if ($refFmt eq "ucsc") { $IDinRef = DeCovA::refIDs::UCSC2Ids($refFile,\@IDs,\%chromName); }
-	elsif ($refFmt eq "gtf") { $IDinRef = DeCovA::refIDs::GTF2Ids($refFile,\@IDs,\%chromName); }
-	elsif ($refFmt eq "gff3") { $IDinRef = DeCovA::refIDs::GFF2Ids($refFile,\@IDs,\%chromName); }
+	if ($refFmt eq "ucsc") { $IDinRef = DeCovA::refIDs::UCSC2Ids($refFile,\@IDs,\%chromName,$wNonCod); }
+	elsif ($refFmt eq "gtf") { $IDinRef = DeCovA::refIDs::GTF2Ids($refFile,\@IDs,\%chromName,$wNonCod); }
+	elsif ($refFmt eq "gff3") { $IDinRef = DeCovA::refIDs::GFF2Ids($refFile,\@IDs,\%chromName,$wNonCod); }
 	}
 
 
@@ -1350,12 +1350,12 @@ if ($bedFile) {
 		$reAnnotBed{"file"} .= "_ann.bed";
 		if ($IDinRef) {
 			my$ref_0based =  DeCovA::refIDs::refHash2Transcripts($IDinRef,$refFmt);
-			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$nonCod);
+			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
 			}
 		else {
 			$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
 			my$ref_0based =  DeCovA::refIDs::refHash2Transcripts($ALLinRef,$refFmt);
-			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$nonCod);
+			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
 			}
 		unless ($currentBed eq $bedFile) { unlink $currentBed; }
 		$currentBed = $reAnnotBed{"file"};
@@ -1403,14 +1403,14 @@ use DeCovA::geneRegion;
 
 ## if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
 unless ($IDinRef) {
-	$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$mergedBed_Intervals,\%chromName,$nonCod);
+	$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$mergedBed_Intervals,\%chromName,$wNonCod);
 	#undef $ALLinRef;
 	}
 
 ## for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
 @hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wUTR,$id2Bed,\@chromOrder,\%chromName);
-#($geneNM_r, $NMgene_r, $NMchr_r, $NMsens_r, $NMstartCod{"raw"}, $NMendCod{"raw"}, $Regions{"raw"}, $NM_Ex{"raw"}, $Genes_r) = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,\@chromOrder);
+#($geneNM_r, $NMgene_r, $NMchr_r, $NMsens_r, $NMstartCod{"raw"}, $NMendCod{"raw"}, $Regions{"raw"}, $NM_Ex{"raw"}, $Genes_r) = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wNonCod,$wUTR,$id2Bed,\@chromOrder);
 #return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
 $geneNM_r = $hashSub[0];		# @{ $geneNM{$gene} } = [$NM1,...]
 $NMgene_r = $hashSub[1];		# $NMgene{$NM} = $gene;
@@ -2382,7 +2382,7 @@ if ($jobs{"CNV"}) {
 				foreach my$chr (keys%{ $CNV_bed{$file} }) {
 					%{ $CNV_bed{$file}{$chr} } = mergeIntervals(\%{ $CNV_bed{$file}{$chr} });
 					}
-				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$nonCod);
+				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$wNonCod);
 				foreach (keys%{ ${CNV_IDs}{$file} }) {
 					my$gene = ${CNV_IDs}{$file}{$_}{"gene"};
 					my$chr = ${CNV_IDs}{$file}{$_}{"chr"};
@@ -2397,7 +2397,7 @@ if ($jobs{"CNV"}) {
 			foreach my$chr (keys%{ $CNV_bed{"allFiles"} }) {
 				%{ $CNV_bed{"allFiles"}->{$chr} } = mergeIntervals(\%{ $CNV_bed{"allFiles"}->{$chr} }); 
 				}
-			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName,$nonCod);
+			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName,$wNonCod);
 			foreach (keys%{ ${CNV_IDs}{"allFiles"} }) {
 				my$gene = ${CNV_IDs}{"allFiles"}{$_}{"gene"};
 				my$chr = ${CNV_IDs}{"allFiles"}{$_}{"chr"};

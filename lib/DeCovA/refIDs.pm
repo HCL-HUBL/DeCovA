@@ -11,7 +11,7 @@ use warnings;
 
 sub UCSC2Ids {
 
-my($refFile,$IDs,$chromName)=@_;
+my($refFile,$IDs,$chromName,$wNonCod)=@_;
 
 #@IDs in hash %target
 my(%targets,%foundIds);
@@ -61,8 +61,18 @@ while (my$line = <$fhIn>) {
 		${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
 		my$match = 0;
 		if (exists $targets{$transcript_id}) { $foundIds{$transcript_id} = 1; $match = 1; }
-		elsif (exists $targets{$gene_name}) { $foundIds{$gene_name} = 1; $match = 1; }
-		elsif (exists $targets{$Id_noExt}) { $foundIds{$Id_noExt} = 1; $match = 1; }
+		elsif (exists $targets{$gene_name}) {
+			$foundIds{$gene_name} = 1;
+			if ( $wNonCod || ($tab[$idx{"cdsStart"}] != $tab[$idx{"cdsEnd"}]) ) {
+				$match = 1;
+				}
+			}
+		elsif (exists $targets{$Id_noExt}) {
+			$foundIds{$Id_noExt} = 1;
+			if ( $wNonCod || ($tab[$idx{"cdsStart"}] != $tab[$idx{"cdsEnd"}]) ) {
+				$match = 1;
+				}
+			}
 		if ($match) {
 			$allRefs{$transcript_id}{"chr"} = $chr;
 			$allRefs{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
@@ -136,7 +146,7 @@ return(\%allRefs);
 
 sub GTF2Ids {
 
-my($refFile,$IDs,$chromName)=@_;
+my($refFile,$IDs,$chromName,$wNonCod)=@_;
 
 ## reading $refFile, in hash %allRefs:
 
@@ -240,10 +250,18 @@ foreach my$id (@{$IDs}) {
 	$id = uc($id);
 	if (exists ${$allRefs}{"transcript"}{$id}) { %{ $targets{$id} } = %{ ${$allRefs}{"transcript"}{$id} }; }
 	elsif (exists ${$allRefs}{"gene"}{$id}) {
-		foreach my$nm (keys%{ ${$allRefs}{"gene"}{$id} }) { %{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} }; }
+		foreach my$nm (keys%{ ${$allRefs}{"gene"}{$id} }) {
+			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+				}
+			}
 		}
 	elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
-		foreach my$nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) { %{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} }; }
+		foreach my$nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
+			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+				}
+			}
 		}
 	else { die "$id not found in $refFile file\n"; }
 	}
@@ -338,7 +356,7 @@ return(\%allRefs);
 
 sub GFF2Ids {
 
-my($refFile,$IDs,$chromName)=@_;
+my($refFile,$IDs,$chromName,$wNonCod)=@_;
 
 # GFF (General Feature Format)  version 3
 #tab-separated fields:
@@ -465,17 +483,30 @@ foreach my$id (@{$IDs}) {
 	elsif (exists ${$allRefs}{"gene"}{$id}) {
 		if (exists ${$allRefs}{"gene"}{$id}{"2gene_id"}) {
 			my$gene_id = ${$allRefs}{"gene"}{$id}{"2gene_id"};
-			foreach my$nm (keys%{ ${$allRefs}{"gene"}{$gene_id}{"transcript"} }) { %{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} }; }
+			foreach my$nm (keys%{ ${$allRefs}{"gene"}{$gene_id}{"transcript"} }) {
+				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+					}
+				}
 			}
 		else {
-			foreach my$nm (keys%{ ${$allRefs}{"gene"}{$id}{"transcript"} }) { %{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} }; }
+			foreach my$nm (keys%{ ${$allRefs}{"gene"}{$id}{"transcript"} }) {
+				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+					}
+				}
 			}
 		}
 	elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
-		foreach my$nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) { %{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} }; }
+		foreach my$nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
+			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+				}
+			}
 		}
 	else { die "can't find $id in $refFile file\n"; }
 	}
+
 foreach my$id (keys%targets) {
 	delete $targets{$id}{"ex_starts"};
 	@{ $targets{$id}{"ex_starts"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_starts"} };
@@ -580,7 +611,7 @@ return(\%allRefs);
 
 sub bed2IDs {
 
-my($allRefs,$refFile,$refFmt,$interval_r,$chromName,$nonCod) = @_;
+my($allRefs,$refFile,$refFmt,$interval_r,$chromName,$wNonCod) = @_;
 #my%interval ->	#$Bed{$chr}{$start} = $end , in 1-based
 
 print "\n\tlooking for genes/transcripts overlapping bed file intervals\n";
@@ -601,7 +632,7 @@ if (!$allRefs) {
 if ($refFmt eq "ucsc") {
 	unless ($allRefs) { $allRefs = UCSCfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($nonCod || (!$nonCod && exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"})) {
+		if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 			push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{${$allRefs}{"transcript"}{$nm}{"ex_starts"}[0]}{${$allRefs}{"transcript"}{$nm}{"ex_ends"}[-1]} }, $nm);
 			}
 		}
@@ -609,7 +640,7 @@ if ($refFmt eq "ucsc") {
 elsif ($refFmt eq "gtf") {
 	unless ($allRefs) { $allRefs = GTFfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($nonCod || (!$nonCod && exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"})) {
+		if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 			my@ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
 			delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
 			@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
@@ -623,7 +654,7 @@ elsif ($refFmt eq "gtf") {
 elsif ($refFmt eq "gff3") {
 	unless ($allRefs) { $allRefs = GFFfile2hash($fhIn,$chromName); }
 	foreach my$nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($nonCod || (!$nonCod && exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"})) {
+		if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 			my@ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
 			delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
 			@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
@@ -812,7 +843,7 @@ return(\%targets);
 #RefSeq:
 ##bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
 #0	NM_032291	chr1	+	66999824	67210768	67000041	67208778	25	66999824,67091529,67098752,67101626,67105459,67108492,67109226,67126195,67133212,67136677,67137626,67138963,67142686,67145360,67147551,67154830,67155872,67161116,67184976,67194946,67199430,67205017,67206340,67206954,67208755,	67000051,67091593,67098777,67101698,67105516,67108547,67109402,67126207,67133224,67136702,67137678,67139049,67142779,67145435,67148052,67154958,67155999,67161176,67185088,67195102,67199563,67205220,67206405,67207119,67210768,	0	SGIP1	cmpl	cmpl	0,1,2,0,0,0,1,0,0,0,1,2,1,1,1,1,0,1,1,2,2,0,2,1,1,
-## @hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$nonCod,$wUTR,$id2Bed,\@chromOrder);
+## @hashSub = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wNonCod,$wUTR,$id2Bed,\@chromOrder);
 
 sub Id2Coord {
 
@@ -845,6 +876,7 @@ foreach my$NM (keys%{$IDinRef}) {
 		$NMendCod{$NM} = ${$IDinRef}{$NM}{"CDS_end"};
 		}
 	else {
+		if (!$wUTR) { next; }		#next if non coding transcript and $wUTR not wanted
 		$NMstartCod{$NM} = $Ends[-1];
 		$NMendCod{$NM} = $Ends[-1];
 		}
@@ -993,7 +1025,10 @@ foreach my$NM (keys%{$IDinRef}) {
 				}
 			}
 		$interval2{$start} = $end;
-		$NM_Ex{$NM}{$start}{$Starts[$lastCodingEx]} = $NMendCod{$NM};
+		if ($lastCodingEx) {
+			$NM_Ex{$NM}{$start}{$Starts[$lastCodingEx]} = $NMendCod{$NM};
+			}
+		else { print "$NM\t $firstCodingEx\n"; exit;}
 		}
 	%{ $Regions{$chr}{$NM} } = %interval2;
 	foreach (keys%interval2) {
