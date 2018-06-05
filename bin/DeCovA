@@ -31,7 +31,7 @@ use DeCovA::refIDs;
 #parameters:
 
 Getopt::Long::Configure ("bundling");
-my%opt = ();
+my %opt = ();
 GetOptions (\%opt, 
 	"file|f=s@",
 	"fList|F=s",
@@ -267,7 +267,7 @@ parameters:
 print "\n\n####\n\nchecking input files\n\n####\n";
 
 #-d: directory
-my@dir = ();
+my @dir = ();
 if (exists $opt{dir}) {
 	@dir = split(/,/, join(',',@{$opt{dir}}));
 	foreach (@dir) {
@@ -276,19 +276,19 @@ if (exists $opt{dir}) {
 		}
 	}
 #-f: files
-my$suff = "";
+my $suff = "";
 if (exists $opt{suffix}) { 
 	$suff = $opt{suffix}; 
 	$suff =~ s/.bam$//;
 	}
-my@Files = ();
+my @Files = ();
 if (exists $opt{file}) {
 	@Files = split(/,/, join(',',@{$opt{file}}));
 	}
 if (exists $opt{fList}) {
 	if (-f $opt{fList}) {
-		open(my$fh, "<", $opt{fList}) || die "can't open file $opt{fList} ($!)\n";
-		while (my$line=<$fh>) {
+		open(my $fh, "<", $opt{fList}) || die "can't open file $opt{fList} ($!)\n";
+		while (my $line=<$fh>) {
 			unless ($line =~ /^\s*$/) {
 				$line =~ s/\s*$//; $line =~ s/^\s*//;
 				push (@Files, $line);
@@ -298,7 +298,7 @@ if (exists $opt{fList}) {
 		}
 	else { die $opt{fList}." not found\n"; }
 	}
-foreach my$dir(@dir) {
+foreach my $dir(@dir) {
 	find(\&subDir, $dir);
 	}
 sub subDir {
@@ -312,11 +312,11 @@ else {
 	}
 }
 my(%fName,%path);	#fName: name of file, without path and extension
-my$extenS = "$suff.bam";
+my $extenS = "$suff.bam";
 if (@Files) {
 	print "\nbam file(s) to analysed:\n";
 	##uniquify
-	my%Files = ();
+	my %Files = ();
 	foreach (@Files) { $Files{$_} = 1; }
 	@Files = sort(keys%Files);
 	##parse path
@@ -332,7 +332,7 @@ if (@Files) {
 	}
 print "\n";
 
-my$refFile = "";
+my $refFile = "";
 if (exists $opt{"ref"}) { 
 	if (-f $opt{"ref"}) {
 		$refFile = $opt{"ref"};
@@ -340,7 +340,7 @@ if (exists $opt{"ref"}) {
 		}
 	else { die $opt{"ref"}." not found\n"; }
 	}
-my$refFmt = "";
+my $refFmt = "";
 if ($refFile) {
 	if (exists $opt{fmt}) {
 		if ($opt{fmt} =~ /ucsc/i) { $refFmt = "ucsc"; }
@@ -376,18 +376,18 @@ if (exists $opt{mut}) {
 	else { die $opt{mut}." not found\n"; }
 	}
 
-my$outfile = "cov_";
+my $outfile = "cov_";
 if ($opt{outfile})
 	{ $outfile = $opt{outfile}; }
 
-my@IDs = ();
+my @IDs = ();
 if (exists $opt{id}) {
 	@IDs = split(/,/, join(',',@{$opt{id}}));
 	}
 if (exists $opt{idList}) {
 	if (-f $opt{idList}) {
-		open(my$fh, "<", $opt{idList}) || die "can't open file $opt{idList} ($!)\n";
-		while (my$line = <$fh>) {
+		open(my $fh, "<", $opt{idList}) || die "can't open file $opt{idList} ($!)\n";
+		while (my $line = <$fh>) {
 			unless($line =~ /^\s*$/ || $line =~ /^#/) {
 				#$line =~ s/\s//g;
 				$line =~ s/\s+$//; $line =~ s/^\s+//;
@@ -399,8 +399,8 @@ if (exists $opt{idList}) {
 	else { die $opt{idList}." not found\n"; }
 	}
 if (@IDs) {
-	my%IDs = ();
-	foreach my$id (@IDs) { 
+	my %IDs = ();
+	foreach my $id (@IDs) { 
 #		if ($id =~ /^N[MR]_/) { $id =~ s/\.(\d+)$//; }
 		$IDs{$id} = 1;
 		}
@@ -409,7 +409,7 @@ if (@IDs) {
 	#foreach (@IDs) { print "\t$_\n"; }
 	}
 
-my$raw_cov_file = "";
+my $raw_cov_file = "";
 if (exists $opt{raw_cov}) {
 	if (-f $opt{raw_cov}) {
 		$raw_cov_file = $opt{raw_cov};
@@ -420,7 +420,7 @@ if (exists $opt{raw_cov}) {
 	}
 if (@Files && $raw_cov_file) { die "must choose between providing bam files or cov files\n"; }
 
-my$bed_cov_file = "";
+my $bed_cov_file = "";
 if (exists $opt{bed_cov}) { 
 	if (-f $opt{bed_cov}) {
 		$bed_cov_file = $opt{bed_cov};
@@ -429,7 +429,7 @@ if (exists $opt{bed_cov}) {
 	else { die $opt{bed_cov}." not found\n"; }
 	}
 
-my$genom = "";
+my $genom = "";
 if (exists $opt{genome}) {
 	if (-f $opt{genome}) {
 		$genom = $opt{genome}; 
@@ -438,7 +438,7 @@ if (exists $opt{genome}) {
 	else { die $opt{genome}." not found\n"; } 
 	}
 
-my$fichier_sexe = "";
+my $fichier_sexe = "";
 if (exists $opt{sex_file}) { 
 	if (-f $opt{sex_file}) {
 		$fichier_sexe = $opt{sex_file};
@@ -448,7 +448,7 @@ if (exists $opt{sex_file}) {
 	}
 
 ##jobs
-my%jobs = ();
+my %jobs = ();
 $jobs{"bedReport"} = 0;
 if (exists $opt{bedReport})
 	{ $jobs{"bedReport"} = 1; }
@@ -504,10 +504,10 @@ if (exists $opt{summary}) {
 $jobs{"keepCov"} = "";
 if (exists $opt{keepCov}) { $jobs{"keepCov"} = 1; }
 $jobs{"keepBed"} = "";
-my$keepBedName = "";
+my $keepBedName = "";
 if ($bedName) { $keepBedName = $bedName; }
 else { $keepBedName = "allID"; }
-my$keepBedDir = ".";
+my $keepBedDir = ".";
 if (exists $opt{keepBed}) {
 	$jobs{"keepBed"} = 1;
 	if ($opt{keepBed}) { 
@@ -536,7 +536,7 @@ if (exists $opt{depthThreshold}) {
 	@Thresholds = sort{$b<=>$a}@Thresholds;	#decroissant
 	#check if $pThreshold one of those in @Thresholds
 	if ($pThreshold) {
-		my$ok=0;
+		my $ok=0;
 		foreach (@Thresholds) {
 			if ($pThreshold==$_) 
 				{ $ok=1; last; }
@@ -551,29 +551,29 @@ else {
 	if ($pThreshold) { @Thresholds = ($pThreshold); }
 	}
 ##regions extent
-my$wNonCod = "";
+my $wNonCod = "";
 if (exists $opt{nonCoding})
 	{ $wNonCod = 1; }
 
-my$wUTR = 1;
+my $wUTR = 1;
 if (exists $opt{noUTR})
 	{ $wUTR = 0; }
-my$UTRinTxt = 1;
+my $UTRinTxt = 1;
 if (exists $opt{noUTRinTxt})
 	{ $UTRinTxt = 0; }
 if ($wNonCod && (!$wUTR || !$UTRinTxt))
 	{ die "nonCoding inclusion not compatible with UTR exclusion\n"; }
 
-my$maxGr = ""; #max depth for graphs
+my $maxGr = ""; #max depth for graphs
 if (exists $opt{maxDepth}) { 
 	if ($opt{maxDepth} =~ /^\d+$/) { $maxGr = $opt{maxDepth}; }
 	else { die "--maxCov opt value need to be an integer\n"; }
 	}
 
-my$len5 = 0; my$len3 = 0;
+my $len5 = 0; my $len3 = 0;
 if (exists $opt{expand2val}) {
 	if ($opt{expand2val} =~ /,/) {
-		my@len = split(/,/,$opt{expand2val});
+		my @len = split(/,/,$opt{expand2val});
 		$len5 = $len[0];
 		$len3 = $len[1];
 		}
@@ -583,16 +583,16 @@ if (exists $opt{expand2val}) {
 		}
 	}
 
-my$splitBedFromId = 0;
+my $splitBedFromId = 0;
 if (exists $opt{splitBedFromId}) { $splitBedFromId = 1; }
-my$mergeBedFromId = 0;
+my $mergeBedFromId = 0;
 if (exists $opt{mergeBedFromId}) { $mergeBedFromId = 1; }
 
-my$lenTxt5 = 0; my$lenTxt3 = 0;
+my $lenTxt5 = 0; my $lenTxt3 = 0;
 if (exists $opt{Ltxt}) {
 	if ($opt{Ltxt}) {
 		if ($opt{Ltxt} =~ /,/) {
-			my@len = split(/,/,$opt{Ltxt});
+			my @len = split(/,/,$opt{Ltxt});
 			$lenTxt5 = $len[0];
 			$lenTxt3 = $len[1];
 			}
@@ -604,11 +604,11 @@ if (exists $opt{Ltxt}) {
 	else { $lenTxt5 = $len5; $lenTxt3 = $len3; }
 	}
 
-my$upstream = 0; my$downstream = 0;
+my $upstream = 0; my $downstream = 0;
 if (exists $opt{UDstream}) {
 	if ($wUTR) {
 		if ($opt{UDstream} =~ /,/) {
-			my@len = split(/,/,$opt{UDstream});
+			my @len = split(/,/,$opt{UDstream});
 			$upstream = $len[0];
 			$downstream = $len[1];
 			}
@@ -624,12 +624,12 @@ if (exists $opt{UDstream}) {
 	else { die "upstream/downstream expansion not compatible without UTR\n"; }
 	}
 
-my$UpInTxt = 0 ; my$DownInTxt = 0;
+my $UpInTxt = 0 ; my $DownInTxt = 0;
 if (exists $opt{UDtxt}) {
 	if ($opt{UDtxt}) {
 		if ($wUTR) {
 			if ($opt{UDtxt} =~ /,/) {
-				my@len = split(/,/,$opt{UDtxt});
+				my @len = split(/,/,$opt{UDtxt});
 				$UpInTxt = $len[0];
 				$DownInTxt = $len[1];
 				}
@@ -647,97 +647,97 @@ if (exists $opt{UDtxt}) {
 	else { $UpInTxt = $upstream; $DownInTxt = $downstream; }
 	}
 
-my$Expand = "";
+my $Expand = "";
 if (exists $opt{expand2bed})
 	{ $Expand = 1; }
 
-my$spacer = 0;
+my $spacer = 0;
 
-my$Rev = 1;
+my $Rev = 1;
 if (exists $opt{noReverse})
 	{ $Rev = 0; }
 
-my$AllTranscripts = 1;		##all transcripts on same graph; no longer disable possibility
+my $AllTranscripts = 1;		##all transcripts on same graph; no longer disable possibility
 if (exists $opt{noEachTranscript}) 
 	{ $AllTranscripts = 0; }
 
-my$gThreshold = 1;
+my $gThreshold = 1;
 if (exists $opt{noGraphThreshold})
 	{  $gThreshold=""; }
 
-my$nGraf = "max";
+my $nGraf = "max";
 if (exists $opt{nGraph} && $opt{nGraph}!=0)
 	{ $nGraf = $opt{nGraph}; }
 
 ## plots param
-my$bin = 10; #nber of bin for bar plots
+my $bin = 10; #nber of bin for bar plots
 if (exists $opt{binPlot})
 	{ $bin = $opt{binPlot}; }
-my$maxPl = 100; #max depth for bar plots
+my $maxPl = 100; #max depth for bar plots
 if (exists $opt{maxPlot})
 	{ $maxPl = $opt{maxPlot}; }
 if (($maxPl % $bin) != 0) { die "binPlot needs to be a multiple of maxPlot\n"; }
 
 ##external tools paths and param
-my$bedT = "";
+my $bedT = "";
 if (exists $opt{bedtools})
 	{ $bedT = $opt{bedtools}; }
-my$samT = "";
+my $samT = "";
 if (exists $opt{samtools})
 	{ $samT = $opt{samtools}; }
-my$picard = "";
+my $picard = "";
 if (exists $opt{picard})
 	{ $picard = $opt{picard}; }
-my$gatk = "";
+my $gatk = "";
 if (exists $opt{gatk}) { 
 	$gatk = $opt{gatk}; 
 	if (!$gatk) { $gatk = 1; }	#if exists, but no value: means, just use it, but will test the default command
 	}
-my$ram = "";
+my $ram = "";
 if (exists $opt{ram}) { 
 	$ram = $opt{ram};
 	}
-my$threads = "";
+my $threads = "";
 if (exists $opt{cpu}) { 
 	$threads = $opt{cpu};
 	}
-my$dedup = "";
+my $dedup = "";
 if (exists $opt{dedup}) { 
 	if ($opt{dedup} eq "do") { $dedup = "do"; }
 	elsif ($opt{dedup} eq "") { $dedup = 1; }
 	else { die "not recognized value for --dedup arg.\n"; }
 	}
-my$mbq = "";
+my $mbq = "";
 if (exists $opt{mbq}) { $mbq = $opt{mbq}; }
-my$mmq = "";
+my $mmq = "";
 if (exists $opt{mmq}) { $mmq = $opt{mmq}; }
 
 
 
 ##bed param
-my$lenForBed = 0;
+my $lenForBed = 0;
 if (exists $opt{Lbed}) {
 	if ($opt{Lbed} =~ /^\d+$/) { $lenForBed = $opt{Lbed}; }
 	else { die "--Lbed value need to be an integer\n"; }
 	}
 
-my$splitBed = "";
+my $splitBed = "";
 if (exists $opt{split_bed}) { $splitBed = 1; }
 
-my$rmOverlapBed = "";
+my $rmOverlapBed = "";
 if (exists $opt{no_overlap_bed}) { $rmOverlapBed = 1; }
 
-my$cutBed = "";
-my%cutB_opt = ();
+my $cutBed = "";
+my %cutB_opt = ();
 if (exists $opt{cut_bed}) { 
 	$cutBed = 1;
 	$cutB_opt{"cutL"}=150; $cutB_opt{"maxL"}=150; $cutB_opt{"minL"}=75; $cutB_opt{"keepLast"}="merge";
 	if ($opt{cut_bed}) {	## cutL:x,minL:y,maxL:z,keepLast:s
-		my@cutB_arg = split(/,/,$opt{cut_bed});
-		my$minL=""; my$maxL="";
-		foreach my$a (@cutB_arg) {
-			my$ok=0;
-			foreach my$o (keys%cutB_opt) {
+		my @cutB_arg = split(/,/,$opt{cut_bed});
+		my $minL=""; my $maxL="";
+		foreach my $a (@cutB_arg) {
+			my $ok=0;
+			foreach my $o (keys%cutB_opt) {
 				if ($a =~ /$o:(.+)/) {
 					if ($o eq "minL") { $minL=1; }
 					if ($o eq "maxL") { $maxL=1; }
@@ -762,7 +762,7 @@ if (exists $opt{cut_bed}) {
 	}
 #if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry...\n";}
 
-my%reAnnotBed = ();
+my %reAnnotBed = ();
 if (exists $opt{reAnnot_bed}) {
 	if ($opt{reAnnot_bed}) {
 		$opt{reAnnot_bed} =~ s/,//g;
@@ -780,10 +780,10 @@ if (exists $opt{reAnnot_bed}) {
 		}
 	}
 
-my@covFields =(); 
+my @covFields =(); 
 if ($pThreshold) { @covFields = ("min","mean","cov"); }
 else { @covFields = ("min","mean","tot"); }
-my%covFieldList = ("min"=>1,"max"=>1,"tot"=>1,"mean"=>1,"median"=>1,"cov"=>1);
+my %covFieldList = ("min"=>1,"max"=>1,"tot"=>1,"mean"=>1,"median"=>1,"cov"=>1);
 if (exists $opt{cov_fields}) {
 	@covFields = split(/,/, join(',',@{$opt{cov_fields}}));
 	foreach (@covFields) {
@@ -792,7 +792,7 @@ if (exists $opt{cov_fields}) {
 	}
 
 ## CNV param
-my%CNV_opt;
+my %CNV_opt;
 $CNV_opt{"center"} = "med";
 if (exists $opt{spread2}) { $CNV_opt{"center_test"} = 0; }
 else { $CNV_opt{"center_test"} = 1; }
@@ -816,9 +816,9 @@ if (exists $opt{spread_del}) { $CNV_opt{"spread_del"} = $opt{spread_del}; }
 if (exists $opt{spread_dup}) { $CNV_opt{"spread_dup"} = $opt{spread_dup}; }
 if (exists $opt{range}) { $CNV_opt{"range"} = $opt{range}; }
 if (exists $opt{highQual}) {
-	my@tab1 = split(/,/,$opt{highQual});
-	foreach my$string (@tab1) {
-		my@tab2 = split(/:/,$string);
+	my @tab1 = split(/,/,$opt{highQual});
+	foreach my $string (@tab1) {
+		my @tab2 = split(/:/,$string);
 		if ($tab2[0] =~ /^li/i) { $CNV_opt{"trueCNV"}{"level"}{"del"} = $tab2[1]; }
 		elsif ($tab2[0] =~ /^ls/i) { $CNV_opt{"trueCNV"}{"level"}{"dup"} = $tab2[1]; }
 		elsif ($tab2[0] =~ /^si/i) { $CNV_opt{"trueCNV"}{"spread"}{"del"} = $tab2[1]; }
@@ -868,7 +868,7 @@ if (exists $opt{graph_byCNV}) {
 @{ $CNV_opt{"fields"} } = ();
 if (exists $opt{CNV_fields}) {
 	@{ $CNV_opt{"fields"} } = split(/,/, join(',',@{$opt{CNV_fields}}));
-	my%CNVfieldList = ("min"=>1,"max"=>1,"med"=>1,"avg"=>1,"std"=>1,"Q1"=>1,"Q3"=>1);
+	my %CNVfieldList = ("min"=>1,"max"=>1,"med"=>1,"avg"=>1,"std"=>1,"Q1"=>1,"Q3"=>1);
 	foreach (@{ $CNV_opt{"fields"} }) {
 		unless (exists $CNVfieldList{$_}) { die "$_ CNV field not recognized (min,max,norm)\n"; }
 		}
@@ -941,10 +941,10 @@ if ($genom) {
 	if (-e "$genom.fai") {
 		#@chromLength = `cut -f1-2 $genom.fai`;
 		#chomp @chromLength;
-		open(my$fh, '<', "$genom.fai") or die "cannot open $genom.fai\n";
-		while (my$line = <$fh>) {
-			my@tab = split(/\t/,$line);
-			my$chr = $tab[0];
+		open(my $fh, '<', "$genom.fai") or die "cannot open $genom.fai\n";
+		while (my $line = <$fh>) {
+			my @tab = split(/\t/,$line);
+			my $chr = $tab[0];
 			$chr =~ s/^chr//i;
 			$chromName{"fasta"}{$chr} = $tab[0];
 			push(@chromOrder,$chr);
@@ -968,7 +968,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 ##sName: name of sample in bam file (unless samtools: name of file without extension)
 ##sName2: not redundant name of sample
 my(%sName,%sName2,$smplIdx,%bamHeaders);
-my$bedTversion = ""; 
+my $bedTversion = ""; 
 
 if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"} ) {
 	unless ($raw_cov_file) {
@@ -996,7 +996,7 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 			}	
 		##picard tools
 		if ($picard) {
-			my$picardName = $picard;
+			my $picardName = $picard;
 			$picardName =~ s/\.jar$//;
 			$picardName =~ s/picard$//;
 			$picardName =~ s/\/$//;
@@ -1024,7 +1024,7 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 		if ($mbq && !$gatk) { $gatk = 1; }
 		if ($gatk) {
 			if ($gatk ne "1") {
-				my$gatkName = $gatk;
+				my $gatkName = $gatk;
 				$gatkName =~ s/\.jar$//;
 				$gatkName =~ s/GenomeAnalysisTK$//;
 				$gatkName =~ s/\/$//;
@@ -1096,15 +1096,15 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 		##find sample names in bam
 		##sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
 		if ($samT) {
-			my%allID;
-			foreach my$f (@Files) {
+			my %allID;
+			foreach my $f (@Files) {
 				# @RG	ID:id	SM:sample	LB:lb	PL:Illumina	PU:pu
 				@{ $bamHeaders{$f} } = `$samT view -H $f`;
-				my@RGs = grep(/^\@RG/, @{ $bamHeaders{$f} });
+				my @RGs = grep(/^\@RG/, @{ $bamHeaders{$f} });
 				$RGs[0] =~ /\tID:(.+?)(\t|\n)/;
-				my$ID = $1;
+				my $ID = $1;
 				$RGs[0] =~ /\tSM:(.+?)(\t|\n)/;
-				my$SM = $1;
+				my $SM = $1;
 				if (exists $allID{$SM}) {
 					$sName{$f} = $SM;
 					$sName2{$f} = $SM."_".$ID;
@@ -1130,9 +1130,9 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 		if (@Files) {
 			#bam index
 			if ($samT) {
-				foreach my$file (@Files) {
+				foreach my $file (@Files) {
 					unless (-e "$file.bai") {
-						my$cmd = "$samT index $file";
+						my $cmd = "$samT index $file";
 						print "$cmd\n";
 						system "$cmd";
 						}
@@ -1141,13 +1141,13 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 			#@chromOrder from 1st bam, if not already set
 			unless (@chromOrder) {
 				if (%bamHeaders) {
-					foreach my$file (keys%bamHeaders) {
+					foreach my $file (keys%bamHeaders) {
 						## @SQ	SN:chr1	LN:249250621
-						my@SQs = grep(/^\@SQ/, @{ $bamHeaders{$file} });
-						foreach my$sq (@SQs) {
+						my @SQs = grep(/^\@SQ/, @{ $bamHeaders{$file} });
+						foreach my $sq (@SQs) {
 							$sq =~ /\tSN:(.+?)\tLN:(\d+)\n/;
-							my$chrName = $1; my$len = $2;
-							my$chr = $chrName; $chr =~ s/^chr//i;
+							my $chrName = $1; my $len = $2;
+							my $chr = $chrName; $chr =~ s/^chr//i;
 							$chromName{"fasta"}{$chr} = $chrName;
 							push(@chromOrder, $chr);
 							$chromLength{$chr} = $len;
@@ -1181,11 +1181,11 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 		}
 	#read sex file, just to check existing sample names
 	if ($fichier_sexe) {
-		open(my$fh, "<", $fichier_sexe) or die "cannot read $fichier_sexe ($!)\n";
-		while (my$line = <$fh>) {
+		open(my $fh, "<", $fichier_sexe) or die "cannot read $fichier_sexe ($!)\n";
+		while (my $line = <$fh>) {
 			$line =~ /(\S+)\s+(\S+)/;
-			my$ok="";
-			foreach my$file (@Files) {
+			my $ok="";
+			foreach my $file (@Files) {
 				if ($1 eq $sName2{$file}) {
 					$ok=1; last;
 					}
@@ -1200,10 +1200,10 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 #create output dirs
 
 use POSIX qw(strftime);
-my$outdir = "";
-my$tmpDir = "";
-my$chromLength = "";
-my@tmpFiles = (); ##tmp files to rm when ends
+my $outdir = "";
+my $tmpDir = "";
+my $chromLength = "";
+my @tmpFiles = (); ##tmp files to rm when ends
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"CNV"} || $jobs{"covMut"}) {
 	if (exists $opt{outdir}) { 
 		$outdir = $opt{outdir}; 
@@ -1230,10 +1230,10 @@ else {
 	else { $outdir = "."; }
 	}
 
-my$depthFilePerChr = {};
+my $depthFilePerChr = {};
 if ($raw_cov_file) {
 	print "\n\n####\n\nreading $raw_cov_file\n\n####\n";
-	my$fhIn;
+	my $fhIn;
 	if ($raw_cov_file =~ /.gz$/) {
 		use IO::Zlib;
 		$fhIn = new IO::Zlib;
@@ -1244,12 +1244,12 @@ if ($raw_cov_file) {
 		}
 	## gets sample names
 	print "\n\tgetting sample names\n";
-	my$firstLine = <$fhIn>;
+	my $firstLine = <$fhIn>;
 	chomp $firstLine;
-	my@tab = split(/\t/,$firstLine);
-	for my$i (0..$#tab) {
+	my @tab = split(/\t/,$firstLine);
+	for my $i (0..$#tab) {
 		if ($tab[$i] =~ /^Depth_for_(.+)/) {
-			my$smpl = $1;
+			my $smpl = $1;
 			push(@Files,$smpl);
 			$fName{$smpl} = $smpl;
 			$sName2{$smpl} = $smpl;
@@ -1259,15 +1259,15 @@ if ($raw_cov_file) {
 	unless (@Files) { die "not able to find sample names in $raw_cov_file\nmissing header line?\n"; }
 	## gets @chromOrder, writes to depthFilePerChrom
 	print "\n\tgetting chrom Order and writting to depthFilePerChr\n";
-	my$currentChr = "";
-	my$fhChr;
-	my$getChromOrder = "";
+	my $currentChr = "";
+	my $fhChr;
+	my $getChromOrder = "";
 	unless (@chromOrder) { $getChromOrder = 1; }
-	my%allChr = ();
-	while (my$line = <$fhIn>) {
+	my %allChr = ();
+	while (my $line = <$fhIn>) {
 		$line =~ /^(\w+):\d+\t/;
-		my$chrName = $1;
-		my$chr = $chrName; $chr =~ s/^chr//i;
+		my $chrName = $1;
+		my $chr = $chrName; $chr =~ s/^chr//i;
 		if ($chr ne $currentChr) {
 			if ($getChromOrder && !exists $allChr{$chr}) {
 				$chromName{"fasta"}{$chr} = $chrName;
@@ -1291,7 +1291,7 @@ else {
 	if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) && !$gatk && $bedTversion == 2) {
 		if (%chromLength) {
 			$chromLength = "$tmpDir/chromLength.txt";		#used by bedtools
-			open (my$fhOut, ">", "$chromLength");
+			open (my $fhOut, ">", "$chromLength");
 			foreach (@chromOrder) { print $fhOut $chromName{"fasta"}{$_}."\t$chromLength{$_}\n"; }
 			close $fhOut;
 			}
@@ -1333,11 +1333,11 @@ if (@IDs) {
 my($bed_Intervals,$mergedBed_Intervals);		##bed in %hash : $Bed{$chr}{$start} = $end , in 1-based
 if ($bedFile) {
 	print "\n\n####\n\nprocessing $bedFile\n\n####\n";
-	my$currentBed = "$bedFile";
+	my $currentBed = "$bedFile";
 	DeCovA::bedProcessing::getChrNameInBed($bedFile,\@chromOrder,\%chromName);
 	if ($lenForBed) {
 		print "\n\tadding $lenForBed bp to $currentBed intervals ends\n";
-		my$expandedBed = "$outdir/$bedName";
+		my $expandedBed = "$outdir/$bedName";
 		$expandedBed =~ s/.bed$//;
 		$expandedBed .= "_w$lenForBed.bed";
 		DeCovA::bedProcessing::addLength2Bed($currentBed,$expandedBed,$lenForBed);
@@ -1349,12 +1349,12 @@ if ($bedFile) {
 		$reAnnotBed{"file"} =~ s/.bed$//;
 		$reAnnotBed{"file"} .= "_ann.bed";
 		if ($IDinRef) {
-			my$ref_0based =  DeCovA::refIDs::refHash2Transcripts($IDinRef,$refFmt);
+			my $ref_0based =  DeCovA::refIDs::refHash2Transcripts($IDinRef,$refFmt);
 			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
 			}
 		else {
 			$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
-			my$ref_0based =  DeCovA::refIDs::refHash2Transcripts($ALLinRef,$refFmt);
+			my $ref_0based =  DeCovA::refIDs::refHash2Transcripts($ALLinRef,$refFmt);
 			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
 			}
 		unless ($currentBed eq $bedFile) { unlink $currentBed; }
@@ -1364,17 +1364,17 @@ if ($bedFile) {
 		#transform in 1-based coord; keep longest intervals
 		$bed_Intervals = DeCovA::bedProcessing::readBed($currentBed);
 		#merge overlapping intervals
-		foreach my$chr (keys%{$bed_Intervals}) {
+		foreach my $chr (keys%{$bed_Intervals}) {
 			%{ ${$mergedBed_Intervals}{$chr} } = mergeIntervals(\%{ ${$bed_Intervals}{$chr} });
 			}
 		#print merged bed, for depth analysis
 		DeCovA::bedProcessing::printBed("$tmpDir/original",$mergedBed_Intervals,\@chromOrder);
 		}
 	#eventually slice bed intervals : split_Bed, rm_Overlap_Bed, cut_Bed
-	my$currentBed2 = DeCovA::bedProcessing::sliceBedIntervals($currentBed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@chromOrder,\%chromName);
+	my $currentBed2 = DeCovA::bedProcessing::sliceBedIntervals($currentBed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@chromOrder,\%chromName);
 	if ($currentBed2 ne $currentBed && $currentBed ne $bedFile) { unlink $currentBed; }
 	if ($opt{keepBed} && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs{"graphBySample"} && !$jobs{"geneSummary"} && !$jobs{"geneReport"} && !$jobs{"covPlot"} && !$jobs{"genePlot"} && !$jobs{"interSplot"} && !$jobs{"covBed"} && !$jobs{"CNV"} && !$jobs{"covMut"}) {
-		my$outBed = "$outdir/$bedName"; $outBed =~ s/.bed$//; $outBed .= ".bed";
+		my $outBed = "$outdir/$bedName"; $outBed =~ s/.bed$//; $outBed .= ".bed";
 		#rename $currentBed2, "$outdir/$bedName" or die "rename failed: $!";
 		use File::Copy qw(move);
 		move($currentBed2, "$outBed") or die "move failed: $!";
@@ -1423,11 +1423,18 @@ $NM_Ex{"raw"} = $hashSub[7];		# %NM_Ex{NM}{start of region}{start of exon} = end
 $Genes_r = $hashSub[8]; 
 unless ($bedFile) { 			#-> bed from id's locations
 	$bed_Intervals = $hashSub[9];		# $Bed{$chr}{$start} = $end; 
-	foreach my$chr (keys%{$bed_Intervals}) {
+	foreach my $chr (keys%{$bed_Intervals}) {
 		%{ ${$mergedBed_Intervals}{$chr} } = mergeIntervals(\%{ ${$bed_Intervals}{$chr} });
 		}
 	}
-
+=pod
+	foreach my $chr(sort(keys%{$Regions{"raw"}})) {
+		foreach my $NM (sort(keys%{ $Regions{"raw"}{$chr} })) {
+			foreach my $startR (sort{$a<=>$b}keys%{  $Regions{"raw"}{$chr}{$NM} })
+				{ print $chr."\t".$NM."\t".$startR."\t". $Regions{"raw"}{$chr}{$NM}{$startR}."\n"; }
+			}
+		}
+=cut
 ## for summary txt file:
 if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 	$bedName = $keepBedName;
@@ -1437,7 +1444,7 @@ if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 $txtRegions_r = $hashSub[6];		# as %Regions, but for summary txt file
 $txt_NM_Ex_r = $hashSub[7];		# as %NM_Ex, but for summary txt file
 $ref_Intervals = $hashSub[9];		# as %Bed, but for coordPlot and cov_Bed if no bedfile
-foreach my$chr (keys%{$ref_Intervals}) {
+foreach my $chr (keys%{$ref_Intervals}) {
 	%{ ${$ref_Intervals}{$chr} } = mergeIntervals(\%{ ${$ref_Intervals}{$chr} });
 	}
 if ($id2Bed) {
@@ -1493,8 +1500,8 @@ $Regions{"coord0"} = $hashSub[2];	#$Regions{"coord0"}{$NM}{start of region} = $e
 #$NMstartCod{"coord0"}{$NM} = $start of coding sequence (for start of region = 0)
 #$NMendCod{"coord0"}{$NM} = $end of coding sequence (for start of region = 0)
 if ($AllTranscripts) {
-	foreach my$gene(keys%{ $Regions{"coord0"} }) {
-		foreach my$NM (@{ ${$geneNM_r}{$gene} }) {
+	foreach my $gene(keys%{ $Regions{"coord0"} }) {
+		foreach my $NM (@{ ${$geneNM_r}{$gene} }) {
 			@hashSub = DeCovA::geneRegion::transposeNM($wUTR,$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $Regions{"raw"}->{${$NMchr_r}{$NM}}{$gene} },\%{ $Regions{"coord0"}->{$gene} },\%{ $NM_Ex{"raw"}->{$NM} }); 
 			$NMstartCod{"coord0"}->{$NM} = $hashSub[0];		#${$NMstartCod_r}{"coord0"}{$NM} = $hashSub[0];
 			$NMendCod{"coord0"}->{$NM} = $hashSub[1];			#${$NMendCod_r}{"coord0"}->{$NM} = $hashSub[1];
@@ -1503,7 +1510,7 @@ if ($AllTranscripts) {
 		}
 	}
 else {
-	foreach my$NM (keys%{ $Regions{"coord0"} }) { 
+	foreach my $NM (keys%{ $Regions{"coord0"} }) { 
 		@hashSub = DeCovA::geneRegion::transposeNM($wUTR,$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $Regions{"raw"}->{${$NMchr_r}{$NM}}{$NM} },\%{ $Regions{"coord0"}->{$NM} },\%{ $NM_Ex{"raw"}{$NM} });
 		$NMstartCod{"coord0"}->{$NM} = $hashSub[0];
 		$NMendCod{"coord0"}->{$NM} = $hashSub[1]; 
@@ -1537,17 +1544,17 @@ $RegBed{"coord0"} = $hashSub[0];
 $RegMut{"coord0"} = $hashSub[1];
 
 print "\n\treversing minus transcript coordinates\n";
-foreach my$gene (keys%{$Genes_r}) {
-	my@NMs =  @{ ${$geneNM_r}{$gene} };
-	my$chr = ${$NMchr_r}{$NMs[0]};
-	my$sens = ${$NMsens_r}{$NMs[0]};
+foreach my $gene (keys%{$Genes_r}) {
+	my @NMs =  @{ ${$geneNM_r}{$gene} };
+	my $chr = ${$NMchr_r}{$NMs[0]};
+	my $sens = ${$NMsens_r}{$NMs[0]};
 	if ($Rev && $sens eq "-") {
 		if ($AllTranscripts) {
 			@hashSub = DeCovA::geneRegion::ReverseGene1($gene,$NMlength{$gene},\%{ $Regions{"coord0"}->{$gene} },\%{ $RegBed{"coord0"}->{$gene} },\%{ $RegMut{"coord0"}->{$gene} });
 			$Regions{"rev"}->{$gene} = $hashSub[0];
 			$RegBed{"rev"}->{$gene} = $hashSub[1];
 			$RegMut{"rev"}->{$gene} = $hashSub[2];
-			foreach my$NM (@NMs) {
+			foreach my $NM (@NMs) {
 				@hashSub = DeCovA::geneRegion::ReverseGene2($NM,$NMlength{$gene},\%{ $Regions{"coord0"}->{$gene} },\%{ $NM_Ex{"coord0"}->{$NM} },\%{ $intron{"coord0"}->{$NM} },\%{ $UTR{"coord0"}->{$NM} },\%{ $Cod{"coord0"}->{$NM} });
 				$NM_Ex{"rev"}->{$NM} = $hashSub[0];
 				$intron{"rev"}->{$NM} = $hashSub[1];
@@ -1556,7 +1563,7 @@ foreach my$gene (keys%{$Genes_r}) {
 				}
 			}
 		else {
-			foreach my$NM (@NMs) {
+			foreach my $NM (@NMs) {
 				@hashSub = DeCovA::geneRegion::ReverseNMs($NM,$NMlength{$NM},\%{ $Regions{"coord0"}->{$NM} },\%{ $NM_Ex{"coord0"}->{$NM} },\%{ $intron{"coord0"}->{$NM} },\%{ $UTR{"coord0"}->{$NM} },\%{ $Cod{"coord0"}->{$NM} },\%{ $RegBed{"coord0"}->{$NM} },\%{ $RegMut{"coord0"}{$NM} });
 				$Regions{"rev"}->{$NM} = $hashSub[0];
 				$NM_Ex{"rev"}->{$NM} = $hashSub[1];
@@ -1575,13 +1582,13 @@ foreach my$gene (keys%{$Genes_r}) {
 			if (exists $RegMut{"coord0"}->{$gene}) { $RegMut{"rev"}->{$gene} = $RegMut{"coord0"}->{$gene}; }
 			}
 		else {
-			foreach my$NM (@NMs) {
+			foreach my $NM (@NMs) {
 				$Regions{"rev"}->{$NM} = $Regions{"coord0"}->{$NM};
 				if (exists $RegBed{"coord0"}->{$NM}) { $RegBed{"rev"}->{$NM} = $RegBed{"coord0"}->{$NM}; }
 				if (exists $RegMut{"coord0"}->{$NM}) { $RegMut{"rev"}->{$NM} = $RegMut{"coord0"}->{$NM}; }
 				}
 			}
-		foreach my$NM (@NMs) {
+		foreach my $NM (@NMs) {
 			if (exists $NM_Ex{"coord0"}->{$NM}) { $NM_Ex{"rev"}->{$NM} = $NM_Ex{"coord0"}->{$NM}; }
 			if (exists $intron{"coord0"}->{$NM}) { $intron{"rev"}->{$NM} = $intron{"coord0"}->{$NM}; }
 			if (exists $UTR{"coord0"}->{$NM}) { $UTR{"rev"}->{$NM} = $UTR{"coord0"}->{$NM}; }
@@ -1597,9 +1604,9 @@ foreach my$gene (keys%{$Genes_r}) {
 
 ###################
 #Job 2: bams analysis:
-#my%headers;
+#my %headers;
 my(%bam2Use);
-my$depthFile = "$outdir/allsamples_depth.txt";
+my $depthFile = "$outdir/allsamples_depth.txt";
 use DeCovA::depthProgr;
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) {
 
@@ -1607,46 +1614,46 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 
 	##defines merge bed to analyse, from bedfile +/- genes +/- mut
 	print "\n\tcreating merged bed to be used by depth tools\n";
-	my$intervalName;	##name of interval file which will feed depth tools
+	my $intervalName;	##name of interval file which will feed depth tools
 	if (scalar(keys%{ $Regions{"raw"} }) > 0) {
 		#merge intervals from %Regions (for example, if several transcripts for the same gene)
 		#% $Regions{"raw"}{chr}{NM}{exonstart} = exonend
 		#% $allInterval{chr}{start of region} = end of region
 		#print bed corresponding to regions
 		#and +/- merge with bedfile and mutFile if any 
-		my$allIntervals_r = mergeRegions($Regions{"raw"});
+		my $allIntervals_r = mergeRegions($Regions{"raw"});
 		$intervalName = "regions";
 		DeCovA::bedProcessing::printBed("$tmpDir/$intervalName",$allIntervals_r,\@chromOrder);
 		if ($bedFile || $mutFile || ($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
 			$intervalName = "merge";
-			open (my$fhO, ">", "$tmpDir/$intervalName.bed") || die "can't create file $tmpDir/$intervalName.bed ($!)\n";
-			open (my$fhI, "<", "$tmpDir/regions_0Chr.bed") || die "can't open file $tmpDir/regions_0Chr.bed ($!)\n";
-			while (my$line = <$fhI>) { print $fhO $line; }
+			open (my $fhO, ">", "$tmpDir/$intervalName.bed") || die "can't create file $tmpDir/$intervalName.bed ($!)\n";
+			open (my $fhI, "<", "$tmpDir/regions_0Chr.bed") || die "can't open file $tmpDir/regions_0Chr.bed ($!)\n";
+			while (my $line = <$fhI>) { print $fhO $line; }
 			close $fhI;
 			if ($bedFile) {
 				open ($fhI, "<", "$tmpDir/original_0Chr.bed") || die "can't open file $tmpDir/original_0Chr.bed ($!)\n";
-				while (my$line = <$fhI>) { print $fhO $line; }
+				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
 				}
 			if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
 				DeCovA::bedProcessing::printBed("$tmpDir/txtRegions",$ref_Intervals,\@chromOrder);
 				open ($fhI, "<", "$tmpDir/txtRegions_0Chr.bed") || die "can't open file $tmpDir/txtRegions_0Chr.bed ($!)\n";
-				while (my$line = <$fhI>) { print $fhO $line; }
+				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
 				}
 			if ($mutFile) {
 				open ($fhI, "<", "$mutFile") || die "can't open file $mutFile ($!)\n";
-				while (my$line = <$fhI>) {
+				while (my $line = <$fhI>) {
 					chomp $line;
-					my@tab = split(/\t/,$line);
+					my @tab = split(/\t/,$line);
 					$tab[0] =~ s/^chr//;
 					print $fhO $tab[0]."\t".($tab[1]-1)."\t".$tab[1]."\n";
 					}
 				close $fhI;
 				}
 			close $fhO; 
-			my$merge_r = DeCovA::bedProcessing::readBed("$tmpDir/$intervalName.bed");
-			foreach my$chr (keys%{$merge_r})
+			my $merge_r = DeCovA::bedProcessing::readBed("$tmpDir/$intervalName.bed");
+			foreach my $chr (keys%{$merge_r})
 				{ %{ ${$merge_r}{$chr} } = mergeIntervals(\%{ ${$merge_r}{$chr} }); }
 			DeCovA::bedProcessing::printBed("$tmpDir/$intervalName",$merge_r,\@chromOrder);
 			unlink "$tmpDir/$intervalName.bed";
@@ -1656,23 +1663,23 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		if ($mutFile) {
 			if ($bedFile) { $intervalName = "merge"; }
 			else  { $intervalName = "muts"; }
-			open (my$fhO, ">", "$tmpDir/$intervalName.bed") || die "can't create file $tmpDir/$intervalName.bed ($!)\n";
-			open (my$fhI, "<", "$mutFile") || die "can't open file $mutFile ($!)\n";
-			while (my$line = <$fhI>) {
+			open (my $fhO, ">", "$tmpDir/$intervalName.bed") || die "can't create file $tmpDir/$intervalName.bed ($!)\n";
+			open (my $fhI, "<", "$mutFile") || die "can't open file $mutFile ($!)\n";
+			while (my $line = <$fhI>) {
 				chomp $line;
-				my@tab = split(/\t/,$line);
+				my @tab = split(/\t/,$line);
 				$tab[0] =~ s/^chr//;
 				print $fhO $tab[0]."\t".($tab[1]-1)."\t".$tab[1]."\n";
 				}
 			close $fhI;
 			if ($bedFile) {
 				open ($fhI, "<", "$tmpDir/original_0Chr.bed") || die "can't open file $tmpDir/original_0Chr.bed ($!)\n";
-				while (my$line = <$fhI>) { print $fhO $line; }
+				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
 				}
 			close $fhO;
-			my$merge_r = DeCovA::bedProcessing::readBed("$tmpDir/$intervalName.bed");
-			foreach my$chr (keys%{$merge_r}) {
+			my $merge_r = DeCovA::bedProcessing::readBed("$tmpDir/$intervalName.bed");
+			foreach my $chr (keys%{$merge_r}) {
 				%{ ${$merge_r}{$chr} } = mergeIntervals(\%{ ${$merge_r}{$chr} });
 				}
 			DeCovA::bedProcessing::printBed("$tmpDir/$intervalName",$merge_r,\@chromOrder);
@@ -1693,18 +1700,18 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 
 			print "\n\tchecking that all intervals to be analysed are present in depth file $raw_cov_file\n";
 			## checking that all intervals to be analysed are present in depth file
-			my$intervals_r = DeCovA::bedProcessing::readBed("$intervalName\_0Chr.bed");	#$covbed{$chr}{$start} = $end;	transform in 1-based coord
-			foreach my$chr (keys%{$intervals_r}) {
+			my $intervals_r = DeCovA::bedProcessing::readBed("$intervalName\_0Chr.bed");	#$covbed{$chr}{$start} = $end;	transform in 1-based coord
+			foreach my $chr (keys%{$intervals_r}) {
 				if (exists ${$depthFilePerChr}{"raw"}{$chr}) {
 					print "\t\t$chr found\n";
-					my@Starts = sort{$a<=>$b}(keys%{ ${$intervals_r}{$chr} });
-					my$s = 0;								#idx of @Starts
-					my$posInIntervals = $Starts[$s];		#current position
-					open(my$fhIn, "<", ${$depthFilePerChr}{"raw"}{$chr}) || die "!!! can't read ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
-					while (my$line = <$fhIn>) {
+					my @Starts = sort{$a<=>$b}(keys%{ ${$intervals_r}{$chr} });
+					my $s = 0;								#idx of @Starts
+					my $posInIntervals = $Starts[$s];		#current position
+					open(my $fhIn, "<", ${$depthFilePerChr}{"raw"}{$chr}) || die "!!! can't read ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
+					while (my $line = <$fhIn>) {
 						$line =~ /^(\d+)\t/;
-						my$posInDepthFile = $1;
-						my$stayInThisLine = 1;
+						my $posInDepthFile = $1;
+						my $stayInThisLine = 1;
 						while ($stayInThisLine) {
 							if ($posInDepthFile < $Starts[$s]) { $stayInThisLine = 0; }
 							else {
@@ -1746,14 +1753,14 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 			##bamFilter?
 			if (($gatk && $dedup eq "do") || (!$gatk && ($mmq || $dedup))) {
 				print "\n\tfiltering bam files\n";
-				foreach my$f (@Files) {
+				foreach my $f (@Files) {
 					print "\n\t$f :\n";
-					my$isChr;
+					my $isChr;
 					if ($withChr{$f}) { $isChr = $withChr{$f}; }
 					else { $isChr = "_0Chr.bed"; }
 					DeCovA::depthProgr::samT_filter($samT,"$intervalName$isChr",$threads,$gatk,$mmq,$f,"$tmpDir/".$fName{$f}."_onBed.bam");
-					my$cmd = "$samT view -c $tmpDir/".$fName{$f}."_onBed.bam";
-					my$count = `$cmd`;
+					my $cmd = "$samT view -c $tmpDir/".$fName{$f}."_onBed.bam";
+					my $count = `$cmd`;
 					print "reads from ".$fName{$f}." falling within target regions: $count\n";
 					unless ($withChr{$f}) {
 						if ($count == 0) {
@@ -1780,12 +1787,12 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 					}
 				}
 			else {
-				foreach my$f (@Files) {
+				foreach my $f (@Files) {
 					$bam2Use{$f} = $f;
 					if (!$withChr{$f} && $samT) {
-						my$isChr = "_0Chr.bed";
-						my$cmd = "$samT view -c -L $intervalName$isChr $f";
-						my$count = `$cmd`;
+						my $isChr = "_0Chr.bed";
+						my $cmd = "$samT view -c -L $intervalName$isChr $f";
+						my $count = `$cmd`;
 						print "reads from ".$fName{$f}." falling within target regions: $count\n";
 						if ($count == 0) {
 							print "trying other reference genome:\n";
@@ -1818,21 +1825,21 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 
 ###################
 #depth Mut
-my%depthMut;
+my %depthMut;
 if ($mutFile && $jobs{"covMut"}) {
 
 	print "\n\n####\n\nprinting depth for positions in $mutFile\n\n####\n\n";
 
 	## ${$Mut}{$chr}{$startMut} = $infoMut	; (1-based coord)
 
-	foreach my$chrom (@chromOrder) {
+	foreach my $chrom (@chromOrder) {
 		if (exists ${$Mut}{$chrom}) {
-			my@Starts = sort{$a<=>$b}keys%{ ${$Mut}{$chrom} };
-			my$c = 0;
-			open(my$fh, "<", ${$depthFilePerChr}{"raw"}{$chrom}) || die "can't open file ".${$depthFilePerChr}{"raw"}{$chrom}." ($!)\n";
-			while (my$line = <$fh>) {
-				my@tab = split(/\t/,$line);
-				my$pos = $tab[0];
+			my @Starts = sort{$a<=>$b}keys%{ ${$Mut}{$chrom} };
+			my $c = 0;
+			open(my $fh, "<", ${$depthFilePerChr}{"raw"}{$chrom}) || die "can't open file ".${$depthFilePerChr}{"raw"}{$chrom}." ($!)\n";
+			while (my $line = <$fh>) {
+				my @tab = split(/\t/,$line);
+				my $pos = $tab[0];
 				while ( ($pos > $Starts[$c]) && ($c < $#Starts) ) { $c++; }
 				if ($pos == $Starts[$c]) {
 					foreach (@Files) {
@@ -1846,13 +1853,13 @@ if ($mutFile && $jobs{"covMut"}) {
 		}
 
 	#print mut_depth.txt
-	my$MutDepthFile = "$outdir/$mutFileName"."_depth.txt";
-	open(my$fh, ">", "$MutDepthFile") or die "cannot create $MutDepthFile ($!)\n";
+	my $MutDepthFile = "$outdir/$mutFileName"."_depth.txt";
+	open(my $fh, ">", "$MutDepthFile") or die "cannot create $MutDepthFile ($!)\n";
 	print $fh "#locus\tmutation";
 	foreach (@Files) { print $fh "\t".$sName2{$_}; }
 	print $fh "\n";
-	foreach my$chrom (@chromOrder) {
-		foreach my$pos (sort{$a<=>$b}keys%{ ${$Mut}{$chrom} }) {
+	foreach my $chrom (@chromOrder) {
+		foreach my $pos (sort{$a<=>$b}keys%{ ${$Mut}{$chrom} }) {
 			print $fh $chromName{"mut"}{$chrom}.":$pos\t".${$Mut}{$chrom}{$pos};
 			foreach (@Files) { print $fh "\t".$depthMut{$_}{$chrom}{$pos}; }
 			print $fh "\n";
@@ -1876,8 +1883,8 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 		use DeCovA::geneGraph;
 		}
 
-	my%NMnotCov;	##$NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
-	my%NM_UC;	##NM_UC{$NM}{$threshold} = 1 if 1 region not cov
+	my %NMnotCov;	##$NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
+	my %NM_UC;	##NM_UC{$NM}{$threshold} = 1 if 1 region not cov
 
 	if($jobs{"geneReport"}) {
 		foreach (@Files) {
@@ -1891,30 +1898,30 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 		}
 
 	##foreach gene:
-	foreach my$gene (sort(keys%{$Genes_r})) {
+	foreach my $gene (sort(keys%{$Genes_r})) {
 
 #		print "analysing cov in $gene\n";
-		my@NMs =  @{ ${$geneNM_r}{$gene} };
-		my$chr = ${$NMchr_r}{$NMs[0]};
-		my$sens = ${$NMsens_r}{$NMs[0]};
+		my @NMs =  @{ ${$geneNM_r}{$gene} };
+		my $chr = ${$NMchr_r}{$NMs[0]};
+		my $sens = ${$NMsens_r}{$NMs[0]};
 
 		unless ($AllTranscripts) {
-			my%NMinterval;
-			foreach my$NM (@NMs) {
+			my %NMinterval;
+			foreach my $NM (@NMs) {
 				%{ $NMinterval{$chr}{$NM} } = %{ $Regions{"raw"}->{$chr}{$NM} };
 				}
-			my$tmpRef = mergeRegions(\%NMinterval);
+			my $tmpRef = mergeRegions(\%NMinterval);
 			%{ $Regions{"raw"}->{$chr}{$gene} } = %{ ${$tmpRef}{$chr} };
 			}
 
 		##initialyzes %NMCov: @{ $NMCov{$threshold}{$NM}{$nReg} } = [0 foreach pos of Regions{$NM}{$startReg}]
-		my%NMCov;
+		my %NMCov;
 		if ($jobs{"graphSum"}) {
-			foreach my$threshold (@Thresholds) {
+			foreach my $threshold (@Thresholds) {
 				if ($AllTranscripts) {
-					my$r=0; ##idx of reg of $NM
-					foreach my$startReg (sort{$a<=>$b}keys%{ $Regions{"raw"}->{$chr}{$gene} }) {
-						my$pos=$startReg;
+					my $r=0; ##idx of reg of $NM
+					foreach my $startReg (sort{$a<=>$b}keys%{ $Regions{"raw"}->{$chr}{$gene} }) {
+						my $pos=$startReg;
 						while ($pos <= $Regions{"raw"}->{$chr}{$gene}{$startReg} ) { 
 							push (@{ $NMCov{$gene}{$threshold}{$r} }, 0);
 							$pos++;
@@ -1923,10 +1930,10 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 						}
 					}
 				else {
-					foreach my$NM (@NMs) {
-						my$r=0; ##idx of reg of $NM
-						foreach my$startReg (sort{$a<=>$b}keys%{ $Regions{"raw"}->{$chr}{$NM} }) {
-							my$pos=$startReg;
+					foreach my $NM (@NMs) {
+						my $r=0; ##idx of reg of $NM
+						foreach my $startReg (sort{$a<=>$b}keys%{ $Regions{"raw"}->{$chr}{$NM} }) {
+							my $pos=$startReg;
 							while ($pos <= $Regions{"raw"}->{$chr}{$NM}{$startReg} ) { 
 								push (@{ $NMCov{$NM}{$threshold}{$r} }, 0);
 								$pos++;
@@ -1941,15 +1948,15 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 		##intersection hash-intervals and gene-coordinates
 		##scan bedtools files : create a hash : cov foreach position in intervals from %allInterval: #$allCov{$chr}{$loc} = $cov
 		##create a hash : foreach NM, foreach file, foreach exon, array of values for ordered positions
-		my%NMdepth;
-		my%covStart01;
-		my%covEnd01;
+		my %NMdepth;
+		my %covStart01;
+		my %covEnd01;
 		@hashSub = DeCovA::covByRegion::intersectCovFile(\@Files,$smplIdx,${$depthFilePerChr}{"raw"}{$chr},$maxGr,\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$gene} },1);
-		my$allDepth_r = $hashSub[0];
-		my$notCov_r = $hashSub[1];
-		my$notCovStarts_r = $hashSub[2];
+		my $allDepth_r = $hashSub[0];
+		my $notCov_r = $hashSub[1];
+		my $notCovStarts_r = $hashSub[2];
 
-		foreach my$file (@Files) {
+		foreach my $file (@Files) {
 #			print "\tfor bam $fName{$file}\n";
 
 			if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"}) {
@@ -1960,7 +1967,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 					$NMdepth{$gene}->{$file} = DeCovA::covByRegion::depthLine(\%{ $Regions{"raw"}->{$chr}{$gene} }, \%{ $allDepth_r->{$file} });
 					}
 				else {
-					foreach my$NM (@NMs) {
+					foreach my $NM (@NMs) {
 						$NMdepth{$NM}->{$file} = DeCovA::covByRegion::depthLine(\%{ $Regions{"raw"}->{$chr}{$NM} }, \%{ $allDepth_r->{$file} });
 						}
 					}
@@ -1972,19 +1979,19 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 				## $NMcovEnd{$NM}{$threshold}{$ex}{$notCovStart} = $notCovEnd;
 				## @{ $NMcovStart{$NM}{$threshold}{$ex} } = [ordered $notCovStarts]
 				my(%NMcovStart,%NMcovEnd);
-				my$printR = "";
+				my $printR = "";
 				if ( ($UTRinTxt == $wUTR) && ($lenTxt5 == $len5) && ($lenTxt3 == $len3) && ($UpInTxt == $upstream) && ($DownInTxt == $downstream) ) { $printR = $jobs{"geneReport"}; }
 				if ($AllTranscripts) {
 					@hashSub = DeCovA::covByRegion::notCovDomains2(\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$gene} },\%{ $notCov_r->{$file} },\%{ $notCovStarts_r->{$file} });
 					$NMcovStart{$gene} = $hashSub[0];
 					$NMcovEnd{$gene} = $hashSub[1];
-					foreach my$NM (@NMs) {
+					foreach my $NM (@NMs) {
 						@hashSub = DeCovA::covByRegion::notCovDomains1($AllTranscripts,$fName{$file},$sName2{$file},$outdir,$outfile,$gene,$chr,$NM,${$NMsens_r}{$NM},\@Thresholds,$pThreshold,\%{ $Regions{"raw"}->{$chr}{$gene} },\%{ $NM_Ex{"raw"}->{$NM} },$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $notCov_r->{$file} },\%{ $notCovStarts_r->{$file} },\%NMnotCov,$printR);
 						$NM_UC{$NM}{$fName{$file}} = $hashSub[2];
 						}
 					}
 				else {
-					foreach my$NM (@NMs) {
+					foreach my $NM (@NMs) {
 						@hashSub = DeCovA::covByRegion::DeCovA::covByRegion::notCovDomains1($AllTranscripts,$fName{$file},$sName2{$file},$outdir,$outfile,$gene,$chr,$NM,${$NMsens_r}{$NM},\@Thresholds,$pThreshold,\%{ $Regions{"raw"}->{$chr}{$NM} },\%{ $NM_Ex{"raw"}->{$NM} },$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $notCov_r->{$file} },\%{ $notCovStarts_r->{$file} },\%NMnotCov,$printR);
 						$NMcovStart{$NM} = $hashSub[0];
 						$NMcovEnd{$NM} = $hashSub[1];
@@ -2003,7 +2010,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 						$covEnd01{$gene}->{$file} = $hashSub[1];
 						}
 					else {
-						foreach my$NM (@NMs) {
+						foreach my $NM (@NMs) {
 							@hashSub = DeCovA::covByRegion::transposeCov(\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$NM} },\%{ $Regions{"coord0"}->{$NM} },$NMcovStart{$NM},$NMcovEnd{$NM});
 							$covStart01{$NM}->{$file} = $hashSub[0];
 							$covEnd01{$NM}->{$file} = $hashSub[1];
@@ -2015,13 +2022,13 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 			## @{ $NMCov{$NM}{$threshold}{$nReg} } = [nber of covered samples foreach pos of Regions{$NM}{$startReg}]
 			if ($jobs{"graphSum"}) {
 				if ($AllTranscripts) {
-					foreach my$threshold (@Thresholds) {
+					foreach my $threshold (@Thresholds) {
 						DeCovA::covByRegion::covByThreshold($threshold,\%{ $Regions{"raw"}->{$chr}{$gene} },\%{ $allDepth_r->{$file} },\%{ $NMCov{$gene}{$threshold} });
 						}
 					}
 				else {
-					foreach my$NM (@NMs) {
-						foreach my$threshold (@Thresholds) {
+					foreach my $NM (@NMs) {
+						foreach my $threshold (@Thresholds) {
 							DeCovA::covByRegion::covByThreshold($threshold,\%{ $Regions{"raw"}->{$chr}{$NM} },\%{ $allDepth_r->{$file} },\%{ $NMCov{$NM}{$threshold} });
 							}
 						}
@@ -2038,7 +2045,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 					foreach (@Files) { $maxCovS{$gene}{$_} = $maxGr; }
 					}
 				else {
-					foreach my$NM (@NMs) {
+					foreach my $NM (@NMs) {
 						$maxCovA{$NM} = $maxGr;
 						foreach (@Files) { $maxCovS{$NM}->{$_} = $maxGr; }
 						}
@@ -2051,7 +2058,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 					$maxCovS{$gene} = $hashSub[1];
 					}
 				else {
-					foreach my$NM (@NMs) { 
+					foreach my $NM (@NMs) { 
 						@hashSub = DeCovA::covByRegion::maxCov(\@Files,$NMdepth{$NM},\%{ $Regions{"coord0"}->{$NM} });
 						$maxCovA{$NM} = $hashSub[0];
 						$maxCovS{$NM} = $hashSub[1];
@@ -2067,7 +2074,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 					DeCovA::covByRegion::ReverseCov_Gene($jobs{"graphSum"},$jobs{"graphAllSampls"},$jobs{"graphBySample"},$gene,$NMlength{$gene},\@Thresholds,$NMdepth{$gene},\%{ $covEnd01{$gene} },$covStart01{$gene},$NMCov{$gene});
 					}
 				else {
-					foreach my$NM (@NMs) {
+					foreach my $NM (@NMs) {
 						DeCovA::covByRegion::ReverseCov_NMs($jobs{"graphSum"},$jobs{"graphAllSampls"},$jobs{"graphBySample"},$NM,$NMlength{$NM},\@Thresholds,$NMdepth{$NM},\%{ $covEnd01{$NM} },$covStart01{$NM},$NMCov{$NM});
 						}
 					}
@@ -2085,7 +2092,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 				$NMCovVal{$gene} = $hashSub[1];
 				}
 			else {
-				foreach my$NM (@NMs) {
+				foreach my $NM (@NMs) {
 					@hashSub= DeCovA::covByRegion::covDomains(\@Thresholds,\%{ $Regions{"rev"}->{$NM} },\%{ $NMCov{$NM} });
 					$NMCovEnd{$NM} = $hashSub[0];		
 					$NMCovVal{$NM} = $hashSub[1];
@@ -2094,7 +2101,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 			}
 
 		##graphiques R
-		my@colors=("gold","orange","orangered","red1","magenta4");
+		my @colors=("gold","orange","orangered","red1","magenta4");
 
 		##graph covByGene
 		if ($jobs{"graphSum"}) { 
@@ -2109,10 +2116,10 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 		##graph covBySample
 		if ($jobs{"graphAllSampls"}) {
 			if ($AllTranscripts) {
-				my$ok=0;
+				my $ok=0;
 				if ($gThreshold) {
-					foreach my$NM (@NMs) {
-						foreach my$file (@Files) {
+					foreach my $NM (@NMs) {
+						foreach my $file (@Files) {
 							if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
 								{ $ok=1; last; }
 							}
@@ -2124,10 +2131,10 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 					}
 				}
 			else {
-				foreach my$NM (@NMs) {
-					my$ok=0;
+				foreach my $NM (@NMs) {
+					my $ok=0;
 					if ($gThreshold) {
-						foreach my$file (@Files) {
+						foreach my $file (@Files) {
 							if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
 								{ $ok=1; last; }
 							}
@@ -2141,10 +2148,10 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 
 		if ($jobs{"graphBySample"}) {
 			if ($AllTranscripts) { 
-				my$ok=0;
+				my $ok=0;
 				if ($gThreshold) {
-					foreach my$NM (@NMs) {
-						foreach my$file (@Files) {
+					foreach my $NM (@NMs) {
+						foreach my $file (@Files) {
 							if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
 								{ $ok=1; last; }
 							}
@@ -2156,10 +2163,10 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 					}
 				}
 			else {
-				foreach my$NM (@NMs) {
-					my$ok=0;
+				foreach my $NM (@NMs) {
+					my $ok=0;
 					if ($gThreshold) {
-						foreach my$file (@Files) {
+						foreach my $file (@Files) {
 							if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
 								{ $ok=1; last; }
 							}
@@ -2183,11 +2190,11 @@ target regions: exons\n";
 		if ($UTRinTxt) { print OUT "\twith UTR\n"; }
 		else { print OUT "\twithout UTR\n"; }
 		if ($lenTxt5 && $lenTxt3) { print OUT "\tpadding out of exons ends: 5': $lenTxt5 bp ; 3':$lenTxt3 bp\n"; }
-		foreach my$gene (sort(keys%{$Genes_r})) {
+		foreach my $gene (sort(keys%{$Genes_r})) {
 			print OUT "\n$gene\n"; 
-			foreach my$NM (@{ ${$geneNM_r}{$gene} }) {
-				my$txt="";
-				foreach my$file (@Files) { 
+			foreach my $NM (@{ ${$geneNM_r}{$gene} }) {
+				my $txt="";
+				foreach my $file (@Files) { 
 					if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
 						{ $txt .= "\t$fName{$file} (".sprintf("%.1f",(100-$NM_UC{$NM}{$fName{$file}}->{$pThreshold}))."\%)"; }
 					}
@@ -2206,37 +2213,37 @@ if ( ($jobs{"geneReport"} || $jobs{"geneSummary"}) && (($UTRinTxt != $wUTR) || (
 
 	use DeCovA::covByRegion;
 
-	my%NMnotCov;	## $NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
-	my%NM_UC;	## NM_UC{$NM}{$threshold} = 1 if 1 region not cov
+	my %NMnotCov;	## $NMnotCov{$NM}{$file}{$threshold} = 1 if 1 region not cov
+	my %NM_UC;	## NM_UC{$NM}{$threshold} = 1 if 1 region not cov
 
-	foreach my$gene (sort(keys%{$Genes_r})) {
+	foreach my $gene (sort(keys%{$Genes_r})) {
 #		print "analysing cov in $gene\n";
-		my@NMs =  @{ ${$geneNM_r}{$gene} };
-		my$chr = ${$NMchr_r}{$NMs[0]};
-		my$sens = ${$NMsens_r}{$NMs[0]};
+		my @NMs =  @{ ${$geneNM_r}{$gene} };
+		my $chr = ${$NMchr_r}{$NMs[0]};
+		my $sens = ${$NMsens_r}{$NMs[0]};
 		unless ($AllTranscripts) {
-			my%NMinterval;
-			foreach my$NM (@NMs)
+			my %NMinterval;
+			foreach my $NM (@NMs)
 				{ %{ $NMinterval{$chr}{$NM} } = %{ ${$txtRegions_r}{$chr}{$NM} }; }
-			my$tmpRef = mergeRegions(\%NMinterval);
+			my $tmpRef = mergeRegions(\%NMinterval);
 			%{ ${$txtRegions_r}{$chr}{$gene} } = %{ ${$tmpRef}{$chr} };
 			}
 		## %notCov: start and end of each not covered domain within %allInterval : $notCov{$start} = $end
 		@hashSub = DeCovA::covByRegion::intersectCovFile(\@Files,$smplIdx,${$depthFilePerChr}{"raw"}{$chr},$maxGr,\@Thresholds,\%{ ${$txtRegions_r}{$chr}{$gene} },1);
-		my$notCov_r = $hashSub[1];
-		my$notCovStarts_r = $hashSub[2];
+		my $notCov_r = $hashSub[1];
+		my $notCovStarts_r = $hashSub[2];
 
-		foreach my$file (@Files) {
+		foreach my $file (@Files) {
 #			print "\tfor bam $fName{$file}\n";
 			if ($jobs{"geneSummary"} || $jobs{"geneReport"}) {
 				if ($AllTranscripts) {
-					foreach my$NM (@NMs) {
+					foreach my $NM (@NMs) {
 						@hashSub = DeCovA::covByRegion::notCovDomains1($AllTranscripts,$fName{$file},$sName2{$file},$outdir,$outfile,$gene,$chr,$NM,${$NMsens_r}{$NM},\@Thresholds,$pThreshold,\%{ ${$txtRegions_r}{$chr}{$gene} },\%{ ${$txt_NM_Ex_r}{$NM} },$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $notCov_r->{$file} },\%{ $notCovStarts_r->{$file} },\%NMnotCov,$jobs{"geneReport"});
 						$NM_UC{$NM}{$fName{$file}} = $hashSub[2];
 						}
 					}
 				else {
-					foreach my$NM (@NMs) {
+					foreach my $NM (@NMs) {
 						@hashSub = DeCovA::covByRegion::notCovDomains1($AllTranscripts,$fName{$file},$sName2{$file},$outdir,$outfile,$gene,$chr,$NM,${$NMsens_r}{$NM},\@Thresholds,$pThreshold,\%{ ${$txtRegions_r}{$chr}{$NM} },\%{ ${$txt_NM_Ex_r}{$NM} },$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $notCov_r->{$file} },\%{ $notCovStarts_r->{$file} },\%NMnotCov,$jobs{"geneReport"});
 						$NM_UC{$NM}{$fName{$file}} = $hashSub[2];
 						}
@@ -2254,11 +2261,11 @@ target regions: exons\n";
 		if ($UTRinTxt) { print OUT "\twith UTR\n"; }
 		else { print OUT "\twithout UTR\n"; }
 		if ($lenTxt5 && $lenTxt3) { print OUT "\tpadding out of exons ends: 5': $lenTxt5 bp ; 3':$lenTxt3 bp\n"; }
-		foreach my$gene (sort(keys%{$Genes_r})) {
+		foreach my $gene (sort(keys%{$Genes_r})) {
 			print OUT "\n$gene\n"; 
-			foreach my$NM (@{ ${$geneNM_r}{$gene} }) {
-				my$txt="";
-				foreach my$file (@Files) { 
+			foreach my $NM (@{ ${$geneNM_r}{$gene} }) {
+				my $txt="";
+				foreach my $file (@Files) { 
 					if (exists $NMnotCov{$NM}{$fName{$file}}{$pThreshold}) 
 						{ $txt .= "\t$fName{$file} (".sprintf("%.1f",(100-$NM_UC{$NM}{$fName{$file}}->{$pThreshold}))."\%)"; }
 					}
@@ -2299,7 +2306,7 @@ if ($jobs{"covPlot"} || $jobs{"interSplot"}) {
 
 	use  DeCovA::histCov;
 
-	my$outPlotDir = "$outdir/covPlot";
+	my $outPlotDir = "$outdir/covPlot";
 	mkdir $outPlotDir;
 
 	#classiq
@@ -2360,13 +2367,13 @@ if ($jobs{"CNV"}) {
 				$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
 				}
 			my(%CNV_IDs,%CNV_bed,%CNV_Genes);
-			open (my$fh, ">", "$outdir/allCNVs.bed") || die "can't create file $outdir/allCNVs.bed ($!)\n";
+			open (my $fh, ">", "$outdir/allCNVs.bed") || die "can't create file $outdir/allCNVs.bed ($!)\n";
 			##cnv_Results{$Chrom}{Start}{End} = "DEL/DUP	foldRatio"
-			foreach my$file (keys%{$cnv_Results_r}) {
-				foreach my$chrom (keys%{ ${$cnv_Results_r}{$file} }) {
-					foreach my$start (keys%{ ${$cnv_Results_r}{$file}{$chrom} }) {
-						foreach my$end (keys%{ ${$cnv_Results_r}{$file}{$chrom}{$start} }) {
-							my$chr = $chrom; $chr =~ s/^chr//i;
+			foreach my $file (keys%{$cnv_Results_r}) {
+				foreach my $chrom (keys%{ ${$cnv_Results_r}{$file} }) {
+					foreach my $start (keys%{ ${$cnv_Results_r}{$file}{$chrom} }) {
+						foreach my $end (keys%{ ${$cnv_Results_r}{$file}{$chrom}{$start} }) {
+							my $chr = $chrom; $chr =~ s/^chr//i;
 							print $fh "$chr\t$start\t$end\n";
 							if (exists $CNV_bed{$file}{$chr}{($start+1)}) {
 								if ($end > $CNV_bed{$file}{$chr}{($start+1)}) {
@@ -2379,13 +2386,13 @@ if ($jobs{"CNV"}) {
 							}
 						}
 					}
-				foreach my$chr (keys%{ $CNV_bed{$file} }) {
+				foreach my $chr (keys%{ $CNV_bed{$file} }) {
 					%{ $CNV_bed{$file}{$chr} } = mergeIntervals(\%{ $CNV_bed{$file}{$chr} });
 					}
 				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$wNonCod);
 				foreach (keys%{ ${CNV_IDs}{$file} }) {
-					my$gene = ${CNV_IDs}{$file}{$_}{"gene"};
-					my$chr = ${CNV_IDs}{$file}{$_}{"chr"};
+					my $gene = ${CNV_IDs}{$file}{$_}{"gene"};
+					my $chr = ${CNV_IDs}{$file}{$_}{"chr"};
 					if (exists $Regions{"raw"}->{$chr}{$gene}) {
 						$CNV_Genes{$file}{$gene} = 1;
 						}
@@ -2394,32 +2401,32 @@ if ($jobs{"CNV"}) {
 			close $fh;
 			$CNV_bed{"allFiles"} = DeCovA::bedProcessing::readBed("$outdir/allCNVs.bed");
 			unlink "$outdir/allCNVs.bed";
-			foreach my$chr (keys%{ $CNV_bed{"allFiles"} }) {
+			foreach my $chr (keys%{ $CNV_bed{"allFiles"} }) {
 				%{ $CNV_bed{"allFiles"}->{$chr} } = mergeIntervals(\%{ $CNV_bed{"allFiles"}->{$chr} }); 
 				}
 			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName,$wNonCod);
 			foreach (keys%{ ${CNV_IDs}{"allFiles"} }) {
-				my$gene = ${CNV_IDs}{"allFiles"}{$_}{"gene"};
-				my$chr = ${CNV_IDs}{"allFiles"}{$_}{"chr"};
+				my $gene = ${CNV_IDs}{"allFiles"}{$_}{"gene"};
+				my $chr = ${CNV_IDs}{"allFiles"}{$_}{"chr"};
 				if (exists $Regions{"raw"}->{$chr}{$gene}) {
 					$CNV_Genes{"allFiles"}{$gene} = 1;
 					}
 				}
 
 			## change cov file with $Patients{$file}{"Ref_Profondeur_Patient"}
-			my%covIdx2File;	#$covIdx{$file} = $i;
+			my %covIdx2File;	#$covIdx{$file} = $i;
 			foreach (keys%{$smplIdx}) { $covIdx2File{${$smplIdx}{$_}} = $_; }	#$covIdx2File{$i} = $file;
-			foreach my$chr (@chromOrder) {
+			foreach my $chr (@chromOrder) {
 				${$depthFilePerChr}{"norm"}{$chr} = "$tmpDir/$chr"."_cov_norm.txt";
-				open(my$fhIn, "<", ${$depthFilePerChr}{"raw"}{$chr}) || die "can't read file ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
-				open(my$fhOut, ">", ${$depthFilePerChr}{"norm"}{$chr}) || die "can't create file ".${$depthFilePerChr}{"norm"}{$chr}." ($!)\n";
-				my$l=0; #line iteration
-				while (my$line = <$fhIn>) {
+				open(my $fhIn, "<", ${$depthFilePerChr}{"raw"}{$chr}) || die "can't read file ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
+				open(my $fhOut, ">", ${$depthFilePerChr}{"norm"}{$chr}) || die "can't create file ".${$depthFilePerChr}{"norm"}{$chr}." ($!)\n";
+				my $l=0; #line iteration
+				while (my $line = <$fhIn>) {
 					chomp $line;
-					my@tab = split(/\t/,$line);
-					my$line2="";
-					for my$i (0..2) { $line2 .= $tab[$i]."\t"; }
-					for my$i (3..$#tab) { $line2 .= ($tab[$i] / ${$cnv_Patients_r}{$covIdx2File{$i}}{"Ref_depth"})."\t"; }
+					my @tab = split(/\t/,$line);
+					my $line2="";
+					for my $i (0..2) { $line2 .= $tab[$i]."\t"; }
+					for my $i (3..$#tab) { $line2 .= ($tab[$i] / ${$cnv_Patients_r}{$covIdx2File{$i}}{"Ref_depth"})."\t"; }
 					chop $line2;
 					print $fhOut $line2."\n";
 					$l++;
@@ -2429,17 +2436,17 @@ if ($jobs{"CNV"}) {
 
 			## compute as in graphs by genes
 			my(%CNV_NMdepth,%CNV_maxCov);
-			foreach my$gene (keys%{ $CNV_Genes{"allFiles"} }) {
+			foreach my $gene (keys%{ $CNV_Genes{"allFiles"} }) {
 
 				print "\tanalysing cov in $gene\n";
-				my@NMs =  @{ ${$geneNM_r}{$gene} };
-				my$chr = ${$NMchr_r}{$NMs[0]};
-				my$sens = ${$NMsens_r}{$NMs[0]};
+				my @NMs =  @{ ${$geneNM_r}{$gene} };
+				my $chr = ${$NMchr_r}{$NMs[0]};
+				my $sens = ${$NMsens_r}{$NMs[0]};
 
 				## %allDepth: depth foreach position in intervals from %allInterval : ${$allDepth}{$file}{$loc} = depth
-				my$allDepth_r = DeCovA::covByRegion::intersectCovFile(\@Files,$smplIdx,${$depthFilePerChr}{"norm"}{$chr},$maxGr,\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$gene} },"");
+				my $allDepth_r = DeCovA::covByRegion::intersectCovFile(\@Files,$smplIdx,${$depthFilePerChr}{"norm"}{$chr},$maxGr,\@Thresholds,\%{ $Regions{"raw"}->{$chr}{$gene} },"");
 
-				foreach my$file (@Files) {
+				foreach my $file (@Files) {
 					print "\t\tfor $file\n";
 					## %NMdepth: key = $file, value = %(key = $NM, value = %( key = $ex, value = @(cov foreach ordered bp of exon) ) )
 					## @{ $CNV_NMdepth{$gene}->{$file}{$eachReg} } = [ depth foreach ordered bp of Reg ]
@@ -2454,11 +2461,11 @@ if ($jobs{"CNV"}) {
 
 				##reverse depth coord if sens "-"
 				if ($Rev && ($sens eq "-")) {
-					my$nEx = scalar(keys%{ $CNV_NMdepth{$gene}->{$Files[0]} }) -1;
-					foreach my$file (@Files) {
+					my $nEx = scalar(keys%{ $CNV_NMdepth{$gene}->{$Files[0]} }) -1;
+					foreach my $file (@Files) {
 						#$nEx = scalar(keys%{ $CNV_NMdepth{$gene}->{$file} }) -1;
-						my%tmp;
-						foreach my$ex (sort{$a<=>$b}(keys%{ $CNV_NMdepth{$gene}->{$file} })) {
+						my %tmp;
+						foreach my $ex (sort{$a<=>$b}(keys%{ $CNV_NMdepth{$gene}->{$file} })) {
 							@{ $tmp{($nEx-$ex)} } = reverse@{ $CNV_NMdepth{$gene}->{$file}{$ex} };
 							}
 						%{ $CNV_NMdepth{$gene}->{$file} } = %tmp;
@@ -2467,12 +2474,12 @@ if ($jobs{"CNV"}) {
 				}
 
 			## print graphs
-			foreach my$file (@Files) {
-				foreach my$gene (sort(keys%{ $CNV_Genes{$file} })) {
+			foreach my $file (@Files) {
+				foreach my $gene (sort(keys%{ $CNV_Genes{$file} })) {
 					#print "printing CNV graph for $sName2{$file}, in $gene\n";
-					my@NMs =  @{ ${$geneNM_r}{$gene} };
-					my$chr = ${$NMchr_r}{$NMs[0]};
-					my$sens = ${$NMsens_r}{$NMs[0]};
+					my @NMs =  @{ ${$geneNM_r}{$gene} };
+					my $chr = ${$NMchr_r}{$NMs[0]};
+					my $sens = ${$NMsens_r}{$NMs[0]};
 					DeCovA::geneGraph::CNVgraphByGene($file,$suff,"$outdir/CNV_analysis/$sName2{$file}",$gene,$sens,$maxGr,$Rev,$chr,$CNV_maxCov{$gene},$pThreshold,$NMlength{$gene},\@Files,\%sName2,$Regions{"raw"},$Regions{"rev"},\@NMs,$NM_Ex{"rev"},$RegBed{"rev"},$intron{"rev"},$UTR{"rev"},$Cod{"rev"},$CNV_NMdepth{$gene});
 					}
 				}
@@ -2508,7 +2515,7 @@ if (!$jobs{"keepBed"}) {
 
 
 
-my$datestring = localtime(); 
+my $datestring = localtime(); 
 print "\n\n####\n\nend: $datestring\n\n";
 
 exit;
@@ -2529,11 +2536,11 @@ exit;
 #%interval2 = mergeIntervals(\%interval);
 sub mergeIntervals {
 my($interval_r) = @_;
-my@Starts = sort{$a<=>$b}(keys%{$interval_r});
-my$start = $Starts[0];
-my$end = ${$interval_r}{$start};
-my%interval2;
-for (my$i=1;$i<scalar(@Starts);$i++) {
+my @Starts = sort{$a<=>$b}(keys%{$interval_r});
+my $start = $Starts[0];
+my $end = ${$interval_r}{$start};
+my %interval2;
+for (my $i=1;$i<scalar(@Starts);$i++) {
 	if ($Starts[$i] <= $end) {
 		if (${$interval_r}{$Starts[$i]} > $end)
 			{ $end = ${$interval_r}{$Starts[$i]}; }
@@ -2567,10 +2574,10 @@ print "\t\tmerge overlapping intervals from RefSeq selected transcripts\n";
 
 #for each same starts, keep longer intervals
 my(%interval2,%chrom);
-foreach my$chr (keys%{$interval1}) {
-	foreach my$NM (keys%{ ${$interval1}{$chr} }) {
+foreach my $chr (keys%{$interval1}) {
+	foreach my $NM (keys%{ ${$interval1}{$chr} }) {
 		$chrom{$chr} = 1;
-		foreach my$start ( sort{$a<=>$b}(keys%{ ${$interval1}{$chr}{$NM} }) ) {
+		foreach my $start ( sort{$a<=>$b}(keys%{ ${$interval1}{$chr}{$NM} }) ) {
 			if ( exists $interval2{$chr}{$start} ) {
 				if ( ${$interval1}{$chr}{$NM}{$start} > $interval2{$chr}{$start} )
 					{  $interval2{$chr}{$start} = ${$interval1}{$chr}{$NM}{$start}; }	
@@ -2581,16 +2588,16 @@ foreach my$chr (keys%{$interval1}) {
 			}
 		}
 	}
-my@chrom = sort(keys%chrom);
+my @chrom = sort(keys%chrom);
 
 #merge overlapping intervals
 my(%interval3);
-foreach my$chr (@chrom) { 
-	my@Starts = sort{$a<=>$b}(keys%{ $interval2{$chr} }); 	#hash{chr}=@sortedStart
-	my$start = $Starts[0];
-	my$end = $interval2{$chr}{$start};
+foreach my $chr (@chrom) { 
+	my @Starts = sort{$a<=>$b}(keys%{ $interval2{$chr} }); 	#hash{chr}=@sortedStart
+	my $start = $Starts[0];
+	my $end = $interval2{$chr}{$start};
 	$interval3{$chr}{$start} = $end;
-	for (my$i=1;$i<scalar(@Starts);$i++) {
+	for (my $i=1;$i<scalar(@Starts);$i++) {
 		if ($Starts[$i] <= $end) {
 			if ($interval2{$chr}{$Starts[$i]} > $end)
 				{ $end = $interval2{$chr}{$Starts[$i]}; }
@@ -2615,34 +2622,34 @@ return (\%interval3)	#$interval3{$chr}{$start} = $end;
 #print tests:
 
 #	print "Regions:\n";	# $Regions{chr}{NM}{start of region} = end of region
-#	foreach my$chr(sort(keys%Regions)) {
-#		foreach my$NM (sort(keys%{ $Regions{$chr} })) {
-#			foreach my$startR (sort{$a<=>$b}keys%{ $Regions{$chr}{$NM} })
+#	foreach my $chr(sort(keys%Regions)) {
+#		foreach my $NM (sort(keys%{ $Regions{$chr} })) {
+#			foreach my $startR (sort{$a<=>$b}keys%{ $Regions{$chr}{$NM} })
 #				{ print $chr."\t".$NM."\t".$startR."\t".$Regions{$chr}{$NM}{$startR}."\n"; }
 #			}
 #		}
 
 #	print "NM_Ex:\n";	# %NM_Ex{NM}{start of region}{start of exon} = end of exon
 #	foreach (sort(keys%NM_Ex)) {
-#		foreach my$startR (sort{$a<=>$b}keys%{ $NM_Ex{$_} }) {
-#			foreach my$startN (sort{$a<=>$b}keys%{ $NM_Ex{$_}{$startR} })
+#		foreach my $startR (sort{$a<=>$b}keys%{ $NM_Ex{$_} }) {
+#			foreach my $startN (sort{$a<=>$b}keys%{ $NM_Ex{$_}{$startR} })
 #				{ print $_."\t".$startR."\t".$Regions{$NMchr{$_}}{$NMgene{$_}}{$startR}."\n\t\t".$startN."\t".$NM_Ex{$_}{$startR}{$startN}."\n"; }
 #			}
 #		}
 
 #	print "introns:\n";	# $intron{$NM}{$startIntron} = $endIntron
-#	foreach my$NM (sort(keys%intron)) {
-#		foreach my$start (sort{$a<=>$b}(keys%{ $intron{$NM} }))
+#	foreach my $NM (sort(keys%intron)) {
+#		foreach my $start (sort{$a<=>$b}(keys%{ $intron{$NM} }))
 #			{ print $NM."\t".$start."\t".$intron{$NM}{$start}."\n"; }
 #		}
 #	print "UTRs:\n";	# $UTR{$NM}{$startUTR} = $endUTR
-#	foreach my$NM (sort(keys%UTR)) {
-#		foreach my$start (sort{$a<=>$b}(keys%{ $UTR{$NM} }))
+#	foreach my $NM (sort(keys%UTR)) {
+#		foreach my $start (sort{$a<=>$b}(keys%{ $UTR{$NM} }))
 #			{ print $NM."\t".$start."\t".$UTR{$NM}{$start}."\n"; }
 #		}
 #	print "Cods:\n";	# $Cod{$NM}{$startCod} = $endCod
-#	foreach my$NM (sort(keys%Cod)) {
-#		foreach my$start (sort{$a<=>$b}(keys%{ $Cod{$NM} }))
+#	foreach my $NM (sort(keys%Cod)) {
+#		foreach my $start (sort{$a<=>$b}(keys%{ $Cod{$NM} }))
 #			{ print $NM."\t".$start."\t".$Cod{$NM}{$start}."\n"; }
 #		}
 
