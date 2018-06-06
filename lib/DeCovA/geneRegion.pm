@@ -18,22 +18,21 @@ sub NM2GeneRegion {
 my($Genes,$geneNM,$NMchr,$RegionR,$NM_ExR) = @_;
 my%RegionG;
 foreach my$gene (keys%{$Genes}) {
-	my@NMs =  @{ ${$geneNM}{$gene} };
+	my@NMs = @{ ${$geneNM}{$gene} };
 	my$chr = ${$NMchr}{$NMs[0]};
-#	print "change intervals for ".$gene." according to:\n\t".$NMs[0];
 	%{ $RegionG{$chr}{$gene} } = %{ ${$RegionR}{$chr}{$NMs[0]} };
 	my%geneNM_Ex;
 	%{ $geneNM_Ex{$NMs[0]} } = %{ ${$NM_ExR}{$NMs[0]} };
 	for(my$i=1;$i<scalar@NMs;$i++) {
-#		print "\t".$NMs[$i];
 		changeRegion1($NMs[$i],\%{ $RegionG{$chr}{$gene} },\%geneNM_Ex,\%{ ${$RegionR}{$chr}{$NMs[$i]} },\%{ ${$NM_ExR}{$NMs[$i]} });
 		}
-#	print "\n";
 	foreach (@NMs) {
 		%{ ${$NM_ExR}{$_} } = %{ $geneNM_Ex{$_} };
 		}
 	}
+
 %{$RegionR} = %RegionG;
+
 }
 
 
@@ -61,7 +60,7 @@ my$endN = ${$RegionN}{$StartN[0]};
 #	$endN = ${$RegionN}{$StartN[$i]};
 #	}
 while ( $i < scalar@StartN ) {
-	$endN = ${$RegionN}{$StartN[$i]};				
+	$endN = ${$RegionN}{$StartN[$i]};
 	if ( $endN < $StartG[$c] ) {
 		$RegionG2{$StartN[$i]} = $endN;
 		foreach my$startEx (keys%{ ${$NM_Ex_r}{$StartN[$i]} })

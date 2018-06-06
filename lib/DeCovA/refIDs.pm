@@ -31,16 +31,16 @@ close($fhIn);
 my %targets;
 foreach my $id (@{$IDs}) {
 	$id = uc($id);
-	if (exists ${$allRefs}{"transcript"}{$id}) { %{ $targets{$id} } = %{ ${$allRefs}{"transcript"}{$id} }; }
-	elsif (exists ${$allRefs}{"gene"}{$id}) {
-		foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id} }) {
+	if ($id =~ /^N[MR]_/) { $id =~ s/\.(\d+)$//; }		##no transcript version in refgene
+	if (exists ${$allRefs}{"syn"}{$id}) {
+		foreach my $nm (keys%{ ${$allRefs}{"syn"}{$id} }) {
 			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 				}
 			}
 		}
-	elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
-		foreach my $nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
+	elsif (exists ${$allRefs}{"gene"}{$id}) {
+		foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id}{"transcript"} }) {
 			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 				}
@@ -73,17 +73,19 @@ while (my $line = <$fhIn>) {
 	unless($line =~ /^#/) {
 		chomp $line;
 		my @tab = split(/\t/,$line);
-		my $transcript_id = uc($tab[$idx{"ID"}]);
+		my $transcript_name = uc($tab[$idx{"ID"}]);
+		my $transcript_id = $transcript_name;
 		my $gene_name = uc($tab[$idx{"gene"}]);
-		my $Id_noExt = $transcript_id;
-		$Id_noExt =~ s/\.(\d+)$//;
 		my $chr = $tab[$idx{"chr"}];
 		$chr =~ s/^chr//i;
-		## for synonyms: 
-		if (exists $allRefs{"transcript"}{$transcript_id}) {
-			$allRefs{"transcript"}{$transcript_id}{"nbr"}++;
-			$transcript_id = $transcript_id."-".$allRefs{"transcript"}{$transcript_id}{"nbr"};
+
+		## for transcript synonyms:
+		if (exists $allRefs{"transcript"}{$transcript_name}) {
+			$allRefs{"transcript"}{$transcript_name}{"nbr"}++;
+			$transcript_id = $transcript_name."-".$allRefs{"transcript"}{$transcript_name}{"nbr"};
 			}
+		$allRefs{"syn"}{$transcript_name}{$transcript_id} = 1;
+
 		${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
 		$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
 		$allRefs{"transcript"}{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
@@ -94,14 +96,19 @@ while (my $line = <$fhIn>) {
 		my @starts = split(/,/, $tab[$idx{"exStart"}]);
 		for my $i (0..$#starts) { $allRefs{"transcript"}{$transcript_id}{"ex_starts"}[$i] = $starts[$i] + 1; }		# -> 1-based
 		@{ $allRefs{"transcript"}{$transcript_id}{"ex_ends"} } = split(/,/, $tab[$idx{"exEnd"}]);
+
+		## for gene synonyms:
+		if ( (exists $allRefs{"gene"}{$gene_name}) && ($chr ne $allRefs{"gene"}{$gene_name}{"chr"}) ) { $gene_name .= "-$chr"; }
+		$allRefs{"gene"}{$gene_name}{"chr"} = $chr;
 		$allRefs{"transcript"}{$transcript_id}{"gene"} = $gene_name;
+		$allRefs{"gene"}{$gene_name}{"transcript"}{$transcript_id} = 1;
+
 		}
 	}
 
 return(\%allRefs);
 
 }
-
 
 ##############################
 
@@ -666,7 +673,7 @@ foreach my $chr (sort(keys%{$interval_r})) {
 			}
 		if (${$interval_r}{$chr}{$bedstart} >= $refStarts[$c2]) {
 			foreach my $end (@RefEnds) {
-				if ($bedstart <= $end) { 
+				if ($bedstart <= $end) {
 					foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end} }) {
 						%{ $targets{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
 						}
@@ -822,8 +829,6 @@ sub Id2Coord {
 
 my($IDinRef,$len5,$len3,$upstream,$downstream,$noOverlap,$mergeBedFromId,$wUTR,$id2Bed,$chromOrder_r,$chromName_r) = @_;
 
-print "\n\tgetting positions from gene IDs\n";
-
 my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%hashBed,%printBed);
 
 foreach my $NM (keys%{$IDinRef}) {
@@ -831,7 +836,7 @@ foreach my $NM (keys%{$IDinRef}) {
 	my $gene = ${$IDinRef}{$NM}{"gene"};
 
 	## if same gene name on different chr? add -chr. at the end of this gene
-#	if ( (exists $geneNM{$gene}) && ($chr ne $NMchr{$geneNM{$gene}[0]}) ) { $tab[$geneIdx] .= "-$chr"; }
+#	if ( (exists $geneNM{$gene}) && ($chr ne $NMchr{$geneNM{$gene}[0]}) ) { $gene .= "-$chr"; }
 	##if same transcript on different chr ? skip this one
 #	if (exists $NMchr{$NM}) {
 #		if ($chr =~ /^$NMchr{$NM}.+/) { $ok = 0; }

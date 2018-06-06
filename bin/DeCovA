@@ -121,7 +121,7 @@ GetOptions (\%opt,
 	"compress|z",
 	"nGraph:i",
 	"version|v",
-	"help|h") or die "Invalid parameters: $! \n";
+	"help|h") or die "!!!\n\tInvalid parameters: $! \n";
 
 unless(%opt) { usage(); }
 
@@ -271,7 +271,7 @@ my @dir = ();
 if (exists $opt{dir}) {
 	@dir = split(/,/, join(',',@{$opt{dir}}));
 	foreach (@dir) {
-		unless(-d $_) { die "$_ directory not found\n"; }
+		unless(-d $_) { die "!!!\n\t$_ directory not found\n"; }
 		unless ($_ =~ /\/$/) { $_ .= "/"; } 
 		}
 	}
@@ -287,7 +287,7 @@ if (exists $opt{file}) {
 	}
 if (exists $opt{fList}) {
 	if (-f $opt{fList}) {
-		open(my $fh, "<", $opt{fList}) || die "can't open file $opt{fList} ($!)\n";
+		open(my $fh, "<", $opt{fList}) || die "!!!\n\tcan't open file $opt{fList} ($!)\n";
 		while (my $line=<$fh>) {
 			unless ($line =~ /^\s*$/) {
 				$line =~ s/\s*$//; $line =~ s/^\s*//;
@@ -314,7 +314,7 @@ else {
 my(%fName,%path);	#fName: name of file, without path and extension
 my $extenS = "$suff.bam";
 if (@Files) {
-	print "\nbam file(s) to analysed:\n";
+	print "\n\tbam file(s) to analysed:\n";
 	##uniquify
 	my %Files = ();
 	foreach (@Files) { $Files{$_} = 1; }
@@ -323,11 +323,11 @@ if (@Files) {
 	foreach (@Files) {
 		($fName{$_},$path{$_}) = fileparse($_,$extenS);
 		if (exists $opt{dir} && exists $opt{file}) {
-			if (scalar@dir>1) { die "not possible to affect path to files if several paths specified\n"; }
+			if (scalar@dir>1) { die "!!!\n\tnot possible to affect path to files if several paths specified\n"; }
 			else { $path{$_} = $dir[0]; }
 			}
-		if (-f $path{$_}.$fName{$_}.$extenS) { print "\t".$path{$_}.$fName{$_}.$extenS."\n"; }
-		else { die $path{$_}.$fName{$_}.$extenS." file not found\n"; }
+		if (-f $path{$_}.$fName{$_}.$extenS) { print "\t\t".$path{$_}.$fName{$_}.$extenS."\n"; }
+		else { die "!!!\n\t".$path{$_}.$fName{$_}.$extenS." file not found\n"; }
 		}
 	}
 print "\n";
@@ -336,9 +336,9 @@ my $refFile = "";
 if (exists $opt{"ref"}) { 
 	if (-f $opt{"ref"}) {
 		$refFile = $opt{"ref"};
-		print "$refFile OK\n";
+		print "\t$refFile OK\n";
 		}
-	else { die $opt{"ref"}." not found\n"; }
+	else { die "!!!\n\t".$opt{"ref"}." not found\n"; }
 	}
 my $refFmt = "";
 if ($refFile) {
@@ -346,13 +346,13 @@ if ($refFile) {
 		if ($opt{fmt} =~ /ucsc/i) { $refFmt = "ucsc"; }
 		elsif ($opt{fmt} =~ /gtf/i) { $refFmt = "gtf"; }
 		elsif ($opt{fmt} =~ /gff/i) { $refFmt = "gff3"; }
-		else { die $opt{fmt}." format not recognized (ucsc / gtf/ gff3)\n"; }
+		else { die "!!!\n\t".$opt{fmt}." format not recognized (ucsc / gtf/ gff3)\n"; }
 		}
 	else {
 		if ($refFile =~ /.txt(.gz)?$/) { $refFmt = "ucsc"; }
 		elsif ($refFile =~ /.gtf(.gz)?$/) { $refFmt = "gtf"; }
 		elsif ($refFile =~ /.gff3(.gz)?$/) { $refFmt = "gff3"; }
-		else { die "$refFile format not recognized\n"; }
+		else { die "!!!\n\t$refFile format not recognized\n"; }
 		}
 	}
 
@@ -361,9 +361,9 @@ if (exists $opt{bed}) {
 	if (-f $opt{bed}) {
 		$bedFile = $opt{bed};
 		$bedName = fileparse($bedFile,".bed");
-		print "$bedFile OK\n";
+		print "\t$bedFile OK\n";
 		}
-	else { die $opt{bed}." not found\n"; }
+	else { die "!!!\n\t".$opt{bed}." not found\n"; }
 	}
 
 my($mutFile,$mutFileName);
@@ -371,9 +371,9 @@ if (exists $opt{mut}) {
 	if (-f $opt{mut}) {
 		$mutFile = $opt{mut};
 		$mutFileName = fileparse($mutFile);
-		print "$mutFile OK\n";
+		print "\t$mutFile OK\n";
 		}
-	else { die $opt{mut}." not found\n"; }
+	else { die "!!!\n\t".$opt{mut}." not found\n"; }
 	}
 
 my $outfile = "cov_";
@@ -386,7 +386,7 @@ if (exists $opt{id}) {
 	}
 if (exists $opt{idList}) {
 	if (-f $opt{idList}) {
-		open(my $fh, "<", $opt{idList}) || die "can't open file $opt{idList} ($!)\n";
+		open(my $fh, "<", $opt{idList}) || die "!!!\n\tcan't open file $opt{idList} ($!)\n";
 		while (my $line = <$fh>) {
 			unless($line =~ /^\s*$/ || $line =~ /^#/) {
 				#$line =~ s/\s//g;
@@ -396,12 +396,11 @@ if (exists $opt{idList}) {
 			}
 		close $fh;
 		}
-	else { die $opt{idList}." not found\n"; }
+	else { die "!!!\n\t".$opt{idList}." not found\n"; }
 	}
 if (@IDs) {
 	my %IDs = ();
 	foreach my $id (@IDs) { 
-#		if ($id =~ /^N[MR]_/) { $id =~ s/\.(\d+)$//; }
 		$IDs{$id} = 1;
 		}
 	@IDs = sort(keys%IDs);
@@ -413,38 +412,38 @@ my $raw_cov_file = "";
 if (exists $opt{raw_cov}) {
 	if (-f $opt{raw_cov}) {
 		$raw_cov_file = $opt{raw_cov};
-		if (-s $raw_cov_file) { print "$raw_cov_file OK\n"; }
-		else { die "$raw_cov_file empty\n"; }
+		if (-s $raw_cov_file) { print "\t$raw_cov_file OK\n"; }
+		else { die "!!!\n\t$raw_cov_file empty\n"; }
 		}
-	else { die $opt{raw_cov}." not found\n"; }
+	else { die "!!!\n\t".$opt{raw_cov}." not found\n"; }
 	}
-if (@Files && $raw_cov_file) { die "must choose between providing bam files or cov files\n"; }
+if (@Files && $raw_cov_file) { die "!!!\n\tmust choose between providing bam files or cov files\n"; }
 
 my $bed_cov_file = "";
 if (exists $opt{bed_cov}) { 
 	if (-f $opt{bed_cov}) {
 		$bed_cov_file = $opt{bed_cov};
-		print "$bed_cov_file OK\n";
+		print "\t$bed_cov_file OK\n";
 		}
-	else { die $opt{bed_cov}." not found\n"; }
+	else { die "!!!\n\t".$opt{bed_cov}." not found\n"; }
 	}
 
 my $genom = "";
 if (exists $opt{genome}) {
 	if (-f $opt{genome}) {
 		$genom = $opt{genome}; 
-		print "$genom OK\n";
+		print "\t$genom OK\n";
 		}
-	else { die $opt{genome}." not found\n"; } 
+	else { die "!!!\n\t".$opt{genome}." not found\n"; } 
 	}
 
 my $fichier_sexe = "";
 if (exists $opt{sex_file}) { 
 	if (-f $opt{sex_file}) {
 		$fichier_sexe = $opt{sex_file};
-		print "$fichier_sexe OK\n";
+		print "\t$fichier_sexe OK\n";
 		}
-	else { die $opt{sex_file}." not found\n"; }
+	else { die "!!!\n\t".$opt{sex_file}." not found\n"; }
 	}
 
 ##jobs
@@ -497,7 +496,7 @@ if (exists $opt{summary}) {
 	if ($opt{summary}) {
 		if ($opt{summary} =~ /^y|^o/i) { $jobs{"geneSummary"} = 1; }
 		elsif ($opt{summary} =~ /^n/i) { $jobs{"geneSummary"} = ""; }
-		else { die "opt summary no recognized (y/n)"; }
+		else { die "!!!\n\topt summary no recognized (y/n)"; }
 		}
 	else { $jobs{"geneSummary"} = 1; }
 	}
@@ -513,12 +512,12 @@ if (exists $opt{keepBed}) {
 	if ($opt{keepBed}) { 
 		#$keepBedName = $opt{keepBed};
 		#$keepBedName =~ s/\.bed$//;
-		if (-f $opt{keepBed}) { die "$opt{keepBed} already exists\n"; }
+		if (-f $opt{keepBed}) { die "!!!\n\t$opt{keepBed} already exists\n"; }
 		my($name,$dir) = fileparse($opt{keepBed},".bed");
 		if ($name) { $keepBedName = $name; }
 		if ($dir) {
 			if (-d $keepBedDir) { $keepBedDir = $dir; }
-			else { die "$keepBedDir not found\n"; }
+			else { die "!!!\n\t$keepBedDir not found\n"; }
 			}
 		}
 	}
@@ -531,7 +530,7 @@ if (exists $opt{depthThreshold}) {
 	@Thresholds = split(/,/, join(',',@{$opt{depthThreshold}}));
 	foreach (@Thresholds) {
 		if ($_ =~ /^\d+$/) { next; }		#{ print "depth threshold: $_\n"; }
-		else { die "$_ depth threshold value need to be an integer\n"; }
+		else { die "!!!\n\t$_ depth threshold value need to be an integer\n"; }
 		}
 	@Thresholds = sort{$b<=>$a}@Thresholds;	#decroissant
 	#check if $pThreshold one of those in @Thresholds
@@ -542,7 +541,7 @@ if (exists $opt{depthThreshold}) {
 				{ $ok=1; last; }
 			}
 		unless ($ok) 
-			{ die "opt -T threshold value need to be 1 of those in opt -t\n"; }
+			{ die "!!!\n\topt -T threshold value need to be 1 of those in opt -t\n"; }
 		}
 	else { $pThreshold = $Thresholds[-1]; }
 	#print "threshold for summary: $pThreshold \n";
@@ -562,12 +561,12 @@ my $UTRinTxt = 1;
 if (exists $opt{noUTRinTxt})
 	{ $UTRinTxt = 0; }
 if ($wNonCod && (!$wUTR || !$UTRinTxt))
-	{ die "nonCoding inclusion not compatible with UTR exclusion\n"; }
+	{ die "!!!\n\tnonCoding inclusion not compatible with UTR exclusion\n"; }
 
 my $maxGr = ""; #max depth for graphs
 if (exists $opt{maxDepth}) { 
 	if ($opt{maxDepth} =~ /^\d+$/) { $maxGr = $opt{maxDepth}; }
-	else { die "--maxCov opt value need to be an integer\n"; }
+	else { die "!!!\n\t--maxCov opt value need to be an integer\n"; }
 	}
 
 my $len5 = 0; my $len3 = 0;
@@ -621,7 +620,7 @@ if (exists $opt{UDstream}) {
 		#if ($upstream < $len5 || $downstream < $len3)
 		#	{ die "upstream/downstream expansion must be longer than padding $upstream <= $len5  $downstream <= $len3\n"; }
 		}
-	else { die "upstream/downstream expansion not compatible without UTR\n"; }
+	else { die "!!!\n\tupstream/downstream expansion not compatible without UTR\n"; }
 	}
 
 my $UpInTxt = 0 ; my $DownInTxt = 0;
@@ -642,7 +641,7 @@ if (exists $opt{UDtxt}) {
 			#if ($UpInTxt < $lenTxt5 || $DownInTxt < $lenTxt3)
 			#	{ die "upstream/downstream expansion must be longer than padding $UpInTxt <= $lenTxt5 || $DownInTxt <= $lenTxt3\n"; }
 			}
-		else { die "upstream/downstream expansion not compatible without UTR\n"; }
+		else { die "!!!\n\tupstream/downstream expansion not compatible without UTR\n"; }
 		}
 	else { $UpInTxt = $upstream; $DownInTxt = $downstream; }
 	}
@@ -676,7 +675,7 @@ if (exists $opt{binPlot})
 my $maxPl = 100; #max depth for bar plots
 if (exists $opt{maxPlot})
 	{ $maxPl = $opt{maxPlot}; }
-if (($maxPl % $bin) != 0) { die "binPlot needs to be a multiple of maxPlot\n"; }
+if (($maxPl % $bin) != 0) { die "!!!\n\tbinPlot needs to be a multiple of maxPlot\n"; }
 
 ##external tools paths and param
 my $bedT = "";
@@ -705,7 +704,7 @@ my $dedup = "";
 if (exists $opt{dedup}) { 
 	if ($opt{dedup} eq "do") { $dedup = "do"; }
 	elsif ($opt{dedup} eq "") { $dedup = 1; }
-	else { die "not recognized value for --dedup arg.\n"; }
+	else { die "!!!\n\tnot recognized value for --dedup arg.\n"; }
 	}
 my $mbq = "";
 if (exists $opt{mbq}) { $mbq = $opt{mbq}; }
@@ -718,7 +717,7 @@ if (exists $opt{mmq}) { $mmq = $opt{mmq}; }
 my $lenForBed = 0;
 if (exists $opt{Lbed}) {
 	if ($opt{Lbed} =~ /^\d+$/) { $lenForBed = $opt{Lbed}; }
-	else { die "--Lbed value need to be an integer\n"; }
+	else { die "!!!\n\t--Lbed value need to be an integer\n"; }
 	}
 
 my $splitBed = "";
@@ -745,7 +744,7 @@ if (exists $opt{cut_bed}) {
 						if ($1 =~ /^m/i) { $cutB_opt{"$o"} = "merge"; }
 						elsif  ($1 =~ /^h/i) { $cutB_opt{"$o"} = "half"; }
 						elsif  ($1 =~ /^n/i) { $cutB_opt{"$o"} = ""; }
-						else { die "cut_bed opt \"keepLast\" not recognized ($1?) (\"h\" , \"m\" or \"n\")\n"; }
+						else { die "!!!\n\tcut_bed opt \"keepLast\" not recognized ($1?) (\"h\" , \"m\" or \"n\")\n"; }
 						}
 					else { $cutB_opt{"$o"} = $1; }
 					$ok=1;
@@ -754,7 +753,7 @@ if (exists $opt{cut_bed}) {
 				
 
 				}
-			unless ($ok) { die "cut_bed opt not recognized ($a?)\n"; }
+			unless ($ok) { die "!!!\n\tcut_bed opt not recognized ($a?)\n"; }
 			}
 		unless ($minL) { $cutB_opt{"minL"} = int($cutB_opt{"cutL"}/2); }
 		unless ($maxL) { $cutB_opt{"maxL"} = $cutB_opt{"cutL"}; }
@@ -770,7 +769,7 @@ if (exists $opt{reAnnot_bed}) {
 			if ($_ =~ /g|t|e|i|o/i) {
 					$reAnnotBed{"item"}{lc($_)} = 1;
 				}
-			else { die "\n!! opt --reAnnot_bed value not recognized (comma separated g/t/e/i/o)\n"; }
+			else { die "\n!!!\topt --reAnnot_bed value not recognized (comma separated g/t/e/i/o)\n"; }
 			}
 		}
 	else {
@@ -787,7 +786,7 @@ my %covFieldList = ("min"=>1,"max"=>1,"tot"=>1,"mean"=>1,"median"=>1,"cov"=>1);
 if (exists $opt{cov_fields}) {
 	@covFields = split(/,/, join(',',@{$opt{cov_fields}}));
 	foreach (@covFields) {
-		unless (exists $covFieldList{$_}) { die "cov field not recognized (min,max,tot,mean,median,cov)\n"; }
+		unless (exists $covFieldList{$_}) { die "\n!!!\tcov field not recognized (min,max,tot,mean,median,cov)\n"; }
 		}
 	}
 
@@ -799,13 +798,13 @@ else { $CNV_opt{"center_test"} = 1; }
 if (exists $opt{level2}) {
 	if ($opt{level2} =~ /^avg/i) { $CNV_opt{"center"} = "avg"; }
 	elsif ($opt{level2} =~ /^med/i) { $CNV_opt{"center"} = "med"; }
-	else { die "opt --level2 not recognized (avg/med)\n"; }
+	else { die "\n!!!\topt --level2 not recognized (avg/med)\n"; }
 	$CNV_opt{"center_test"} = 1;
 	}
 if (exists $opt{spread2}) {
 	if ($opt{spread2} =~ /^std/i) { $CNV_opt{"spread"} = "std"; $CNV_opt{"center"} = "avg"; }
 	elsif ($opt{spread2} =~ /^q/i) { $CNV_opt{"spread"} = "Qtile"; $CNV_opt{"center"} = "med"; }
-	else { die "opt --spread2 not recognized (std/qtile)\n"; }
+	else { die "\n!!!\topt --spread2 not recognized (std/qtile)\n"; }
 	$CNV_opt{"spread_test"} = 1;
 	}
 $CNV_opt{"seuil_del"} = 0.8;
@@ -824,7 +823,7 @@ if (exists $opt{highQual}) {
 		elsif ($tab2[0] =~ /^si/i) { $CNV_opt{"trueCNV"}{"spread"}{"del"} = $tab2[1]; }
 		elsif ($tab2[0] =~ /^ss/i) { $CNV_opt{"trueCNV"}{"spread"}{"dup"} = $tab2[1]; }
 		elsif ($tab2[0] =~ /^c/i) { $CNV_opt{"trueCNV"}{"conseC"} = $tab2[1]; }
-		else  { die "opt --highQual not recognized (li/ls/si/ss/c)\n"; }
+		else  { die "\n!!!\topt --highQual not recognized (li/ls/si/ss/c)\n"; }
 		}
 	}
 $CNV_opt{"seuil_region"} = 1;
@@ -845,13 +844,13 @@ if (exists $opt{ratioByGender}) {
 	if ($opt{ratioByGender}=~/^a/i) { $CNV_opt{"ratioByGender"} = "all"; }
 	elsif ($opt{ratioByGender}=~/^g/i) { $CNV_opt{"ratioByGender"} = "gono"; }
 	elsif ($opt{ratioByGender}=~/^n/i) { $CNV_opt{"ratioByGender"} = ""; }
-	else { die "opt --ratioByGender not recognized (a/g/n)\n"; }
+	else { die "\n!!!\topt --ratioByGender not recognized (a/g/n)\n"; }
 	}
 $CNV_opt{"RefDepth"} = "mean";
 if (exists $opt{normDepth}) {
 	if ($opt{normDepth}=~/^m/i) { $CNV_opt{"RefDepth"} = "mean"; }
 	elsif ($opt{normDepth}=~/^t/i) { $CNV_opt{"RefDepth"} = "tot"; }
-	else { die "opt --normDepth not recognized (mean/tot)\n"; }
+	else { die "\n!!!\topt --normDepth not recognized (mean/tot)\n"; }
 	}
 $CNV_opt{"RefNoChrY"} = 1;
 if (exists $opt{normAllChr}) { $CNV_opt{"RefNoChrY"} = ""; }
@@ -870,7 +869,7 @@ if (exists $opt{CNV_fields}) {
 	@{ $CNV_opt{"fields"} } = split(/,/, join(',',@{$opt{CNV_fields}}));
 	my %CNVfieldList = ("min"=>1,"max"=>1,"med"=>1,"avg"=>1,"std"=>1,"Q1"=>1,"Q3"=>1);
 	foreach (@{ $CNV_opt{"fields"} }) {
-		unless (exists $CNVfieldList{$_}) { die "$_ CNV field not recognized (min,max,norm)\n"; }
+		unless (exists $CNVfieldList{$_}) { die "\n!!!\t$_ CNV field not recognized (min,max,norm)\n"; }
 		}
 	}
 $CNV_opt{"switch2graphByCNV"} = 250;
@@ -890,7 +889,7 @@ $CNV_opt{"ploidy"} = 2;
 if ($bed_cov_file) {
 	$jobs{"CNV"} = 1;
 	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"})
-		{ die "actions other than CNV_detect not allowed if .cov.txt file provided\n"; }
+		{ die "\n!!!\tactions other than CNV_detect not allowed if .cov.txt file provided\n"; }
 	}
 if ($jobs{"CNV"} && !$bed_cov_file) {
 	$jobs{"covBed"} = 1;
@@ -901,7 +900,7 @@ if ($jobs{"bedReport"} || $jobs{"2Reseq"}) {
 	}
 
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) {
-	if (!@Files && !$raw_cov_file) { die "no .bam files (or coverage file) provided\n"; }
+	if (!@Files && !$raw_cov_file) { die "\n!!!\tno .bam files (or coverage file) provided\n"; }
 	}
 
 if ($raw_cov_file) { $jobs{"keepCov"} = ""; }
@@ -909,25 +908,25 @@ if ($raw_cov_file) { $jobs{"keepCov"} = ""; }
 #unless ($mutFile || ($jobs{"CNV"} && $bed_cov_file)) {
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"}) {
 	unless ($bedFile || @IDs) 
-		{ die ".bed file (opt -b) or list of genes or transcripts id required (opt -i)\n"; }
+		{ die "\n!!!\t.bed file (opt -b) or list of genes or transcripts id required (opt -i)\n"; }
 	}
 
 unless (@Thresholds) {
-	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || ($jobs{"CNV"} && $CNV_opt{"seuil_cov"})) { die "at least 1 threshold value required (opt -t)\n"; }
+	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || ($jobs{"CNV"} && $CNV_opt{"seuil_cov"})) { die "\n!!!\tat least 1 threshold value required (opt -t)\n"; }
 	if ($jobs{"covBed"}) {
 		foreach(@covFields) {
-			if ($_ eq "cov") { die "at least 1 threshold value required (opt -t)\n"; }
+			if ($_ eq "cov") { die "\n!!!\tat least 1 threshold value required (opt -t)\n"; }
 			}
-		if ($jobs{"bedReport"})  { die "at least 1 threshold value required (opt -t)\n"; }
+		if ($jobs{"bedReport"})  { die "\n!!!\tat least 1 threshold value required (opt -t)\n"; }
 		}
 	}
 
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"genePlot"} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"}) || ($bedFile && %reAnnotBed) || @IDs) { 
-	unless ($refFile) { die "RefSeq file required (opt -r)\n"; } 
+	unless ($refFile) { die "\n!!!\tRefSeq file required (opt -r)\n"; } 
 	}
 
 unless ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"CNV"} || $jobs{"covMut"} || $jobs{"keepCov"} || $jobs{"keepBed"}) {
-	die "no job selected!\n";
+	die "\n!!!\tno job selected!\n";
 	}
 
 
@@ -941,7 +940,7 @@ if ($genom) {
 	if (-e "$genom.fai") {
 		#@chromLength = `cut -f1-2 $genom.fai`;
 		#chomp @chromLength;
-		open(my $fh, '<', "$genom.fai") or die "cannot open $genom.fai\n";
+		open(my $fh, '<', "$genom.fai") or die "\n!!!\tcannot open $genom.fai\n";
 		while (my $line = <$fh>) {
 			my @tab = split(/\t/,$line);
 			my $chr = $tab[0];
@@ -961,8 +960,8 @@ use File::Which;
 #check R
 if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"CNV"} || $jobs{"covMut"}) {
 	$pathCmd{"R"} = which('R');
-	if ($pathCmd{"R"}) { print "R tools OK\n"; }
-	else { die "R tools not installed or not found\n"; }
+	if ($pathCmd{"R"}) { print "\tR tools OK\n"; }
+	else { die "\n!!!\tR tools not installed or not found\n"; }
 	}
 
 ##sName: name of sample in bam file (unless samtools: name of file without extension)
@@ -977,21 +976,21 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 		if ($samT) {
 			#system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
 			$pathCmd{$samT} = which($samT);
-			if ($pathCmd{$samT}) { print "samtools OK\n"; }
+			if ($pathCmd{$samT}) { print "\tsamtools OK\n"; }
 			else {
 				$samT =~ s/samtools$//;
 				$samT =~ s/\/$//;
 				if ($samT eq "") { $samT = "."; }
 				$samT .= "/samtools";
 				$pathCmd{$samT} = which($samT);
-				if ($pathCmd{$samT}) { print "samtools OK\n"; }
+				if ($pathCmd{$samT}) { print "\tsamtools OK\n"; }
 				else { $samT = ""; }
 				}
 			}
 		else {
 			$samT = "samtools";
 			$pathCmd{$samT} = which($samT);
-			if ($pathCmd{$samT}) { print "samtools OK\n"; }
+			if ($pathCmd{$samT}) { print "\tsamtools OK\n"; }
 			else { $samT = ""; }
 			}	
 		##picard tools
@@ -1004,19 +1003,19 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 			if (-e $picardName) {
 				if ($ram) { $picard = "java -Xmx$ram"."g -jar $picardName"; }
 				else { $picard = "java -jar $picardName"; }
-				print "picard-tools OK\n"; 
+				print "\tpicard-tools OK\n"; 
 				}
 			else {
 				print "$picardName .jar file not found; test for command\n";
 				$pathCmd{$picard} = which($picard);
-				if ($pathCmd{$picard}) { print "picard-tools OK\n"; }
+				if ($pathCmd{$picard}) { print "\tpicard-tools OK\n"; }
 				else { $picard = ""; }
 				}
 			}
 		else {
 			$picard = "picard-tools"; #"PicardCommandLine"
 			$pathCmd{$picard} = which($picard);
-			if ($pathCmd{$picard}) { print "picard-tools OK\n"; }
+			if ($pathCmd{$picard}) { print "\tpicard-tools OK\n"; }
 			else { $picard = ""; }
 			}
 		##gatk
@@ -1032,16 +1031,16 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 				if (-e $gatkName) {
 					if ($ram) { $gatk = "java -jar -Xmx$ram"."g $gatkName"; }
 					else { $gatk = "java -jar $gatkName"; }
-					print "GATK OK\n";
+					print "\tGATK OK\n";
 					}
 				else {
 					print "$gatkName .jar file not found; test for command\n";
 					$pathCmd{$gatk} = which($gatk);
 					if ($pathCmd{$gatk}) {
 						if ($ram) { $gatk .= " -Xmx$ram"."g"; }
-						print "GATK OK\n";
+						print "\tGATK OK\n";
 						}
-					else { die "GATK .jar file not found\n"; } #$gatk = ""; }
+					else { die "\n!!!\tGATK .jar file not found\n"; } #$gatk = ""; }
 					}
 				}
 			else {
@@ -1049,33 +1048,33 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 				$pathCmd{$gatk} = which($gatk); 
 				if ($pathCmd{$gatk}) {
 					if ($ram) { $gatk .= " -Xmx$ram"."g"; }
-					print "GATK OK\n"; 
+					print "\tGATK OK\n"; 
 					}
-				else { die "GATK cmd not found\n"; } #$gatk = ""; }
+				else { die "\n!!!\tGATK cmd not found\n"; } #$gatk = ""; }
 				}
 			foreach (@Files) { $smplIdx->{$_} = ""; }	#to initialize
 			}
-		if ($mbq && !$gatk) { die "GATK needed for min base quality filter\n"; }
+		if ($mbq && !$gatk) { die "\n!!!\tGATK needed for min base quality filter\n"; }
 		##bedtools
 		if (!$gatk) {
 			if ($bedT) {
 				#system "$bedT";
 				$pathCmd{$bedT} = which($bedT); 
-				if ($pathCmd{$bedT}) { print "bedtools OK\n"; }
+				if ($pathCmd{$bedT}) { print "\tbedtools OK\n"; }
 				else {
 					$bedT =~ s/bedtools$//;
 					$bedT =~ s/\/$//;
 					if ($bedT eq "") { $bedT = "."; }
 					$bedT.="/bedtools";
 					$pathCmd{$bedT} = which($bedT); 
-					if ($pathCmd{$bedT})  { print "bedtools OK\n"; }
+					if ($pathCmd{$bedT})  { print "\tbedtools OK\n"; }
 					else { $bedT = ""; }
 					}
 				}
 			else {
 				$bedT = "bedtools";
 				$pathCmd{$bedT} = which($bedT);
-				if ($pathCmd{$bedT}) { print "bedtools OK\n"; }
+				if ($pathCmd{$bedT}) { print "\tbedtools OK\n"; }
 				else { $bedT = ""; }
 				}
 			if ($bedT) {
@@ -1087,11 +1086,11 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 			}
 		##softwares requirements according to options and actions:
 		if ($mmq && !$gatk) {
-			unless ($samT) { die "samtools not installed or not found (required for min mapping quality filter)\n"; }
+			unless ($samT) { die "\n!!!\tsamtools not installed or not found (required for min mapping quality filter)\n"; }
 			}
 		#if ($jobs{"CNV"} && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
-		if ($dedup eq "do" && !$picard) { die "picard tools not installed or not found (required for discarding duplicates)\n"; }
-		if (!$bedT && !$gatk) { die "bedtools or GATK required\n"; }
+		if ($dedup eq "do" && !$picard) { die "\n!!!\tpicard tools not installed or not found (required for discarding duplicates)\n"; }
+		if (!$bedT && !$gatk) { die "\n!!!\tbedtools or GATK required\n"; }
 
 		##find sample names in bam
 		##sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
@@ -1159,12 +1158,12 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 			}
 		## check requirement for genome.fa and genome.fa.fai
 		if ($gatk) {
-			unless ($genom) { die "reference genome.fa required\n"; }
-			unless (-e "$genom.fai") { die "index genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
+			unless ($genom) { die "\n!!!\treference genome.fa required\n"; }
+			unless (-e "$genom.fai") { die "\n!!!\tindex genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
 			}
 		else  {
 			if ($bedTversion == 2) {
-				unless (%chromLength) { die "index genome.fa.fai required (to generate chomLength file for bedtools2)\n"; }
+				unless (%chromLength) { die "\n!!!\tindex genome.fa.fai required (to generate chomLength file for bedtools2)\n"; }
 				}
 			}
 		}
@@ -1181,7 +1180,7 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 		}
 	#read sex file, just to check existing sample names
 	if ($fichier_sexe) {
-		open(my $fh, "<", $fichier_sexe) or die "cannot read $fichier_sexe ($!)\n";
+		open(my $fh, "<", $fichier_sexe) or die "\n!!!\tcannot read $fichier_sexe ($!)\n";
 		while (my $line = <$fh>) {
 			$line =~ /(\S+)\s+(\S+)/;
 			my $ok="";
@@ -1190,7 +1189,7 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 					$ok=1; last;
 					}
 				}
-			unless ($ok) { die "sample $1 not found in bam files\n"; }
+			unless ($ok) { die "\n!!!\tsample $1 not found in bam files\n"; }
 			}
 		close $fh;
 		}
@@ -1240,7 +1239,7 @@ if ($raw_cov_file) {
 		$fhIn->open($raw_cov_file, "rb")
 		}
 	else {
-		open($fhIn, "<", $raw_cov_file) or die "could not read $raw_cov_file ($!)\n";
+		open($fhIn, "<", $raw_cov_file) or die "\n!!!\tcould not read $raw_cov_file ($!)\n";
 		}
 	## gets sample names
 	print "\n\tgetting sample names\n";
@@ -1256,7 +1255,7 @@ if ($raw_cov_file) {
 			$smplIdx->{$smpl} = $i;
 			}
 		}
-	unless (@Files) { die "not able to find sample names in $raw_cov_file\nmissing header line?\n"; }
+	unless (@Files) { die "\n!!!\tnot able to find sample names in $raw_cov_file\nmissing header line?\n"; }
 	## gets @chromOrder, writes to depthFilePerChrom
 	print "\n\tgetting chrom Order and writting to depthFilePerChr\n";
 	my $currentChr = "";
@@ -1277,7 +1276,7 @@ if ($raw_cov_file) {
 			if ($currentChr ne "") { close $fhChr; }
 			$currentChr = $chr;
 			${$depthFilePerChr}{"raw"}{$chr} = "$tmpDir/$chr"."_cov.txt";
-			open($fhChr, ">", ${$depthFilePerChr}{"raw"}{$chr}) || die "could not create ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
+			open($fhChr, ">", ${$depthFilePerChr}{"raw"}{$chr}) || die "\n!!!\tcould not create ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
 			}
 		if (defined $fhChr) {
 			$line =~ s/^\w+://;
@@ -1377,7 +1376,7 @@ if ($bedFile) {
 		my $outBed = "$outdir/$bedName"; $outBed =~ s/.bed$//; $outBed .= ".bed";
 		#rename $currentBed2, "$outdir/$bedName" or die "rename failed: $!";
 		use File::Copy qw(move);
-		move($currentBed2, "$outBed") or die "move failed: $!";
+		move($currentBed2, "$outBed") or die "\n!!!\tmove failed: $!";
 		$currentBed2 = "$outBed";
 		}
 	$bedFile = $currentBed2;
@@ -1409,6 +1408,8 @@ unless ($IDinRef) {
 
 ## for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
 ##and transform in 1-based coordinates
+print "\n\tgetting positions from gene IDs\n";
+print "\t\tfor graph regions\n";
 @hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wUTR,$id2Bed,\@chromOrder,\%chromName);
 #($geneNM_r, $NMgene_r, $NMchr_r, $NMsens_r, $NMstartCod{"raw"}, $NMendCod{"raw"}, $Regions{"raw"}, $NM_Ex{"raw"}, $Genes_r) = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wNonCod,$wUTR,$id2Bed,\@chromOrder);
 #return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
@@ -1426,6 +1427,7 @@ unless ($bedFile) { 			#-> bed from id's locations
 	foreach my $chr (keys%{$bed_Intervals}) {
 		%{ ${$mergedBed_Intervals}{$chr} } = mergeIntervals(\%{ ${$bed_Intervals}{$chr} });
 		}
+	%{ $bed_Intervals } = %{ $mergedBed_Intervals };
 	}
 =pod
 	foreach my $chr(sort(keys%{$Regions{"raw"}})) {
@@ -1436,6 +1438,7 @@ unless ($bedFile) { 			#-> bed from id's locations
 		}
 =cut
 ## for summary txt file:
+print "\t\tfor txt regions\n";
 if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 	$bedName = $keepBedName;
 	$id2Bed = "$outdir/$bedName.bed";
@@ -1454,9 +1457,9 @@ if ($id2Bed) {
 ## changes Regions{gene} according to each NM (without -A N)
 if ($AllTranscripts) {
 	print "\n\tchange region intervals according to each transcript\n";
-
+	print "\t\tfor graph regions\n";
 	DeCovA::geneRegion::NM2GeneRegion($Genes_r,$geneNM_r,$NMchr_r,$Regions{"raw"},$NM_Ex{"raw"});
-
+	print "\t\tfor txt regions\n";
 	DeCovA::geneRegion::NM2GeneRegion($Genes_r,$geneNM_r,$NMchr_r,$txtRegions_r,$txt_NM_Ex_r);
 
 	}
@@ -1626,23 +1629,23 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		DeCovA::bedProcessing::printBed("$tmpDir/$intervalName",$allIntervals_r,\@chromOrder);
 		if ($bedFile || $mutFile || ($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
 			$intervalName = "merge";
-			open (my $fhO, ">", "$tmpDir/$intervalName.bed") || die "can't create file $tmpDir/$intervalName.bed ($!)\n";
-			open (my $fhI, "<", "$tmpDir/regions_0Chr.bed") || die "can't open file $tmpDir/regions_0Chr.bed ($!)\n";
+			open (my $fhO, ">", "$tmpDir/$intervalName.bed") || die "\n!!!\tcan't create file $tmpDir/$intervalName.bed ($!)\n";
+			open (my $fhI, "<", "$tmpDir/regions_0Chr.bed") || die "\n!!!\tcan't open file $tmpDir/regions_0Chr.bed ($!)\n";
 			while (my $line = <$fhI>) { print $fhO $line; }
 			close $fhI;
 			if ($bedFile) {
-				open ($fhI, "<", "$tmpDir/original_0Chr.bed") || die "can't open file $tmpDir/original_0Chr.bed ($!)\n";
+				open ($fhI, "<", "$tmpDir/original_0Chr.bed") || die "\n!!!\tcan't open file $tmpDir/original_0Chr.bed ($!)\n";
 				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
 				}
 			if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
 				DeCovA::bedProcessing::printBed("$tmpDir/txtRegions",$ref_Intervals,\@chromOrder);
-				open ($fhI, "<", "$tmpDir/txtRegions_0Chr.bed") || die "can't open file $tmpDir/txtRegions_0Chr.bed ($!)\n";
+				open ($fhI, "<", "$tmpDir/txtRegions_0Chr.bed") || die "\n!!!\tcan't open file $tmpDir/txtRegions_0Chr.bed ($!)\n";
 				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
 				}
 			if ($mutFile) {
-				open ($fhI, "<", "$mutFile") || die "can't open file $mutFile ($!)\n";
+				open ($fhI, "<", "$mutFile") || die "\n!!!\tcan't open file $mutFile ($!)\n";
 				while (my $line = <$fhI>) {
 					chomp $line;
 					my @tab = split(/\t/,$line);
@@ -1663,8 +1666,8 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 		if ($mutFile) {
 			if ($bedFile) { $intervalName = "merge"; }
 			else  { $intervalName = "muts"; }
-			open (my $fhO, ">", "$tmpDir/$intervalName.bed") || die "can't create file $tmpDir/$intervalName.bed ($!)\n";
-			open (my $fhI, "<", "$mutFile") || die "can't open file $mutFile ($!)\n";
+			open (my $fhO, ">", "$tmpDir/$intervalName.bed") || die "\n!!!\tcan't create file $tmpDir/$intervalName.bed ($!)\n";
+			open (my $fhI, "<", "$mutFile") || die "\n!!!\tcan't open file $mutFile ($!)\n";
 			while (my $line = <$fhI>) {
 				chomp $line;
 				my @tab = split(/\t/,$line);
@@ -1673,7 +1676,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 				}
 			close $fhI;
 			if ($bedFile) {
-				open ($fhI, "<", "$tmpDir/original_0Chr.bed") || die "can't open file $tmpDir/original_0Chr.bed ($!)\n";
+				open ($fhI, "<", "$tmpDir/original_0Chr.bed") || die "\n!!!\tcan't open file $tmpDir/original_0Chr.bed ($!)\n";
 				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
 				}
@@ -1707,7 +1710,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 					my @Starts = sort{$a<=>$b}(keys%{ ${$intervals_r}{$chr} });
 					my $s = 0;								#idx of @Starts
 					my $posInIntervals = $Starts[$s];		#current position
-					open(my $fhIn, "<", ${$depthFilePerChr}{"raw"}{$chr}) || die "!!! can't read ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
+					open(my $fhIn, "<", ${$depthFilePerChr}{"raw"}{$chr}) || die "\n!!!\tcan't read ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
 					while (my $line = <$fhIn>) {
 						$line =~ /^(\d+)\t/;
 						my $posInDepthFile = $1;
@@ -1721,7 +1724,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 										$stayInThisLine = 0;
 										}
 									else {
-										die "!!! at least 1 position to be analysed ($chr:$posInIntervals) not found in cov file (last line: $chr: $posInDepthFile)\n";
+										die "\n!!!\tat least 1 position to be analysed ($chr:$posInIntervals) not found in cov file (last line: $chr: $posInDepthFile)\n";
 										}
 									}
 								else {
@@ -1737,12 +1740,12 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 						}
 					close $fhIn;
 					unless (($posInIntervals-1) == ${$intervals_r}{$chr}{$Starts[$s]}) {
-						die "!!! at least 1 position to be analysed not found in cov file
+						die "\n!!!\tat least 1 position to be analysed not found in cov file
 	(last position evaluated: $chr : ".($posInIntervals-1)."
 	last interval end: $chr : ".${$intervals_r}{$chr}{$Starts[$s]}." )\n";
 						}
 					}
-				else { die "!!! some chrom to be analysed not found in cov file ( $chr )\n"; }
+				else { die "\n!!!\tsome chrom to be analysed not found in cov file ( $chr )\n"; }
 				}
 
 			}
@@ -1778,7 +1781,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 						$cmd = "$picard MarkDuplicates I=".$bam2Use{$f}." O=$tmpDir/".$fName{$f}."_dedup.bam M=$tmpDir/".$fName{$f}.".dedup-metrics REMOVE_DUPLICATES=true CREATE_INDEX=true TMP_DIR=$tmpDir";
 						print "$cmd\n";
 						system "$cmd";
-						if ($?) { die "picard tools not happy\n"; }
+						if ($?) { die "\n!!!\tpicard tools not happy\n"; }
 						else {
 							$bam2Use{$f} = "$tmpDir/".$fName{$f}."_dedup.bam";
 							unlink "$tmpDir/".$fName{$f}."_onBed.bam", "$tmpDir/".$fName{$f}."_onBed.bam.bai";
@@ -1836,7 +1839,7 @@ if ($mutFile && $jobs{"covMut"}) {
 		if (exists ${$Mut}{$chrom}) {
 			my @Starts = sort{$a<=>$b}keys%{ ${$Mut}{$chrom} };
 			my $c = 0;
-			open(my $fh, "<", ${$depthFilePerChr}{"raw"}{$chrom}) || die "can't open file ".${$depthFilePerChr}{"raw"}{$chrom}." ($!)\n";
+			open(my $fh, "<", ${$depthFilePerChr}{"raw"}{$chrom}) || die "\n!!!\tcan't open file ".${$depthFilePerChr}{"raw"}{$chrom}." ($!)\n";
 			while (my $line = <$fh>) {
 				my @tab = split(/\t/,$line);
 				my $pos = $tab[0];
@@ -1854,7 +1857,7 @@ if ($mutFile && $jobs{"covMut"}) {
 
 	#print mut_depth.txt
 	my $MutDepthFile = "$outdir/$mutFileName"."_depth.txt";
-	open(my $fh, ">", "$MutDepthFile") or die "cannot create $MutDepthFile ($!)\n";
+	open(my $fh, ">", "$MutDepthFile") or die "\n!!!\tcannot create $MutDepthFile ($!)\n";
 	print $fh "#locus\tmutation";
 	foreach (@Files) { print $fh "\t".$sName2{$_}; }
 	print $fh "\n";
@@ -1888,7 +1891,7 @@ if ($jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"graphSum"} || ( 
 
 	if($jobs{"geneReport"}) {
 		foreach (@Files) {
-			open(OUT, ">", "$outdir/cov\_$sName2{$_}/$outfile$sName2{$_}\_geneReport.txt") || die "can't create file $outdir/cov\_$sName2{$_}/$outfile$sName2{$_}\_geneReport.txt\n";
+			open(OUT, ">", "$outdir/cov\_$sName2{$_}/$outfile$sName2{$_}\_geneReport.txt") || die "\n!!!\tcan't create file $outdir/cov\_$sName2{$_}/$outfile$sName2{$_}\_geneReport.txt\n";
 			print OUT "## SAMPLE : $sName2{$_}\n\n";
 			if ($pThreshold) {
 				print OUT "## depth threshold : $pThreshold x\n\n";
@@ -2367,7 +2370,7 @@ if ($jobs{"CNV"}) {
 				$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
 				}
 			my(%CNV_IDs,%CNV_bed,%CNV_Genes);
-			open (my $fh, ">", "$outdir/allCNVs.bed") || die "can't create file $outdir/allCNVs.bed ($!)\n";
+			open (my $fh, ">", "$outdir/allCNVs.bed") || die "\n!!!\tcan't create file $outdir/allCNVs.bed ($!)\n";
 			##cnv_Results{$Chrom}{Start}{End} = "DEL/DUP	foldRatio"
 			foreach my $file (keys%{$cnv_Results_r}) {
 				foreach my $chrom (keys%{ ${$cnv_Results_r}{$file} }) {
@@ -2418,8 +2421,8 @@ if ($jobs{"CNV"}) {
 			foreach (keys%{$smplIdx}) { $covIdx2File{${$smplIdx}{$_}} = $_; }	#$covIdx2File{$i} = $file;
 			foreach my $chr (@chromOrder) {
 				${$depthFilePerChr}{"norm"}{$chr} = "$tmpDir/$chr"."_cov_norm.txt";
-				open(my $fhIn, "<", ${$depthFilePerChr}{"raw"}{$chr}) || die "can't read file ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
-				open(my $fhOut, ">", ${$depthFilePerChr}{"norm"}{$chr}) || die "can't create file ".${$depthFilePerChr}{"norm"}{$chr}." ($!)\n";
+				open(my $fhIn, "<", ${$depthFilePerChr}{"raw"}{$chr}) || die "\n!!!\tcan't read file ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
+				open(my $fhOut, ">", ${$depthFilePerChr}{"norm"}{$chr}) || die "\n!!!\tcan't create file ".${$depthFilePerChr}{"norm"}{$chr}." ($!)\n";
 				my $l=0; #line iteration
 				while (my $line = <$fhIn>) {
 					chomp $line;
