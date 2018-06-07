@@ -1166,33 +1166,19 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 				unless (%chromLength) { die "\n!!!\tindex genome.fa.fai required (to generate chomLength file for bedtools2)\n"; }
 				}
 			}
-		}
-	## check for "chr" in chrom names
-	if (@chromOrder) {
-		if ($chromName{"fasta"}{$chromOrder[0]} =~ /^chr/i) {
-			$withChr{"all"} = "_wChr.bed";
-			foreach (@Files) { $withChr{$_} = "_wChr.bed"; } 
-			}
-		else {
-			$withChr{"all"} = "_0Chr.bed";
-			foreach (@Files) { $withChr{$_} = "_0Chr.bed"; } 
-			}
-		}
-	#read sex file, just to check existing sample names
-	if ($fichier_sexe) {
-		open(my $fh, "<", $fichier_sexe) or die "\n!!!\tcannot read $fichier_sexe ($!)\n";
-		while (my $line = <$fh>) {
-			$line =~ /(\S+)\s+(\S+)/;
-			my $ok="";
-			foreach my $file (@Files) {
-				if ($1 eq $sName2{$file}) {
-					$ok=1; last;
-					}
+		## check for "chr" in chrom names, for fepth analysis
+		if (@chromOrder) {
+			if ($chromName{"fasta"}{$chromOrder[0]} =~ /^chr/i) {
+				$withChr{"all"} = "_wChr.bed";
+				foreach (@Files) { $withChr{$_} = "_wChr.bed"; } 
 				}
-			unless ($ok) { die "\n!!!\tsample $1 not found in bam files\n"; }
+			else {
+				$withChr{"all"} = "_0Chr.bed";
+				foreach (@Files) { $withChr{$_} = "_0Chr.bed"; } 
+				}
 			}
-		close $fh;
 		}
+
 	}
 
 
@@ -1295,6 +1281,22 @@ else {
 			close $fhOut;
 			}
 		}
+	}
+
+#read sex file, just to check existing sample names
+if ($fichier_sexe && scalar(keys%sName2)>0) {
+	open(my $fh, "<", $fichier_sexe) or die "\n!!!\tcannot read $fichier_sexe ($!)\n";
+	while (my $line = <$fh>) {
+		$line =~ /(\S+)\s+(\S+)/;
+		my $ok = "";
+		foreach my $file (@Files) {
+			if ($1 eq $sName2{$file}) {
+				$ok = 1; last;
+				}
+			}
+		unless ($ok) { die "\n!!!\tsample $1 not found in bam files\n"; }
+		}
+	close $fh;
 	}
 
 if ($jobs{"graphBySample"} || $jobs{"geneReport"} || $jobs{"bedReport"}) { 
