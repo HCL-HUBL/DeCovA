@@ -1285,16 +1285,19 @@ else {
 
 #read sex file, just to check existing sample names
 if ($fichier_sexe && scalar(keys%sName2)>0) {
+	print "\n\tchecking that all sample names in $fichier_sexe are those found in bam files\n";
 	open(my $fh, "<", $fichier_sexe) or die "\n!!!\tcannot read $fichier_sexe ($!)\n";
 	while (my $line = <$fh>) {
-		$line =~ /(\S+)\s+(\S+)/;
-		my $ok = "";
-		foreach my $file (@Files) {
-			if ($1 eq $sName2{$file}) {
-				$ok = 1; last;
+		if ($line =~ /(\S+)(\s*:*\s+|\s+:*\s*|\s*:\s*)\S+/) {
+			my$smpl = $1;
+			my $ok = "";
+			foreach my $file (@Files) {
+				if ($smpl eq $sName2{$file}) {
+					$ok = 1; last;
+					}
 				}
+			unless ($ok) { die "\n!!!\tsample $smpl not found in bam files\n"; }
 			}
-		unless ($ok) { die "\n!!!\tsample $1 not found in bam files\n"; }
 		}
 	close $fh;
 	}
