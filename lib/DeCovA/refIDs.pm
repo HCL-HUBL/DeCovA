@@ -910,7 +910,7 @@ foreach my $NM (keys%{$IDinRef}) {
 		##intervals
 		for (my $i=0;$i<scalar(@Starts);$i++) {
 			if ($Ends[$i] < $NMstartCod{$NM}) { next; }
-			elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] < $NMstartCod{$NM}) ) {
+			elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
 				$firstCodingEx = $i;
 				if ($Ends[$i] > $NMendCod{$NM}) {
 					$interval{($NMstartCod{$NM}-$minLen)} = $NMendCod{$NM}+$plusLen;
@@ -919,7 +919,7 @@ foreach my $NM (keys%{$IDinRef}) {
 					$interval{($NMstartCod{$NM}-$minLen)} = $Ends[$i]+$plusLen;
 					}
 				}
-			elsif ( ($Starts[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
+			elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
 				if ($Ends[$i] < $NMendCod{$NM}) {
 					$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
 					}
@@ -942,7 +942,7 @@ foreach my $NM (keys%{$IDinRef}) {
 				if ($NMsens{$NM} eq "+") { $exonNb = ($i+1); }
 				else { $exonNb = (scalar(@Starts)-$i); }
 				if ($Ends[$i] < $NMstartCod{$NM}) { next; }
-				elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] < $NMstartCod{$NM}) ) {
+				elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
 					$firstCodingEx = $i;
 					if ($Ends[$i] > $NMendCod{$NM}) {
 						$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
@@ -951,7 +951,7 @@ foreach my $NM (keys%{$IDinRef}) {
 						$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
 						}
 					}
-				elsif ( ($Starts[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
+				elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
 					if ($Ends[$i] < $NMendCod{$NM}) {
 						$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
 						}
@@ -1006,7 +1006,7 @@ foreach my $NM (keys%{$IDinRef}) {
 		if ($lastCodingEx) {
 			$NM_Ex{$NM}{$start}{$Starts[$lastCodingEx]} = $NMendCod{$NM};
 			}
-		else { print "$NM\t $firstCodingEx\n"; exit;}
+		#else { print "$NM\t $firstCodingEx\n"; exit;}
 		}
 	%{ $Regions{$chr}{$NM} } = %interval2;
 	foreach (keys%interval2) {
