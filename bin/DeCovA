@@ -26,6 +26,12 @@ use lib dirname(abs_path($0))."/../lib";
 use DeCovA::bedProcessing;
 use DeCovA::refIDs;
 
+require File::Which;
+require IO::Zlib;
+require File::Copy;
+require File::Path;
+require IO::Compress::Gzip;
+
 
 ############
 #parameters:
