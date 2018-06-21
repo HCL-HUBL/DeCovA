@@ -1374,9 +1374,7 @@ if ($bedFile) {
 		#transform in 1-based coord; keep longest intervals
 		$bed_Intervals = DeCovA::bedProcessing::readBed($currentBed);
 		#merge overlapping intervals
-		foreach my $chr (keys%{$bed_Intervals}) {
-			%{ ${$mergedBed_Intervals}{$chr} } = mergeIntervals(\%{ ${$bed_Intervals}{$chr} });
-			}
+		$mergedBed_Intervals = mergeIntervals($bed_Intervals);
 		#print merged bed, for depth analysis
 		DeCovA::bedProcessing::printBed("$tmpDir/original",$mergedBed_Intervals,\@chromOrder);
 		}
@@ -1435,10 +1433,7 @@ $NM_Ex{"raw"} = $hashSub[7];		# %NM_Ex{NM}{start of region}{start of exon} = end
 $Genes_r = $hashSub[8]; 
 unless ($bedFile) { 			#-> bed from id's locations
 	$bed_Intervals = $hashSub[9];		# $Bed{$chr}{$start} = $end; 
-	foreach my $chr (keys%{$bed_Intervals}) {
-		%{ ${$mergedBed_Intervals}{$chr} } = mergeIntervals(\%{ ${$bed_Intervals}{$chr} });
-		}
-	%{ $bed_Intervals } = %{ $mergedBed_Intervals };
+	mergeIntervalsInRef($bed_Intervals);
 	}
 =pod
 	foreach my $chr(sort(keys%{$Regions{"raw"}})) {
@@ -1458,9 +1453,7 @@ if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
 $txtRegions_r = $hashSub[6];		# as %Regions, but for summary txt file
 $txt_NM_Ex_r = $hashSub[7];		# as %NM_Ex, but for summary txt file
 $ref_Intervals = $hashSub[9];		# as %Bed, but for coordPlot and cov_Bed if no bedfile
-foreach my $chr (keys%{$ref_Intervals}) {
-	%{ ${$ref_Intervals}{$chr} } = mergeIntervals(\%{ ${$ref_Intervals}{$chr} });
-	}
+mergeIntervalsInRef($ref_Intervals);
 if ($id2Bed) {
 	$id2Bed = DeCovA::bedProcessing::sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@chromOrder,\%chromName);
 	}
@@ -1667,8 +1660,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 				}
 			close $fhO; 
 			my $merge_r = DeCovA::bedProcessing::readBed("$tmpDir/$intervalName.bed");
-			foreach my $chr (keys%{$merge_r})
-				{ %{ ${$merge_r}{$chr} } = mergeIntervals(\%{ ${$merge_r}{$chr} }); }
+			mergeIntervalsInRef($merge_r);
 			DeCovA::bedProcessing::printBed("$tmpDir/$intervalName",$merge_r,\@chromOrder);
 			unlink "$tmpDir/$intervalName.bed";
 			}
@@ -1693,9 +1685,7 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 				}
 			close $fhO;
 			my $merge_r = DeCovA::bedProcessing::readBed("$tmpDir/$intervalName.bed");
-			foreach my $chr (keys%{$merge_r}) {
-				%{ ${$merge_r}{$chr} } = mergeIntervals(\%{ ${$merge_r}{$chr} });
-				}
+			mergeIntervalsInRef($merge_r);
 			DeCovA::bedProcessing::printBed("$tmpDir/$intervalName",$merge_r,\@chromOrder);
 			unlink "$tmpDir/$intervalName.bed";
 			}
@@ -2400,9 +2390,8 @@ if ($jobs{"CNV"}) {
 							}
 						}
 					}
-				foreach my $chr (keys%{ $CNV_bed{$file} }) {
-					%{ $CNV_bed{$file}{$chr} } = mergeIntervals(\%{ $CNV_bed{$file}{$chr} });
-					}
+				my $href = mergeIntervals(\%{ $CNV_bed{$file} });
+				%{ $CNV_bed{$file} } = %{$href};
 				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$wNonCod);
 				foreach (keys%{ ${CNV_IDs}{$file} }) {
 					my $gene = ${CNV_IDs}{$file}{$_}{"gene"};
@@ -2415,9 +2404,7 @@ if ($jobs{"CNV"}) {
 			close $fh;
 			$CNV_bed{"allFiles"} = DeCovA::bedProcessing::readBed("$outdir/allCNVs.bed");
 			unlink "$outdir/allCNVs.bed";
-			foreach my $chr (keys%{ $CNV_bed{"allFiles"} }) {
-				%{ $CNV_bed{"allFiles"}->{$chr} } = mergeIntervals(\%{ $CNV_bed{"allFiles"}->{$chr} }); 
-				}
+			mergeIntervalsInRef($CNV_bed{"allFiles"});
 			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName,$wNonCod);
 			foreach (keys%{ ${CNV_IDs}{"allFiles"} }) {
 				my $gene = ${CNV_IDs}{"allFiles"}{$_}{"gene"};
@@ -2549,25 +2536,53 @@ exit;
 #merge overlapping intervals 
 #%interval2 = mergeIntervals(\%interval);
 sub mergeIntervals {
-my($interval_r) = @_;
-my @Starts = sort{$a<=>$b}(keys%{$interval_r});
-my $start = $Starts[0];
-my $end = ${$interval_r}{$start};
+my ($intervals) = @_;
 my %interval2;
-for (my $i=1;$i<scalar(@Starts);$i++) {
-	if ($Starts[$i] <= $end) {
-		if (${$interval_r}{$Starts[$i]} > $end)
-			{ $end = ${$interval_r}{$Starts[$i]}; }
-		else { next; }
+foreach my $chr (keys%{$intervals}) {
+	my @Starts = sort{$a<=>$b}(keys%{ ${$intervals}{$chr} });
+	my $start = $Starts[0];
+	my $end = ${$intervals}{$chr}{$start};
+	for (my $i=1;$i<scalar(@Starts);$i++) {
+		if ($Starts[$i] <= $end) {
+			if (${$intervals}{$chr}{$Starts[$i]} > $end) {
+				$end = ${$intervals}{$chr}{$Starts[$i]};
+				}
+			else { next; }
+			}
+		else {
+			$interval2{$chr}{$start} = $end;
+			$start = $Starts[$i];
+			$end = ${$intervals}{$chr}{$start};
+			}
 		}
-	else {
-		$interval2{$start} = $end;
-		$start = $Starts[$i];
-		$end = ${$interval_r}{$start};
-		}
+	$interval2{$chr}{$start} = $end;
 	}
-$interval2{$start} = $end;
-return(%interval2);
+return(\%interval2);
+}
+
+sub mergeIntervalsInRef {
+my ($intervals) = @_;
+foreach my $chr (keys%{$intervals}) {
+	my @Starts = sort{$a<=>$b}(keys%{ ${$intervals}{$chr} });
+	my $start = $Starts[0];
+	my $end = ${$intervals}{$chr}{$start};
+	my %interval2;
+	for (my $i=1;$i<scalar(@Starts);$i++) {
+		if ($Starts[$i] <= $end) {
+			if (${$intervals}{$chr}{$Starts[$i]} > $end) {
+				$end = ${$intervals}{$chr}{$Starts[$i]};
+				}
+			else { next; }
+			}
+		else {
+			$interval2{$start} = $end;
+			$start = $Starts[$i];
+			$end = ${$intervals}{$chr}{$start};
+			}
+		}
+	$interval2{$start} = $end;
+	%{ ${$intervals}{$chr} } = %interval2;
+	}
 }
 
 
