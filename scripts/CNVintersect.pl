@@ -269,15 +269,15 @@ if (exists $opt{transitivity}) {
 
 
 
-## reads all CNV files, filling %allCNV{sample}{CNVtype}{chr}{start} = end
+## reads all CNV files, filling %allCNVs{sample}{CNVtype}{chr}{start} = end
 print STDERR "## reading CNV files:\n";
-my (@Samples,%allCNV,%chromName);
+my (@Samples,%allCNVs,%chromName);
 foreach my $file (@Files) {
 	my $smplName = $File{$file}{"name"};
 	$smplName =~ s/^CNV_//;
 	if (!@selectedSmpl || exists $selectedSmpl{$smplName}) {
 		push(@Samples,$smplName);
-		if (exists $allCNV{$smplName}) {
+		if (exists $allCNVs{$smplName}) {
 			die "!!! err: sample $smplName found several times\n";
 		}
 		print STDERR "\t$file\n";
@@ -295,7 +295,7 @@ foreach my $file (@Files) {
 					my $chr = $chrName;
 					$chr =~ s/^chr//i;
 					$chromName{$chr} = $chrName;
-					$allCNV{$smplName}{lc($tab[$idx{"type"}])}{$chr}{$start}{"end"} = $end;
+					$allCNVs{$smplName}{lc($tab[$idx{"type"}])}{$chr}{$start}{"end"} = $end;
 				} elsif ($CNVfmt eq "reg" && $tab[$idx{"pos"}] =~ m/^(\w+) *: *(\d+) *- *(\d+)/) {
 					$someLinesOK++;
 					my $chrName = $1;
@@ -304,7 +304,7 @@ foreach my $file (@Files) {
 					my $chr = $chrName;
 					$chr =~ s/^chr//i;
 					$chromName{$chr} = $chrName;
-					$allCNV{$smplName}{lc($tab[$idx{"type"}])}{$chr}{$start}{"end"} = $end;
+					$allCNVs{$smplName}{lc($tab[$idx{"type"}])}{$chr}{$start}{"end"} = $end;
 				}
 			}
 		}
@@ -316,7 +316,7 @@ foreach my $file (@Files) {
 }
 if (@selectedSmpl) {
 	foreach (@selectedSmpl) {
-		unless (exists $allCNV{$_}) {
+		unless (exists $allCNVs{$_}) {
 			die "!!! err: sample $_ not found\n";
 		}
 	}
@@ -324,19 +324,25 @@ if (@selectedSmpl) {
 if (%Fams) {
 	foreach my $fam (keys%Fams) {
 		foreach (@{ $Fams{$fam}{"A_all"} }) {
-			unless (exists $allCNV{$_}) {
+			unless (exists $allCNVs{$_}) {
 				die "!!! err: sample $_ not found\n";
 			}
 		}
 	}
 }
 
-## order starts
-my (%allStarts);
-foreach my $smpl (keys%allCNV) {
-	foreach my $type (keys%{ $allCNV{$smpl} }) {
-		foreach my $chr (keys%{ $allCNV{$smpl}{$type} }) {
-			@{ $allStarts{$smpl}{$type}{$chr} } = sort{$a<=>$b}keys%{ $allCNV{$smpl}{$type}{$chr} };
+my $allStarts = {};
+if ($bedFile) {
+	$Bed1based = readBed($bedFile);
+	mergeIntervals($Bed1based);
+	restrict2Intervals(\%allCNVs,$allStarts,$Bed1based);
+} else {
+	## just order starts : so it will not be done several times
+	foreach my $smpl (keys%allCNVs) {
+		foreach my $type (keys%{ $allCNVs{$smpl} }) {
+			foreach my $chr (keys%{ $allCNVs{$smpl}{$type} }) {
+				@{ ${$allStarts}{$smpl}{$type}{$chr} } = sort{$a<=>$b}keys%{ $allCNVs{$smpl}{$type}{$chr} };
+			}
 		}
 	}
 }
@@ -348,30 +354,30 @@ if ($longest) { print STDERR "\tkeeping union of coordinates\n";
 }
 my %donePairs = ();
 my $overlap1 = {};	# ${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start."-".$S1end} = 1
-foreach my $smpl1 (keys%allCNV) {
-	foreach my $smpl2 (keys%allCNV) {
+foreach my $smpl1 (keys%allCNVs) {
+	foreach my $smpl2 (keys%allCNVs) {
 		if ($smpl2 ne $smpl1 && !exists $donePairs{$smpl1}{$smpl2} && !exists $donePairs{$smpl2}{$smpl1}) {
-			print STDERR "\t$smpl1 and $smpl2\n";
-			foreach my $type (keys%{ $allCNV{$smpl1} }) {
-				foreach my $chr (keys%{ $allCNV{$smpl1}{$type} }) {
-					if (exists $allCNV{$smpl2}{$type}{$chr}) {
-						my $S1start = \@{ $allStarts{$smpl1}{$type}{$chr} };
+			print STDERR "\t$smpl1 with $smpl2\n";
+			foreach my $type (keys%{ $allCNVs{$smpl1} }) {
+				foreach my $chr (keys%{ $allCNVs{$smpl1}{$type} }) {
+					if (exists $allCNVs{$smpl2}{$type}{$chr}) {
+						my $S1start = \@{ ${$allStarts}{$smpl1}{$type}{$chr} };
 						my $c = 0;	#idx of @{$S1start}
-						foreach my $S2start (@{ $allStarts{$smpl2}{$type}{$chr} }) {
-							if ($S2start > $allCNV{$smpl1}{$type}{$chr}{${$S1start}[-1]}{"end"}) { last; }
-							while ( ($c < (scalar@{$S1start}-1)) && ($S2start > $allCNV{$smpl1}{$type}{$chr}{${$S1start}[$c]}{"end"}) ) {
+						foreach my $S2start (@{ ${$allStarts}{$smpl2}{$type}{$chr} }) {
+							if ($S2start > $allCNVs{$smpl1}{$type}{$chr}{${$S1start}[-1]}{"end"}) { last; }
+							while ( ($c < (scalar@{$S1start}-1)) && ($S2start > $allCNVs{$smpl1}{$type}{$chr}{${$S1start}[$c]}{"end"}) ) {
 								$c++;
 							}
 							my $c2 = $c;
 							my ($shortestStart,$shortestEnd);
-							while ( ($c2 < scalar@{$S1start}) && ($allCNV{$smpl2}{$type}{$chr}{$S2start}{"end"} >= ${$S1start}[$c2]) ) {
+							while ( ($c2 < scalar@{$S1start}) && ($allCNVs{$smpl2}{$type}{$chr}{$S2start}{"end"} >= ${$S1start}[$c2]) ) {
 								my $significantOverlap = 1;
 								if ($minRatio) {
-									$significantOverlap = testMinR($minRatio,$choice,${$S1start}[$c2],$allCNV{$smpl1}{$type}{$chr}{${$S1start}[$c2]}{"end"},
-									                               $S2start,$allCNV{$smpl2}{$type}{$chr}{$S2start}{"end"});
+									$significantOverlap = testMinR($minRatio,$choice,${$S1start}[$c2],$allCNVs{$smpl1}{$type}{$chr}{${$S1start}[$c2]}{"end"},
+									                               $S2start,$allCNVs{$smpl2}{$type}{$chr}{$S2start}{"end"});
 								}
 								if ($significantOverlap) {
-									fillOverlap1($overlap1,$type,$chr,$smpl1,$smpl2,${$S1start}[$c2],$S2start,\%allCNV, $longest);
+									fillOverlap1($overlap1,$type,$chr,$smpl1,$smpl2,${$S1start}[$c2],$S2start,\%allCNVs, $longest);
 								}
 								$c2++;
 							}
@@ -554,27 +560,22 @@ if ($transitivity) {
 	}
 
 }
-foreach my $type (keys%overlap2) {
-	foreach my $chr (keys%{ $overlap2{$type} }) {
-		foreach my $overlapStart (keys%{ $overlap2{$type}{$chr} } ) {
-			# $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl1}{$S1start."-".$S1end} = 1
-			# $allCNV{$smpl1}{$type}{$chr}{$start}{"smplOv"} = $smpl2;
-			foreach my $smpl (keys%{ $overlap2{$type}{$chr}{$overlapStart}{"overlaps"} }) {
-				foreach my $smplStart (keys%{ $overlap2{$type}{$chr}{$overlapStart}{"overlaps"}{$smpl} }) {
-					$allCNV{$smpl}{$type}{$chr}{$smplStart}{"startOv"} = $overlapStart;
+if (%Fams) {
+	foreach my $type (keys%overlap2) {
+		foreach my $chr (keys%{ $overlap2{$type} }) {
+			foreach my $overlapStart (keys%{ $overlap2{$type}{$chr} } ) {
+				# $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl1}{$S1start} = $S1end
+				# $allCNVs{$smpl1}{$type}{$chr}{$start}{"smplOv"} = $smpl2;
+				foreach my $smpl (keys%{ $overlap2{$type}{$chr}{$overlapStart}{"overlaps"} }) {
+					foreach my $smplStart (keys%{ $overlap2{$type}{$chr}{$overlapStart}{"overlaps"}{$smpl} }) {
+						$allCNVs{$smpl}{$type}{$chr}{$smplStart}{"startOv"} = $overlapStart;
+					}
 				}
 			}
 		}
 	}
 }
 
-
-if ($bedFile) {
-	$Bed1based = readBed($bedFile);
-	mergeIntervals($Bed1based);
-	my $href = restrict2Intervals(\%overlap2,$Bed1based);
-	%overlap2 = %{$href};
-	}
 
 ## print all intersections
 print STDERR "## printing all intersections in $outName.txt\n";
@@ -622,26 +623,26 @@ if (%Fams) {
 	foreach my $fam (keys%Fams) {
 		my @affected = keys%{ $Fams{$fam}{"A"} };
 		if (scalar@affected == 1) {
-			# $allCNV{$smpl1}{$type}{$chr}{$S1start}{"smplOv"} = 1
+			# $allCNVs{$smpl1}{$type}{$chr}{$S1start}{"smplOv"} = 1
 			my $affSmpl = $affected[0];
-			foreach my $type (keys%{ $allCNV{$affSmpl} }) {
-				foreach my $chr (keys%{ $allCNV{$affSmpl}{$type} }) {
-					foreach my $start (keys%{ $allCNV{$affSmpl}{$type}{$chr} }) {
+			foreach my $type (keys%{ $allCNVs{$affSmpl} }) {
+				foreach my $chr (keys%{ $allCNVs{$affSmpl}{$type} }) {
+					foreach my $start (keys%{ $allCNVs{$affSmpl}{$type}{$chr} }) {
 						my $keep = 1;
-						if (exists $allCNV{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
+						if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
 							foreach my $hSmpl (keys%{$Fams{$fam}{"H"}}) {
-								if (exists $allCNV{$affSmpl}{$type}{$chr}{$start}{"smplOv"}{$hSmpl}) {
+								if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}{$hSmpl}) {
 									$keep = 0;
 									last;
 								}
 							}
 						}
 						if ($keep) {
-							if (exists $allCNV{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
-								my $overlapStart = $allCNV{$affSmpl}{$type}{$chr}{$start}{"startOv"};
+							if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
+								my $overlapStart = $allCNVs{$affSmpl}{$type}{$chr}{$start}{"startOv"};
 								%{ $CNVbyFam{$fam}{$type}{$chr}{$overlapStart} } = %{ $overlap2{$type}{$chr}{$overlapStart} };
 							} else {
-								my $end = $allCNV{$affSmpl}{$type}{$chr}{$start}{"end"};
+								my $end = $allCNVs{$affSmpl}{$type}{$chr}{$start}{"end"};
 								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printStart"} = $start;
 								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printEnd"} = $end;
 								$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start} = $end;
@@ -820,8 +821,8 @@ sub testMinR {
 
 sub fillOverlap1 {
 
-	my ($overlap1, $type, $chr, $smpl1, $smpl2, $S1start, $S2start, $allCNV, $longest) = @_;
-	my ($S1end, $S2end) = (${$allCNV}{$smpl1}{$type}{$chr}{$S1start}{"end"}, ${$allCNV}{$smpl2}{$type}{$chr}{$S2start}{"end"});
+	my ($overlap1, $type, $chr, $smpl1, $smpl2, $S1start, $S2start, $allCNVs, $longest) = @_;
+	my ($S1end, $S2end) = (${$allCNVs}{$smpl1}{$type}{$chr}{$S1start}{"end"}, ${$allCNVs}{$smpl2}{$type}{$chr}{$S2start}{"end"});
 	my ($overStart,$overEnd);
 	if ($longest) {
 		if ($S2start < $S1start) { $overStart = $S2start; } else { $overStart = $S1start; }
@@ -833,13 +834,14 @@ sub fillOverlap1 {
 	${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start} = $S1end;
 	${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl2}{$S2start} = $S2end;
 
-	${$allCNV}{$smpl1}{$type}{$chr}{$S1start}{"smplOv"}{$smpl2} = 1;
-	${$allCNV}{$smpl2}{$type}{$chr}{$S2start}{"smplOv"}{$smpl1} = 1;
+	${$allCNVs}{$smpl1}{$type}{$chr}{$S1start}{"smplOv"}{$smpl2} = 1;
+	${$allCNVs}{$smpl2}{$type}{$chr}{$S2start}{"smplOv"}{$smpl1} = 1;
 
 }
 
 
 #################
+
 sub readBed {
 
 	my ($bed) = @_;
@@ -877,6 +879,7 @@ sub readBed {
 
 
 #################
+
 sub mergeIntervals {
 
 	my ($Intervals) = @_;
@@ -907,9 +910,62 @@ sub mergeIntervals {
 
 
 #################
+
+sub restrict2Intervals {
+
+	my ($CNV2cut,$orderedStarts,$Intervals) = @_;
+	# $allCNVs{$smpl}{$type}{$chr}{$start}{"end"} = $end
+	print STDERR "## restricting CNVs to bed intervals\n";
+	foreach my $smpl (keys%{$CNV2cut}) {
+		foreach my $type (keys%{ ${$CNV2cut}{$smpl} }) {
+			foreach my $chr (keys%{ ${$CNV2cut}{$smpl}{$type} }) {
+				if (exists ${$Intervals}{$chr}) {
+					my %keptCNV = ();
+					my @StartBed = sort{$a<=>$b}(keys%{ ${$Intervals}{$chr} });
+					my @StartCNV = sort{$a<=>$b}(keys%{ ${$CNV2cut}{$smpl}{$type}{$chr} });
+					my $b = 0;	# idx in @StartBed
+					my $c = 0;	# idx in @StartCNV
+					my $endB;
+					while ( $b < scalar@StartBed ) {
+						## 1st loop on bed
+						$endB = ${$Intervals}{$chr}{$StartBed[$b]};
+						if ( $endB < $StartCNV[$c] ) {
+							$b++;
+							next;
+						}
+						while ( ($c < $#StartCNV) && (${$CNV2cut}{$smpl}{$type}{$chr}{$StartCNV[$c]}{"end"} < $StartBed[$b]) ) {
+							## 2nd loop on overlap
+							$c++; 
+						}
+						while ( ($c < scalar@StartCNV) && ($StartCNV[$c] <= $endB) ) {
+							%{ $keptCNV{$StartCNV[$c]} } = %{ ${$CNV2cut}{$smpl}{$type}{$chr}{$StartCNV[$c]} };
+							push(@{ ${$orderedStarts}{$smpl}{$type}{$chr} }, $StartCNV[$c]);
+							$c++;
+						}
+						if ( $StartBed[$b] > ${$CNV2cut}{$smpl}{$type}{$chr}{$StartCNV[-1]}{"end"} ) {
+							last;
+						}
+						$b++;
+					}
+					if (%keptCNV) {
+						%{ ${$CNV2cut}{$smpl}{$type}{$chr} } = %keptCNV;
+					} else {
+						delete ${$CNV2cut}{$smpl}{$type}{$chr};
+					}
+				} else {
+					delete ${$CNV2cut}{$smpl}{$type}{$chr};
+				}
+			}
+		}
+	}
+
+}
+
+=pod
 sub restrict2Intervals {
 
 	my ($Overlaps,$Intervals) = @_;
+	# $overlap2{$type}{$chr}{$overlapStart}{"shortEnd"} = $overlapEnd
 	print STDERR "## restricting CNVs overlaps to bed intervals\n";
 	my %Overlap2;
 	my $nOread = 0;
@@ -943,10 +999,10 @@ sub restrict2Intervals {
 			}
 		}
 	}
-	#%{$Overlaps} = %Overlap2;
 	return(\%Overlap2);
 
 }
+=cut
 
 
 
