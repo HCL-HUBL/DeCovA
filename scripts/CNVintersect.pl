@@ -44,9 +44,10 @@ or: perl script.pl [options] CNVfile1 CNVfile2 ...
     options:
     -f / --file [file]: input CNV files (comma separated, or set several times),
                         either in bed format (chr<tab>start(0-based)<tab>end) or region format (chr:start(1-based)-end)
+                        if region format, opt --posC is mandatory
     -F / --fileLs [file]: file with list of input CNV files, one per line
     -C / --typeC [int]: index(1-based) of CNV type field (def: 2nd col)
-    -P / --posC [int]: index(1-based) of position field, if not a bed file
+    -P / --posC [int]: index(1-based) of position field, if CNV file in region format
     -d / --dir [dir]: directory(ies) where to look for input files (comma separated, or set several times)
     -s / --suffix [str]: used to select input files in dir(s) (comma separated, or set several times)(def: .summary.txt)
     -b / --bed [file]: intervals file to restrict analysis
@@ -167,6 +168,7 @@ if (exists $opt{outName}) {
 		$outName = $opt{outName};
 		my ($outFile,$outPath) = fileparse($outName);
 		unless (-d $outPath) {
+			$outPath =~ s/\/$//;
 			my ($subdir,$dir) = fileparse($outPath);
 			if (-d $dir) {
 				mkdir $outPath;
@@ -339,10 +341,13 @@ foreach my $smpl (keys%allCNV) {
 	}
 }
 
-##fill Overlap1 : same intervals
+## fill Overlap1 : same intervals
 print STDERR "## overlapping pairs of CNV files\n";
+if ($longest) { print STDERR "\tkeeping union of coordinates\n";
+} else { print STDERR "\tkeeping intersection of coordinates\n";
+}
 my %donePairs = ();
-my $overlap1 = {};	# %{ ${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}}{$S1start."-".$S1end} = 1
+my $overlap1 = {};	# ${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start."-".$S1end} = 1
 foreach my $smpl1 (keys%allCNV) {
 	foreach my $smpl2 (keys%allCNV) {
 		if ($smpl2 ne $smpl1 && !exists $donePairs{$smpl1}{$smpl2} && !exists $donePairs{$smpl2}{$smpl1}) {
@@ -353,20 +358,20 @@ foreach my $smpl1 (keys%allCNV) {
 						my $S1start = \@{ $allStarts{$smpl1}{$type}{$chr} };
 						my $c = 0;	#idx of @{$S1start}
 						foreach my $S2start (@{ $allStarts{$smpl2}{$type}{$chr} }) {
-							my $S2end = $allCNV{$smpl2}{$type}{$chr}{$S2start}{"end"};
 							if ($S2start > $allCNV{$smpl1}{$type}{$chr}{${$S1start}[-1]}{"end"}) { last; }
 							while ( ($c < (scalar@{$S1start}-1)) && ($S2start > $allCNV{$smpl1}{$type}{$chr}{${$S1start}[$c]}{"end"}) ) {
 								$c++;
 							}
 							my $c2 = $c;
 							my ($shortestStart,$shortestEnd);
-							while ( ($c2 < scalar@{$S1start}) && ($S2end >= ${$S1start}[$c2]) ) {
+							while ( ($c2 < scalar@{$S1start}) && ($allCNV{$smpl2}{$type}{$chr}{$S2start}{"end"} >= ${$S1start}[$c2]) ) {
 								my $significantOverlap = 1;
 								if ($minRatio) {
-									$significantOverlap = testMinR($minRatio,$choice,${$S1start}[$c2],$allCNV{$smpl1}{$type}{$chr}{${$S1start}[$c2]}{"end"},$S2start,$S2end);
+									$significantOverlap = testMinR($minRatio,$choice,${$S1start}[$c2],$allCNV{$smpl1}{$type}{$chr}{${$S1start}[$c2]}{"end"},
+									                               $S2start,$allCNV{$smpl2}{$type}{$chr}{$S2start}{"end"});
 								}
 								if ($significantOverlap) {
-									fillOverlap1($overlap1,$type,$chr,$smpl1,$smpl2,${$S1start}[$c2],$allCNV{$smpl1}{$type}{$chr}{${$S1start}[$c2]}{"end"},$S2start,$S2end,$longest);
+									fillOverlap1($overlap1,$type,$chr,$smpl1,$smpl2,${$S1start}[$c2],$S2start,\%allCNV, $longest);
 								}
 								$c2++;
 							}
@@ -379,43 +384,16 @@ foreach my $smpl1 (keys%allCNV) {
 	}
 }
 
-=pod
-open($fh, ">", $outName."_S1.txt") or die $!;
-foreach my $type (sort(keys%{$overlap1})) {
-	print $fh "##\n\n$type :\n\nPos";
-	foreach (@Samples) { print $fh "\t$_"; }
-	print $fh "\n";
-	foreach my $chr (sort(keys%{ ${$overlap1}{$type} })) {
-		foreach my $start (sort{$a<=>$b}keys%{ ${$overlap1}{$type}{$chr} }) {
-			foreach my $end (sort{$a<=>$b}keys%{ ${$overlap1}{$type}{$chr}{$start} }) {
-				print $fh $chromName{$chr}.":$start-$end";
-				foreach my $smpl (@Samples) {
-					print $fh "\t";
-					if (exists ${$overlap1}{$type}{$chr}{$start}{$end}{$smpl}) {
-						my $txt = join(";", keys%{ ${$overlap1}{$type}{$chr}{$start}{$end}{$smpl} });
-						#foreach (keys%{ ${$overlap1}{$type}{$chr}{$start}{$end}{$smpl} }) { $txt .= "$_;"; }
-						#chop $txt;
-						print $fh $txt;
-						}
-					else { print $fh "."; }
-					}
-				print $fh "\n";
-				}
-			}
-		}
-	}
-close $fh;
-=cut
-
 
 ## merging overlapping overlaps
 print STDERR "## Merging overlapping overlaps\n";
-my %overlap2;
+my %overlap2;	# $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl1}{$S1start."-".$S1end} = 1
 
 if ($transitivity) {
 	print STDERR "\tapplying transitivity accros overlaps\n";
 	foreach my $type (sort(keys%{$overlap1})) {
 		foreach my $chr (sort(keys%{ ${$overlap1}{$type} })) {
+			# ${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start."-".$S1end} = 1
 			my @Starts = sort{$a<=>$b}keys%{ ${$overlap1}{$type}{$chr} };
 			my $c = 0;	#idx of @Starts
 			my $currStart = $Starts[$c];
@@ -425,13 +403,15 @@ if ($transitivity) {
 			$overlap2{$type}{$chr}{$currStart}{"printEnd"} = $currEnd;
 			%{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } = ();
 			for my $e (0..$#ends_1) {
-				%{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } , %{ ${$overlap1}{$type}{$chr}{$Starts[$c]}{$ends_1[$e]} } );
+				%{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} },
+				                                                        %{ ${$overlap1}{$type}{$chr}{$Starts[$c]}{$ends_1[$e]} } );
 			}
 			while ($c < $#Starts) {
 				$c++;
 				if ($Starts[$c] < $currEnd) {
 					foreach my $end2 (keys%{ ${$overlap1}{$type}{$chr}{$Starts[$c]} }) {
-						%{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } , %{ ${$overlap1}{$type}{$chr}{$Starts[$c]}{$end2} } );
+						%{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} },
+						                                                        %{ ${$overlap1}{$type}{$chr}{$Starts[$c]}{$end2} } );
 					}
 				} else {
 					$currStart = $Starts[$c];
@@ -441,7 +421,8 @@ if ($transitivity) {
 					$overlap2{$type}{$chr}{$currStart}{"printEnd"} = $currEnd;
 					%{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } = ();
 					for my $e (0..$#ends_1) {
-						%{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } , %{ ${$overlap1}{$type}{$chr}{$Starts[$c]}{$ends_1[$e]} } );
+						%{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$currStart}{"overlaps"} },
+						                                                        %{ ${$overlap1}{$type}{$chr}{$Starts[$c]}{$ends_1[$e]} } );
 					}
 				}
 			}
@@ -452,13 +433,14 @@ if ($transitivity) {
 	print STDERR "\twithout looking for transitivity accros overlaps\n";
 	foreach my $type (sort(keys%{$overlap1})) {
 		foreach my $chr (sort(keys%{ ${$overlap1}{$type} })) {
+			# ${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start."-".$S1end} = 1
 			my @Starts = sort{$a<=>$b}keys%{ ${$overlap1}{$type}{$chr} };
 			my $c = 1;	#idx of @Starts
 			my (@ends_1,$e);
 			while ($c < scalar@Starts) {				#print STDERR "\t\t$c\n";print STDERR "\t\t\t".$ends_1[0]."\n";print STDERR "\t\t\t".$Starts[$c]."\n";
 				@ends_1 = sort{$a<=>$b}keys%{ ${$overlap1}{$type}{$chr}{$Starts[($c-1)]} };
 				$e = 0;	#idx of @ends_1
-				##reaching next overlap, filling %overlap2 with overlap1 if no overlap, but merging hash of different ends for same start
+				##reaching next overlap, filling %overlap2 with overlap1 if no overlap, but merging hashs of different ends for same start
 				while ( ($e < scalar@ends_1) && ($Starts[$c] > $ends_1[$e]) ) {
 					if (!exists $overlap2{$type}{$chr}{$Starts[($c-1)]}) {
 						$overlap2{$type}{$chr}{$Starts[($c-1)]}{"shortEnd"} = $ends_1[0];
@@ -470,7 +452,8 @@ if ($transitivity) {
 						$overlap2{$type}{$chr}{$Starts[($c-1)]}{"printStart"} = $Starts[($c-1)];
 						%{ $overlap2{$type}{$chr}{$Starts[($c-1)]}{"overlaps"} } = ();
 						for my $i (0..$#ends_1) {
-							%{ $overlap2{$type}{$chr}{$Starts[($c-1)]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[($c-1)]}{"overlaps"} } , %{ ${$overlap1}{$type}{$chr}{$Starts[($c-1)]}{$ends_1[$i]} } );
+							%{ $overlap2{$type}{$chr}{$Starts[($c-1)]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[($c-1)]}{"overlaps"} },
+							                                                             %{ ${$overlap1}{$type}{$chr}{$Starts[($c-1)]}{$ends_1[$i]} } );
 						}
 					}
 					$e++;
@@ -521,17 +504,20 @@ if ($transitivity) {
 							## filling overlap2 with overlap1
 							%{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } = ();
 							for my $i ($e..$#ends_1) {
-								%{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } , %{ ${$overlap1}{$type}{$chr}{$Starts[($c-1)]}{$ends_1[$i]} } );
+								%{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} },
+								                                                          %{ ${$overlap1}{$type}{$chr}{$Starts[($c-1)]}{$ends_1[$i]} } );
 							}
 							foreach my $end2 (@ends_2) {
-								%{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } , %{ ${$overlap1}{$type}{$chr}{$Starts[$c2]}{$end2} } );
+								%{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} },
+								                                                          %{ ${$overlap1}{$type}{$chr}{$Starts[$c2]}{$end2} } );
 							}
 							foreach my $c3 ($c..($c2-1)) {;
 								my @ends_3 = sort{$a<=>$b}keys%{ ${$overlap1}{$type}{$chr}{$Starts[($c3)]} };
 								for my $i (0..$#ends_3) {
 									if ($Starts[$c2] <= $ends_3[$i]) {
 										for my $j ($i..$#ends_3) {
-											%{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } , %{ ${$overlap1}{$type}{$chr}{$Starts[$c3]}{$ends_3[$j]} } );
+											%{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[$c2]}{"overlaps"} },
+											                                                          %{ ${$overlap1}{$type}{$chr}{$Starts[$c3]}{$ends_3[$j]} } );
 										}
 										last;
 									}
@@ -555,11 +541,12 @@ if ($transitivity) {
 				$overlap2{$type}{$chr}{$Starts[-1]}{"printStart"} = $Starts[-1];
 				%{ $overlap2{$type}{$chr}{$Starts[-1]}{"overlaps"} } = ();
 				for my $i (0..$#ends_1) {
-					%{ $overlap2{$type}{$chr}{$Starts[-1]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[-1]}{"overlaps"} } , %{ ${$overlap1}{$type}{$chr}{$Starts[-1]}{$ends_1[$i]} } );
+					%{ $overlap2{$type}{$chr}{$Starts[-1]}{"overlaps"} } = ( %{ $overlap2{$type}{$chr}{$Starts[-1]}{"overlaps"} },
+					                                                         %{ ${$overlap1}{$type}{$chr}{$Starts[-1]}{$ends_1[$i]} } );
 				}
 			}
 			foreach my $start (keys%{ $overlap2{$type}{$chr} } ) {
-				unless (%{ $overlap2{$type}{$chr}{$start} }) {
+				if (scalar(keys%{ $overlap2{$type}{$chr}{$start} }) == 0) {
 					delete $overlap2{$type}{$chr}{$start};
 				}
 			}
@@ -567,6 +554,20 @@ if ($transitivity) {
 	}
 
 }
+foreach my $type (keys%overlap2) {
+	foreach my $chr (keys%{ $overlap2{$type} }) {
+		foreach my $overlapStart (keys%{ $overlap2{$type}{$chr} } ) {
+			# $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl1}{$S1start."-".$S1end} = 1
+			# $allCNV{$smpl1}{$type}{$chr}{$start}{"smplOv"} = $smpl2;
+			foreach my $smpl (keys%{ $overlap2{$type}{$chr}{$overlapStart}{"overlaps"} }) {
+				foreach my $smplStart (keys%{ $overlap2{$type}{$chr}{$overlapStart}{"overlaps"}{$smpl} }) {
+					$allCNV{$smpl}{$type}{$chr}{$smplStart}{"startOv"} = $overlapStart;
+				}
+			}
+		}
+	}
+}
+
 
 if ($bedFile) {
 	$Bed1based = readBed($bedFile);
@@ -591,14 +592,16 @@ foreach my $type (sort(keys%overlap2)) {
 			if ($CNVfmt eq "bed") {
 				print $fh $chromName{$chr}.":".($overlap2{$type}{$chr}{$start}{"printStart"} -1)."-".$overlap2{$type}{$chr}{$start}{"printEnd"};
 			} else {
-if (!exists $overlap2{$type}{$chr}{$start}{"printStart"}) { print STDERR "no start\t\t$chr:$start\n"; }
-if (!exists $overlap2{$type}{$chr}{$start}{"printEnd"}) { print STDERR "no end\t\t$chr:$start\n"; }
 				print $fh $chromName{$chr}.":".$overlap2{$type}{$chr}{$start}{"printStart"}."-".$overlap2{$type}{$chr}{$start}{"printEnd"};
 			}
 			foreach my $smpl (@Samples) {
 				print $fh "\t";
 				if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) {
-					my $txt = join(";", keys%{ $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl} });
+					my $txt = "";
+					foreach (sort{$a<=>$b}keys%{ $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl} }) {
+						$txt .= $_."-".$overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}{$_}.";";
+					}
+					chop $txt;
 					print $fh $txt;
 				} else {
 					print $fh ".";
@@ -610,94 +613,169 @@ if (!exists $overlap2{$type}{$chr}{$start}{"printEnd"}) { print STDERR "no end\t
 }
 close $fh;
 
-print STDERR "## applying family filter\n";
-my %overlap3;
+
+## family analysis
+my %CNVbyFam;
 if (%Fams) {
-	foreach my $type (sort(keys%overlap2)) {
-		foreach my $chr (sort(keys%{ $overlap2{$type} })) {
-			foreach my $start (sort{$a<=>$b}keys%{ $overlap2{$type}{$chr} }) {
-				foreach my $fam (keys%Fams) {
-					my $keep = 0;
-					foreach my $smpl (keys%{ $Fams{$fam}{"A"} }) {
-						if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) { $keep++; }
-					}
-					if ($keep == scalar(keys%{ $Fams{$fam}{"A"} })) {
-						foreach my $smpl (keys%{$Fams{$fam}{"H"}}) {
-							if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) { $keep = 0; }
+
+	print STDERR "## applying family filter\n";
+	foreach my $fam (keys%Fams) {
+		my @affected = keys%{ $Fams{$fam}{"A"} };
+		if (scalar@affected == 1) {
+			# $allCNV{$smpl1}{$type}{$chr}{$S1start}{"smplOv"} = 1
+			my $affSmpl = $affected[0];
+			foreach my $type (keys%{ $allCNV{$affSmpl} }) {
+				foreach my $chr (keys%{ $allCNV{$affSmpl}{$type} }) {
+					foreach my $start (keys%{ $allCNV{$affSmpl}{$type}{$chr} }) {
+						my $keep = 1;
+						if (exists $allCNV{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
+							foreach my $hSmpl (keys%{$Fams{$fam}{"H"}}) {
+								if (exists $allCNV{$affSmpl}{$type}{$chr}{$start}{"smplOv"}{$hSmpl}) {
+									$keep = 0;
+									last;
+								}
 							}
-					} else {
-						$keep = 0;
+						}
+						if ($keep) {
+							if (exists $allCNV{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
+								my $overlapStart = $allCNV{$affSmpl}{$type}{$chr}{$start}{"startOv"};
+								%{ $CNVbyFam{$fam}{$type}{$chr}{$overlapStart} } = %{ $overlap2{$type}{$chr}{$overlapStart} };
+							} else {
+								my $end = $allCNV{$affSmpl}{$type}{$chr}{$start}{"end"};
+								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printStart"} = $start;
+								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printEnd"} = $end;
+								$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start} = $end;
+							}
+						}
 					}
-					if ($keep) {
-						%{ $overlap3{$fam}{$type}{$chr}{$start} } = %{ $overlap2{$type}{$chr}{$start} };
+				}
+			}
+		} else {
+			# $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl1}{$S1start} = $S1end
+			foreach my $type (keys%overlap2) {
+				foreach my $chr (keys%{ $overlap2{$type} }) {
+					foreach my $start (keys%{ $overlap2{$type}{$chr} }) {
+						my $keep = 0;
+						foreach my $smpl (@affected) {
+							if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) { $keep++; }
+						}
+						if ($keep == scalar@affected) {
+							foreach my $smpl (keys%{$Fams{$fam}{"H"}}) {
+								if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) { $keep = 0; }
+							}
+						} else {
+							$keep = 0;
+						}
+						if ($keep) {
+							%{ $CNVbyFam{$fam}{$type}{$chr}{$start} } = %{ $overlap2{$type}{$chr}{$start} };
+						}
 					}
 				}
 			}
 		}
 	}
-}
 
-print STDERR "## printing intersections by family\n";
-foreach my $fam (keys%Fams) {
-	print STDERR "\t$fam, -> ".$outName."_".$fam.".txt file\n";
-	if (exists $overlap3{$fam}) {
+	print STDERR "## printing intersections by family\n";
+	foreach my $fam (keys%Fams) {
+		print STDERR "\t$fam, -> ".$outName."_".$fam.".txt file\n";
 		open($fh, ">", $outName."_".$fam.".txt") or die $!;
-		foreach my $type (sort(keys%{ $overlap3{$fam} })) {
-			if (exists $overlap3{$fam}{$type}) {
-				if ($CNVfmt eq "bed") {
-					print $fh "\n##\n\n$type :\n\nchr\tstart\tend";
+		if (exists $CNVbyFam{$fam}) {
+			## headers :
+			my $headers = "";
+			if ($CNVfmt eq "bed") {
+				$headers .= "#chr\tstart\tend\ttype";
+			} else {
+				$headers .= "#Pos\ttype";
+			}
+			foreach (@{ $Fams{$fam}{"A_all"} }) {
+				if (exists $Fams{$fam}{"A"}{$_}) {
+					$headers .= "\t$_(A)";
 				} else {
-					print $fh "\n##\n\n$type :\n\nPos";
+					$headers .= "\t$_(H)";
 				}
-				foreach (@{ $Fams{$fam}{"A_all"} }) {
-					if (exists $Fams{$fam}{"A"}{$_}) {
-						print $fh "\t$_(A)";
-					} else {
-						print $fh "\t$_(H)";
+			}
+			my $otherGroups = scalar(keys%Fams) - 1;
+			foreach my $smpl (@Samples) {
+				my $belong2Fam = 0;
+				foreach my $f2 (keys%Fams) {
+					if (exists $Fams{$f2}{"H_all"}{$smpl}) { 
+						$belong2Fam = 1;
+						last;
 					}
 				}
-				my $CNVothers = 0;
-				foreach my $smpl (@Samples) {
-					if (!exists $Fams{$fam}{"H_all"}{$smpl}) { $CNVothers++; }
-				}
-				print $fh "\tothers(n/$CNVothers)\n";
-				foreach my $chr (sort(keys%{ $overlap3{$fam}{$type} })) {
-					foreach my $start (sort{$a<=>$b}keys%{ $overlap3{$fam}{$type}{$chr} }) {
+				unless ($belong2Fam) { $otherGroups++; }
+			}
+			$headers .= "\tin_other_groups(tot=$otherGroups)";
+			## CNVs :
+			my %mergeTypes = ();
+			foreach my $type (sort(keys%{ $CNVbyFam{$fam} })) {
+				foreach my $chr (keys%{ $CNVbyFam{$fam}{$type} }) {
+					foreach my $start (keys%{ $CNVbyFam{$fam}{$type}{$chr} }) {
+						my $line = "";
+						## pos type
 						if ($CNVfmt eq "bed") {
-							print $fh $chromName{$chr}.":".($overlap2{$type}{$chr}{$start}{"printStart"} -1)."-".$overlap2{$type}{$chr}{$start}{"printEnd"};
+							$line .= $chromName{$chr}.":".($CNVbyFam{$fam}{$type}{$chr}{$start}{"printStart"} -1)."-".$CNVbyFam{$fam}{$type}{$chr}{$start}{"printEnd"};
 						} else {
-							print $fh $chromName{$chr}.":".$overlap2{$type}{$chr}{$start}{"printStart"}."-".$overlap2{$type}{$chr}{$start}{"printEnd"};
+							$line .= $chromName{$chr}.":".$CNVbyFam{$fam}{$type}{$chr}{$start}{"printStart"}."-".$CNVbyFam{$fam}{$type}{$chr}{$start}{"printEnd"};
 						}
+						$line .= "\t$type";
+						## included intervals
 						foreach my $smpl (@{ $Fams{$fam}{"A_all"} }) {
-							print $fh "\t";
-#							if (exists $Fams{$fam}{"A"}{$smpl}) {
-							if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) {
-								my $txt = join(";", keys%{ $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl} });
-								print $fh $txt;
+							$line .=  "\t";
+							if (exists $CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl}) {
+								my $txt = "";
+								foreach (sort{$a<=>$b}keys%{ $CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl} }) {
+									$txt .= $_."-".$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl}{$_}.";";
 								}
-							else {
-								print $fh ".";
+								chop $txt;
+								$line .=  $txt;
+							} else {
+								$line .=  ".";
 							}
 						}
-						$CNVothers = 0;
+						## occurence in other families
+						my $CNVothers = 0;
+						my %occByFam = ();
 						foreach my $smpl (@Samples) {
 							if (!exists $Fams{$fam}{"H_all"}{$smpl} && exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) {
-								$CNVothers++;
+								my $belong2Fam = 0;
+								foreach my $f2 (keys%Fams) {
+									if (exists $Fams{$f2}{"H_all"}{$smpl}) {
+										$belong2Fam = 1;
+										if (!exists $occByFam{$f2}) {
+											$CNVothers++;
+											$occByFam{$f2} = 1;
+											last;
+										}
+									}
+								}
+								unless ($belong2Fam) { $CNVothers++; }
 							}
 						}
-						print $fh "\t$CNVothers\n";
+						$line .= "\t$CNVothers";
+						push(@{ $mergeTypes{$chr}{$start} } , $line);
 					}
 				}
-			} else {
-				print $fh "\n##\n\n$type :\tNONE\n";
 			}
+			if (%mergeTypes) {
+				print $fh "$headers\n";
+				foreach my $chr (sort(keys%mergeTypes)) {
+					foreach my $start (sort{$a<=>$b}keys%{ $mergeTypes{$chr} }) {
+						foreach (@{ $mergeTypes{$chr}{$start} }) {
+							print $fh "$_\n";
+						}
+					}
+				}
+			}
+		} else {
+			my $line = "no CNV compatible with family $fam transmission hypotheses\n";
+			print $fh $line;
+			print STDERR $line;
 		}
 		close $fh;
-	} else {
-		print STDERR "no CNV compatible with family $fam transmission hypotheses\n";
 	}
-}
 
+}
 
 
 
@@ -742,33 +820,21 @@ sub testMinR {
 
 sub fillOverlap1 {
 
-	my ($overlap1, $type, $chr, $smpl1, $smpl2, $S1start, $S1end, $S2start, $S2end, $longest) = @_;
+	my ($overlap1, $type, $chr, $smpl1, $smpl2, $S1start, $S2start, $allCNV, $longest) = @_;
+	my ($S1end, $S2end) = (${$allCNV}{$smpl1}{$type}{$chr}{$S1start}{"end"}, ${$allCNV}{$smpl2}{$type}{$chr}{$S2start}{"end"});
 	my ($overStart,$overEnd);
 	if ($longest) {
-		if ($S2start < $S1start) {
-			$overStart = $S2start;
-		} else {
-			$overStart = $S1start;
-		}
-		if ($S2end > $S1end) {
-			$overEnd = $S2end;
-		} else {
-			$overEnd = $S1end;
-		}
+		if ($S2start < $S1start) { $overStart = $S2start; } else { $overStart = $S1start; }
+		if ($S2end > $S1end) { $overEnd = $S2end; } else { $overEnd = $S1end; }
 	} else {
-		if ($S2start > $S1start) {
-			$overStart = $S2start;
-		} else {
-			$overStart = $S1start;
-		}
-		if ($S2end < $S1end) {
-			$overEnd = $S2end;
-		} else {
-			$overEnd = $S1end;
-		}
+		if ($S2start > $S1start) { $overStart = $S2start; } else { $overStart = $S1start; }
+		if ($S2end < $S1end) { $overEnd = $S2end; } else { $overEnd = $S1end; }
 	}
-	${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start."-".$S1end} = 1;
-	${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl2}{$S2start."-".$S2end} = 1;
+	${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start} = $S1end;
+	${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl2}{$S2start} = $S2end;
+
+	${$allCNV}{$smpl1}{$type}{$chr}{$S1start}{"smplOv"}{$smpl2} = 1;
+	${$allCNV}{$smpl2}{$type}{$chr}{$S2start}{"smplOv"}{$smpl1} = 1;
 
 }
 
