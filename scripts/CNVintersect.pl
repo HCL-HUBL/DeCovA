@@ -33,6 +33,7 @@ GetOptions (\%opt,
 	"choice|c=s",
 	"union|u",
 	"transitivity|t",
+	"mode|M=s",
 	"info|i=s@",
 	"header|H=s@",
 	"help|h")
@@ -58,15 +59,16 @@ or: perl script.pl [options] CNVfile1 CNVfile2 ...
                          names can be followed by a status: name:A/H for Affected/Healthy
     -N / --nameLs [str]: file with list of sample names to select, one per line (def: all found),
                          names can be followed by a status: name:A/H for Affected/Healthy
-         --fam [file]: file with list of families, one per line, then sample names and status,
+         --fam [file]: file with list of families, one family name per line followed by sample names and status,
                        famName<tab>sample1:A/H<tab>sample2:A/H...
     -m / --minRatio [0-1]: CNVs from 2 samples shared if overlapped by x fraction of their length (def: shared if overlapped by 1 base)
     -c / --choice [A/O]: CNVs shared if both samples are overlapped enough (And), or if only one is significantly overlapped (Or)
     -u / --union : overlap == union of intervals (def: intersection of intervals)
     -t / --transitivity : if A overlaps B and B overlaps C, then A overlaps C (def: no)
+    -M / --mode [A/O]: report All CNVs, or only Overlapped ones (def: only overlaps)
     -i / --info [str][int]: add infos from input CNV lines, comma separated or set several times (def: none)
-                             either col position, if input file has no header
-                             or col name, if name is in a header line
+                            either col position, if input file has no header
+                            or col name, if name is in a header line
 	-H / --header : col_name for sup infos headers, in same order as provided in opt --info
     -h / --help: this help text\n";
 }
@@ -237,7 +239,10 @@ if (exists $opt{fam}) {
 						$Fams{$fam}{"H"}{$smpl} = 1;
 					}
 				} else {
-					die "!!! err: smpl format not recognized within ".$opt{fam}." file\n";
+					#die "!!! err: smpl format not recognized within ".$opt{fam}." file\n";
+					$Fams{$fam}{"H_all"}{$_} = 1;
+					push(@{ $Fams{$fam}{"A_all"} }, $_);
+					$Fams{$fam}{"H"}{$_} = 1;
 				}
 			}
 		}
@@ -270,12 +275,18 @@ if (exists $opt{transitivity}) {
 	$longest = 1;
 }
 
+my $printMode = "onlyOvL";
+if (exists $opt{mode}) {
+	if ($opt{mode} =~ /^a/i) {
+		$printMode = "allC";
+	} elsif ($opt{mode} =~ /^o/i) {
+		$printMode = "onlyOvL";
+	} else {
+		die "!!! opt \"--mode\" not recognized (\"A\" or \"O\")\n";
+	}
+}
 
-## CNV file headers:
-#Region	CNV	N_clean_intervals	clean_ratio_to_avg	N_dirty_intervals	dirty_ratio_to_avg	overlapping_Samples	qual
-#my @supInfos = ("N_clean_intervals", "clean_ratio_to_avg", "qual", "overlapping_Samples");
-## 1 <=> the highest value ;  1 <=> the lowest ;
-#my %singleInfo2Keep = ("qual" => "high", "overlapping_Samples" => 1);
+
 my @supInfos = ();
 if (exists $opt{info}) {
 	@supInfos = split(/,/, join(",",@{ $opt{info} }));
@@ -633,35 +644,72 @@ if (%Fams) {
 ## print all intersections
 print STDERR "## printing all intersections in $outName.txt\n";
 open($fh, ">", $outName.".txt") or die $!;
-foreach my $type (sort(keys%overlap2)) {
-	if ($CNVfmt eq "bed") {
-		print $fh "\n##\n\n$type :\n\nchr\tstart\tend";
-	} else {
-		print $fh "\n##\n\n$type :\n\nPos";
+my $headers = "";
+if ($CNVfmt eq "bed") {
+	$headers .= "#chr\tstart\tend\ttype";
+} else {
+	$headers .= "#Pos\ttype";
+}
+foreach (@Samples) {
+	$headers .= "\t$_";
+	foreach my $info (@supInfos) {
+		$headers .= "\t$_\_".$supInfoHeader{$info};
 	}
-	foreach (@Samples) { print $fh "\t$_"; }
-	print $fh "\n";
-	foreach my $chr (sort(keys%{ $overlap2{$type} })) {
-		foreach my $start (sort{$a<=>$b}keys%{ $overlap2{$type}{$chr} }) {
-			if ($CNVfmt eq "bed") {
-				print $fh $chromName{$chr}.":".($overlap2{$type}{$chr}{$start}{"printStart"} -1)."-".$overlap2{$type}{$chr}{$start}{"printEnd"};
-			} else {
-				print $fh $chromName{$chr}.":".$overlap2{$type}{$chr}{$start}{"printStart"}."-".$overlap2{$type}{$chr}{$start}{"printEnd"};
+}
+my %mergeTypes = ();
+if ($printMode eq "onlyOvL") {
+	foreach my $type (sort(keys%overlap2)) {
+		foreach my $chr (keys%{ $overlap2{$type} }) {
+			foreach my $start (keys%{ $overlap2{$type}{$chr} }) {
+				push(@{ $mergeTypes{$chr}{$start} } , makeLine($CNVfmt,$chromName{$chr},$type,\@Samples,\@supInfos,\%{ $overlap2{$type}{$chr}{$start} }));
 			}
-			foreach my $smpl (@Samples) {
-				print $fh "\t";
-				if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) {
-					my $txt = "";
-					foreach (sort{$a<=>$b}keys%{ $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl} }) {
-						$txt .= $_."-".$overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}{$_}{"end"}.";";
-					}
-					chop $txt;
-					print $fh $txt;
-				} else {
-					print $fh ".";
+		}
+	}
+	if (%mergeTypes) {
+		print $fh "$headers\n";
+		foreach my $chr (sort(keys%mergeTypes)) {
+			foreach my $start (sort{$a<=>$b}keys%{ $mergeTypes{$chr} }) {
+				foreach (@{ $mergeTypes{$chr}{$start} }) {
+					print $fh "$_\n";
 				}
 			}
-			print $fh "\n";
+		}
+	}
+} else {
+	foreach my $smpl (@Samples) {
+		foreach my $type (keys%{ $allCNVs{$smpl} }) {
+			foreach my $chr (keys%{ $allCNVs{$smpl}{$type} }) {
+				foreach my $start (keys%{ $allCNVs{$smpl}{$type}{$chr} }) {
+					if (exists $allCNVs{$smpl}{$type}{$chr}{$start}{"smplOv"}) {
+						my $overlapStart = $allCNVs{$smpl}{$type}{$chr}{$start}{"startOv"};
+						if (!exists $mergeTypes{$chr}{$overlapStart}) {
+							if (!exists $mergeTypes{$chr}{$overlapStart}{$type}) {
+								$mergeTypes{$chr}{$overlapStart}{$type} = makeLine($CNVfmt,$chromName{$chr},$type,\@Samples,\@supInfos,
+								                                                   \%{ $overlap2{$type}{$chr}{$overlapStart} });
+							}
+						}
+					} else {
+						my %miniHash;
+						$miniHash{"printStart"} = $start;
+						$miniHash{"printEnd"} = $allCNVs{$smpl}{$type}{$chr}{$start}{"end"};
+						$miniHash{"overlaps"}{$smpl}{$start}{"end"} = $allCNVs{$smpl}{$type}{$chr}{$start}{"end"};
+						foreach (@supInfos) {
+							$miniHash{"overlaps"}{$smpl}{$start}{$_} = $allCNVs{$smpl}{$type}{$chr}{$start}{$_};
+						}
+						$mergeTypes{$chr}{$start}{$type} = makeLine($CNVfmt,$chromName{$chr},$type,\@Samples,\@supInfos,\%miniHash);
+					}
+				}
+			}
+		}
+	}
+	if (%mergeTypes) {
+		print $fh "$headers\n";
+		foreach my $chr (sort(keys%mergeTypes)) {
+			foreach my $start (sort{$a<=>$b}keys%{ $mergeTypes{$chr} }) {
+				foreach my $type (sort(keys%{ $mergeTypes{$chr}{$start} })) {
+					print $fh $mergeTypes{$chr}{$start}{$type}."\n";
+				}
+			}
 		}
 	}
 }
@@ -674,57 +722,96 @@ if (%Fams) {
 
 	print STDERR "## applying family filter\n";
 	foreach my $fam (keys%Fams) {
-		my @affected = keys%{ $Fams{$fam}{"A"} };
-		if (scalar@affected == 1) {
-			# $allCNVs{$smpl1}{$type}{$chr}{$S1start}{"smplOv"} = 1
-			my $affSmpl = $affected[0];
-			foreach my $type (keys%{ $allCNVs{$affSmpl} }) {
-				foreach my $chr (keys%{ $allCNVs{$affSmpl}{$type} }) {
-					foreach my $start (keys%{ $allCNVs{$affSmpl}{$type}{$chr} }) {
-						my $keep = 1;
-						if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
-							foreach my $hSmpl (keys%{$Fams{$fam}{"H"}}) {
-								if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}{$hSmpl}) {
-									$keep = 0;
-									last;
+		if ($printMode eq "onlyOvL") {
+			my @affected = keys%{ $Fams{$fam}{"A"} };
+			if (scalar@affected == 0) {
+				foreach my $type (keys%overlap2) {
+					foreach my $chr (keys%{ $overlap2{$type} }) {
+						foreach my $start (keys%{ $overlap2{$type}{$chr} }) {
+							my $keep = 0;
+							foreach my $smpl (@{ $Fams{$fam}{"A_all"} }) {
+								if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) {
+									$keep ++;
+								}
+							}
+							if ($keep > 1) {
+								%{ $CNVbyFam{$fam}{$type}{$chr}{$start} } = %{ $overlap2{$type}{$chr}{$start} };
+							}
+						}
+					}
+				}
+			} elsif (scalar@affected == 1) {
+				# $allCNVs{$smpl1}{$type}{$chr}{$S1start}{"smplOv"} = 1
+				my $affSmpl = $affected[0];
+				foreach my $type (keys%{ $allCNVs{$affSmpl} }) {
+					foreach my $chr (keys%{ $allCNVs{$affSmpl}{$type} }) {
+						foreach my $start (keys%{ $allCNVs{$affSmpl}{$type}{$chr} }) {
+							my $keep = 1;
+							if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
+								foreach my $hSmpl (keys%{$Fams{$fam}{"H"}}) {
+									if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}{$hSmpl}) {
+										$keep = 0;
+										last;
+									}
+								}
+							}
+							if ($keep) {
+								if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
+									my $overlapStart = $allCNVs{$affSmpl}{$type}{$chr}{$start}{"startOv"};
+									%{ $CNVbyFam{$fam}{$type}{$chr}{$overlapStart} } = %{ $overlap2{$type}{$chr}{$overlapStart} };
+								} else {
+									my $end = $allCNVs{$affSmpl}{$type}{$chr}{$start}{"end"};
+									$CNVbyFam{$fam}{$type}{$chr}{$start}{"printStart"} = $start;
+									$CNVbyFam{$fam}{$type}{$chr}{$start}{"printEnd"} = $end;
+									$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start}{"end"} = $end;
+									foreach (@supInfos) {
+										$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start}{$_} = $allCNVs{$affSmpl}{$type}{$chr}{$start}{$_};
+									}
 								}
 							}
 						}
-						if ($keep) {
-							if (exists $allCNVs{$affSmpl}{$type}{$chr}{$start}{"smplOv"}) {
-								my $overlapStart = $allCNVs{$affSmpl}{$type}{$chr}{$start}{"startOv"};
-								%{ $CNVbyFam{$fam}{$type}{$chr}{$overlapStart} } = %{ $overlap2{$type}{$chr}{$overlapStart} };
-							} else {
-								my $end = $allCNVs{$affSmpl}{$type}{$chr}{$start}{"end"};
-								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printStart"} = $start;
-								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printEnd"} = $end;
-								$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start}{"end"} = $end;
-								foreach (@supInfos) {
-									$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start}{$_} = $allCNVs{$affSmpl}{$type}{$chr}{$start}{$_};
+					}
+				}
+			} else {
+				# $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl1}{$S1start} = $S1end
+				foreach my $type (keys%overlap2) {
+					foreach my $chr (keys%{ $overlap2{$type} }) {
+						foreach my $start (keys%{ $overlap2{$type}{$chr} }) {
+							my $keep = 0;
+							foreach my $smpl (@affected) {
+								if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) { $keep++; }
+							}
+							if ($keep == scalar@affected) {
+								foreach my $smpl (keys%{$Fams{$fam}{"H"}}) {
+									if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) { $keep = 0; }
 								}
+							} else {
+								$keep = 0;
+							}
+							if ($keep) {
+								%{ $CNVbyFam{$fam}{$type}{$chr}{$start} } = %{ $overlap2{$type}{$chr}{$start} };
 							}
 						}
 					}
 				}
 			}
 		} else {
-			# $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl1}{$S1start} = $S1end
-			foreach my $type (keys%overlap2) {
-				foreach my $chr (keys%{ $overlap2{$type} }) {
-					foreach my $start (keys%{ $overlap2{$type}{$chr} }) {
-						my $keep = 0;
-						foreach my $smpl (@affected) {
-							if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) { $keep++; }
-						}
-						if ($keep == scalar@affected) {
-							foreach my $smpl (keys%{$Fams{$fam}{"H"}}) {
-								if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) { $keep = 0; }
+			foreach my $smpl (@{ $Fams{$fam}{"A_all"} }) {
+				foreach my $type (keys%{ $allCNVs{$smpl} }) {
+					foreach my $chr (keys%{ $allCNVs{$smpl}{$type} }) {
+						foreach my $start (keys%{ $allCNVs{$smpl}{$type}{$chr} }) {
+							if (exists $allCNVs{$smpl}{$type}{$chr}{$start}{"smplOv"}) {
+								my $overlapStart = $allCNVs{$smpl}{$type}{$chr}{$start}{"startOv"};
+								%{ $CNVbyFam{$fam}{$type}{$chr}{$overlapStart} } = %{ $overlap2{$type}{$chr}{$overlapStart} };
+							} else {
+								my $end = $allCNVs{$smpl}{$type}{$chr}{$start}{"end"};
+								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printStart"} = $start;
+								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printEnd"} = $end;
+								$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl}{$start}{"end"} = $end;
+								foreach (@supInfos) {
+									$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl}{$start}{$_} = $allCNVs{$smpl}{$type}{$chr}{$start}{$_};
+								}
 							}
-						} else {
-							$keep = 0;
-						}
-						if ($keep) {
-							%{ $CNVbyFam{$fam}{$type}{$chr}{$start} } = %{ $overlap2{$type}{$chr}{$start} };
 						}
 					}
 				}
@@ -819,7 +906,6 @@ if (%Fams) {
 						$line .= "\t$CNVothers";
 						## add sup Infos
 						foreach my $info (@supInfos) {
-							my @smplInfos = ();
 							foreach my $smpl (@{ $Fams{$fam}{"A_all"} }) {
 								my $smplInfo = "";
 								foreach my $smplStart (@{ $smplStarts{$smpl} }) {
@@ -829,9 +915,8 @@ if (%Fams) {
 								if ($smplInfo  eq "") {
 									$smplInfo = ".";
 								}
-								push(@smplInfos, $smplInfo);
+								$line .= "\t".$smplInfo;
 							}
-							$line .= "\t".join("\t",@smplInfos);
 						}
 						push(@{ $mergeTypes{$chr}{$start} } , $line);
 					}
@@ -1040,48 +1125,48 @@ sub restrict2Intervals {
 
 }
 
-=pod
-sub restrict2Intervals {
+#################
 
-	my ($Overlaps,$Intervals) = @_;
-	# $overlap2{$type}{$chr}{$overlapStart}{"shortEnd"} = $overlapEnd
-	print STDERR "## restricting CNVs overlaps to bed intervals\n";
-	my %Overlap2;
-	my $nOread = 0;
-	my $nOkept = 0;
-	foreach my $type (keys%{$Overlaps}) {
-		foreach my $chr (keys%{$Intervals}) {
-			if (exists ${$Overlaps}{$type}{$chr}) {
-				my @StartBed = sort{$a<=>$b}(keys%{ ${$Intervals}{$chr} });
-				my @StartOverlap = sort{$a<=>$b}(keys%{ ${$Overlaps}{$type}{$chr} });
-				my $b=0;	# idx in @StartBed
-				my $o=0;	# idx in @StartOverlap
-				my $endB;
-				while ( $b < scalar@StartBed ) {	## 1st loop on bed
-					$endB = ${$Intervals}{$chr}{$StartBed[$b]};
-					if ( $endB < $StartOverlap[$o] ) {
-						$b++;
-						next;
-					}
-					while ( ($o < $#StartOverlap) && (${$Overlaps}{$type}{$chr}{$StartOverlap[$o]}{"shortEnd"} < $StartBed[$b]) ) {	## 2nd loop on overlap
-						$o++; 
-					}
-					while ( ($o < scalar@StartOverlap) && ($StartOverlap[$o] <= $endB) ) {
-						%{ $Overlap2{$type}{$chr}{$StartOverlap[$o]} } = %{ ${$Overlaps}{$type}{$chr}{$StartOverlap[$o]} };
-						$o++;
-					}
-					if ( $StartBed[$b] > ${$Overlaps}{$type}{$chr}{$StartOverlap[-1]}{"shortEnd"} ) {
-						last;
-					}
-					$b++;
-				}
+sub makeLine {
+	my ($CNVfmt,$chromName,$type,$Samples,$supInfos,$overlap) = @_;
+	my $line = "";
+	## Pos and Type
+	if ($CNVfmt eq "bed") {
+		$line .= $chromName.":".(${$overlap}{"printStart"} -1)."-".${$overlap}{"printEnd"};
+	} else {
+		$line .= $chromName.":".${$overlap}{"printStart"}."-".${$overlap}{"printEnd"};
+	}
+	$line .= "\t$type";
+	foreach my $smpl (@{$Samples}) {
+		## CNVs, if any
+		$line .= "\t";
+		my @CNVstarts;
+		if (exists ${$overlap}{"overlaps"}{$smpl}) {
+			my $txt = "";
+			foreach (sort{$a<=>$b}keys%{ ${$overlap}{"overlaps"}{$smpl} }) {
+				$txt .= $_."-".${$overlap}{"overlaps"}{$smpl}{$_}{"end"}.";";
+				push(@CNVstarts,$_);
 			}
+			chop $txt;
+			$line .= $txt;
+		} else {
+			$line .= ".";
+		}
+		## add sup Infos
+		foreach my $info (@{$supInfos}) {
+			my $txt = "";
+			foreach my $start (@CNVstarts) {
+				$txt .= ${$overlap}{"overlaps"}{$smpl}{$start}{$info}.";";
+			}
+			chop $txt;
+			if ($txt  eq "") {
+				$txt = ".";
+			}
+			$line .= "\t$txt";
 		}
 	}
-	return(\%Overlap2);
-
+	return $line;
 }
-=cut
 
 
 
