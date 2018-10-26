@@ -33,6 +33,8 @@ GetOptions (\%opt,
 	"choice|c=s",
 	"union|u",
 	"transitivity|t",
+	"info|i=s@",
+	"header|H=s@",
 	"help|h")
 or die "!!! err in command line arguments\n$!\n";
 
@@ -62,6 +64,10 @@ or: perl script.pl [options] CNVfile1 CNVfile2 ...
     -c / --choice [A/O]: CNVs shared if both samples are overlapped enough (And), or if only one is significantly overlapped (Or)
     -u / --union : overlap == union of intervals (def: intersection of intervals)
     -t / --transitivity : if A overlaps B and B overlaps C, then A overlaps C (def: no)
+    -i / --info [str][int]: add infos from input CNV lines, comma separated or set several times (def: none)
+                             either col position, if input file has no header
+                             or col name, if name is in a header line
+	-H / --header : col_name for sup infos headers, in same order as provided in opt --info
     -h / --help: this help text\n";
 }
 
@@ -92,14 +98,14 @@ if (@dir) {
 my $fh;
 my (%File,@Files);
 foreach (@ARGV) {
-	push(@Files, "$_");
+	push(@Files, $_);
 }
 if (exists $opt{fileLs}) {
 	open($fh, "<", $opt{fileLs}) or die $!;
 	while (my $line = <$fh>) {
 		unless ($line =~ /^\s*$/) {
 			$line =~ s/^\s+//; $line =~ s/\s+$//;
-			push (@Files, "$line");
+			push (@Files, $line);
 		}
 	}
 	close $fh;
@@ -265,6 +271,36 @@ if (exists $opt{transitivity}) {
 }
 
 
+## CNV file headers:
+#Region	CNV	N_clean_intervals	clean_ratio_to_avg	N_dirty_intervals	dirty_ratio_to_avg	overlapping_Samples	qual
+#my @supInfos = ("N_clean_intervals", "clean_ratio_to_avg", "qual", "overlapping_Samples");
+## 1 <=> the highest value ;  1 <=> the lowest ;
+#my %singleInfo2Keep = ("qual" => "high", "overlapping_Samples" => 1);
+my @supInfos = ();
+if (exists $opt{info}) {
+	@supInfos = split(/,/, join(",",@{ $opt{info} }));
+}
+my $infoType = "";
+my %supInfoHeader = ();
+if (@supInfos) {
+	$infoType = "index";
+	foreach (@supInfos) {
+		$supInfoHeader{$_} = $_;
+		if ($_ =~ /\D/) {
+			$infoType = "header";
+		}
+	}
+}
+if (exists $opt{header}) {
+	my $i = 0;
+	foreach ( split(/,/, join(",",@{ $opt{header} })) ) {
+		$supInfoHeader{$supInfos[$i]} = $_;
+		$i++;
+	}
+	if (scalar@supInfos > $i) {
+		warn "!!! warn: more sup. col. infos than header names\n";
+	}
+}
 
 
 
@@ -281,36 +317,53 @@ foreach my $file (@Files) {
 			die "!!! err: sample $smplName found several times\n";
 		}
 		print STDERR "\t$file\n";
-		open($fh, "<", "$file") or die $!;
-		my$someLinesOK = 0;
+		open($fh, "<", $file) or die $!;
+		my $nLines = 0;
+		my $nLinesOK = 0;
+		my ($lineOk, @tab, %headerIdx, $chrName, $chr, $start, $end, $type);
 		while (my $line = <$fh>) {
-			if ($line !~ /^#/ && $line !~ /^\s*$/) {
-				chomp $line;
-				my @tab = split(/\t/,$line);
-				if ($CNVfmt eq "bed" && $line =~ m/^(\w+)\t(\d+)\t(\d+)/) {
-					$someLinesOK++;
-					my $chrName = $1;
-					my $start = $2 + 1;
-					my $end = $3;
-					my $chr = $chrName;
-					$chr =~ s/^chr//i;
-					$chromName{$chr} = $chrName;
-					$allCNVs{$smplName}{lc($tab[$idx{"type"}])}{$chr}{$start}{"end"} = $end;
-				} elsif ($CNVfmt eq "reg" && $tab[$idx{"pos"}] =~ m/^(\w+) *: *(\d+) *- *(\d+)/) {
-					$someLinesOK++;
-					my $chrName = $1;
-					my $start = $2;
-					my $end = $3;
-					my $chr = $chrName;
-					$chr =~ s/^chr//i;
-					$chromName{$chr} = $chrName;
-					$allCNVs{$smplName}{lc($tab[$idx{"type"}])}{$chr}{$start}{"end"} = $end;
+			$nLines++;
+			chomp $line;
+			@tab = split(/\t/,$line);
+			if ($infoType eq "header" && $nLines == 1) {
+				for (my $i = 0; $i < @tab; $i++) {
+					$headerIdx{$tab[$i]} = $i;
+				}
+			} else {
+				if ($line !~ /^#/ && $line !~ /^\s*$/) {
+					$lineOk = 0;
+					if ($CNVfmt eq "bed" && $line =~ m/^(\w+)\t(\d+)\t(\d+)/) {
+						$lineOk = 1;
+						$chrName = $1;
+						$start = $2 + 1;
+						$end = $3;
+					} elsif ($CNVfmt eq "reg" && $tab[$idx{"pos"}] =~ m/^(\w+) *: *(\d+) *- *(\d+)/) {
+						$lineOk = 1;
+						$chrName = $1;
+						$start = $2;
+						$end = $3;
+					}
+					if ($lineOk) {
+						$nLinesOK++;
+						$chr = $chrName;
+						$chr =~ s/^chr//i;
+						$chromName{$chr} = $chrName;
+						$type = lc($tab[$idx{"type"}]);
+						$allCNVs{$smplName}{$type}{$chr}{$start}{"end"} = $end;
+						foreach (@supInfos) {
+							if ($infoType eq "header") {
+								$allCNVs{$smplName}{$type}{$chr}{$start}{$_} = $tab[$headerIdx{$_}];
+							} else {
+								$allCNVs{$smplName}{$type}{$chr}{$start}{$_} = $tab[($_-1)];
+							}
+						}
+					}
 				}
 			}
 		}
 		close $fh;
-		unless ($someLinesOK) {
-			print STDERR "!!! err: no correctly formated line found in $file (format = $CNVfmt)\n";
+		unless ($nLinesOK) {
+			print STDERR "no correctly formated line found in $file (format = $CNVfmt)\n";
 		}
 	}
 }
@@ -600,7 +653,7 @@ foreach my $type (sort(keys%overlap2)) {
 				if (exists $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}) {
 					my $txt = "";
 					foreach (sort{$a<=>$b}keys%{ $overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl} }) {
-						$txt .= $_."-".$overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}{$_}.";";
+						$txt .= $_."-".$overlap2{$type}{$chr}{$start}{"overlaps"}{$smpl}{$_}{"end"}.";";
 					}
 					chop $txt;
 					print $fh $txt;
@@ -645,7 +698,10 @@ if (%Fams) {
 								my $end = $allCNVs{$affSmpl}{$type}{$chr}{$start}{"end"};
 								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printStart"} = $start;
 								$CNVbyFam{$fam}{$type}{$chr}{$start}{"printEnd"} = $end;
-								$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start} = $end;
+								$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start}{"end"} = $end;
+								foreach (@supInfos) {
+									$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$affSmpl}{$start}{$_} = $allCNVs{$affSmpl}{$type}{$chr}{$start}{$_};
+								}
 							}
 						}
 					}
@@ -690,9 +746,9 @@ if (%Fams) {
 			}
 			foreach (@{ $Fams{$fam}{"A_all"} }) {
 				if (exists $Fams{$fam}{"A"}{$_}) {
-					$headers .= "\t$_(A)";
+					$headers .= "\tboundaries_$_(A)";
 				} else {
-					$headers .= "\t$_(H)";
+					$headers .= "\tboundaries_$_(H)";
 				}
 			}
 			my $otherGroups = scalar(keys%Fams) - 1;
@@ -707,6 +763,11 @@ if (%Fams) {
 				unless ($belong2Fam) { $otherGroups++; }
 			}
 			$headers .= "\tin_other_groups(tot=$otherGroups)";
+			foreach my $info (@supInfos) {
+				foreach my $smpl (@{ $Fams{$fam}{"A_all"} }) {
+					$headers .= "\t$smpl\_".$supInfoHeader{$info};
+				}
+			}
 			## CNVs :
 			my %mergeTypes = ();
 			foreach my $type (sort(keys%{ $CNVbyFam{$fam} })) {
@@ -721,12 +782,14 @@ if (%Fams) {
 						}
 						$line .= "\t$type";
 						## included intervals
+						my (%smplStarts);
 						foreach my $smpl (@{ $Fams{$fam}{"A_all"} }) {
 							$line .=  "\t";
 							if (exists $CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl}) {
 								my $txt = "";
 								foreach (sort{$a<=>$b}keys%{ $CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl} }) {
-									$txt .= $_."-".$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl}{$_}.";";
+									$txt .= $_."-".$CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl}{$_}{"end"}.";";
+									push(@{ $smplStarts{$smpl} }, $_);
 								}
 								chop $txt;
 								$line .=  $txt;
@@ -754,6 +817,22 @@ if (%Fams) {
 							}
 						}
 						$line .= "\t$CNVothers";
+						## add sup Infos
+						foreach my $info (@supInfos) {
+							my @smplInfos = ();
+							foreach my $smpl (@{ $Fams{$fam}{"A_all"} }) {
+								my $smplInfo = "";
+								foreach my $smplStart (@{ $smplStarts{$smpl} }) {
+									$smplInfo .= $CNVbyFam{$fam}{$type}{$chr}{$start}{"overlaps"}{$smpl}{$smplStart}{$info}.";";
+								}
+								chop $smplInfo;
+								if ($smplInfo  eq "") {
+									$smplInfo = ".";
+								}
+								push(@smplInfos, $smplInfo);
+							}
+							$line .= "\t".join("\t",@smplInfos);
+						}
 						push(@{ $mergeTypes{$chr}{$start} } , $line);
 					}
 				}
@@ -831,8 +910,8 @@ sub fillOverlap1 {
 		if ($S2start > $S1start) { $overStart = $S2start; } else { $overStart = $S1start; }
 		if ($S2end < $S1end) { $overEnd = $S2end; } else { $overEnd = $S1end; }
 	}
-	${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start} = $S1end;
-	${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl2}{$S2start} = $S2end;
+	%{ ${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl1}{$S1start} } = %{ ${$allCNVs}{$smpl1}{$type}{$chr}{$S1start} };
+	%{ ${$overlap1}{$type}{$chr}{$overStart}{$overEnd}{$smpl2}{$S2start} } = %{ ${$allCNVs}{$smpl2}{$type}{$chr}{$S2start} };
 
 	${$allCNVs}{$smpl1}{$type}{$chr}{$S1start}{"smplOv"}{$smpl2} = 1;
 	${$allCNVs}{$smpl2}{$type}{$chr}{$S2start}{"smplOv"}{$smpl1} = 1;
