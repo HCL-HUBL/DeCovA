@@ -1591,7 +1591,8 @@ foreach my$sample (keys%{$Results_r}) {
 						if (exists ${$CNV_opt_r}{"trueCNV"}) { print $fh_sum "\t$qual\n"; }
 						else { print $fh_sum "\n"; }
 						##all intervals
-						print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[0]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[0]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[0]]{"End"}-${$Regions_r}[${$nextReg_r}[0]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[0]]{"label"}."\t".(${$regionIndice_r}{${$nextReg_r}[0]}+1)."\t".${$Results_r}{$sample}{${$nextReg_r}[0]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[0]]{$sample}{"ratio2center"});
+						#print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[0]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[0]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[0]]{"End"}-${$Regions_r}[${$nextReg_r}[0]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[0]]{"label"}."\t".(${$regionIndice_r}{${$nextReg_r}[0]}+1)."\t".${$Results_r}{$sample}{${$nextReg_r}[0]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[0]]{$sample}{"ratio2center"});
+						print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[0]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[0]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[0]]{"End"}-${$Regions_r}[${$nextReg_r}[0]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[0]]{"Infos"}."\t".(${$regionIndice_r}{${$nextReg_r}[0]}+1)."\t".${$Results_r}{$sample}{${$nextReg_r}[0]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[0]]{$sample}{"ratio2center"});
 						if ($spread_test) { print $fh_allI "\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[0]]{$sample}{"ratio2spread"}); }
 						print $fh_allI "\t".${$Regions_r}[${$nextReg_r}[0]]{"nb_CNV"}{${$Results_r}{$sample}{${$nextReg_r}[0]}};
 						if (@{ ${$CNV_opt_r}{"fields"} }) {
@@ -1610,7 +1611,8 @@ foreach my$sample (keys%{$Results_r}) {
 							push(@cleanCNV, ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"});
 							push(@dirtyCNV, ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"});
 							if (exists ${$regionIndice_r}{${$nextReg_r}[$j]}) {
-								print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[$j]]{"End"}-${$Regions_r}[${$nextReg_r}[$j]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[$j]]{"label"}."\t".(${$regionIndice_r}{${$nextReg_r}[$j]}+1)."\t".${$Results_r}{$sample}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"});
+								#print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[$j]]{"End"}-${$Regions_r}[${$nextReg_r}[$j]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[$j]]{"label"}."\t".(${$regionIndice_r}{${$nextReg_r}[$j]}+1)."\t".${$Results_r}{$sample}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"});
+								print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[$j]]{"End"}-${$Regions_r}[${$nextReg_r}[$j]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[$j]]{"Infos"}."\t".(${$regionIndice_r}{${$nextReg_r}[$j]}+1)."\t".${$Results_r}{$sample}{${$nextReg_r}[$j]}."\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"});
 								if ($spread_test) { print $fh_allI "\t".sprintf("%.3f",${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2spread"}); }
 								print $fh_allI "\t".${$Regions_r}[${$nextReg_r}[$j]]{"nb_CNV"}{${$Results_r}{$sample}{${$nextReg_r}[$j]}};
 								if (@{ ${$CNV_opt_r}{"fields"} }) {
@@ -1624,7 +1626,8 @@ foreach my$sample (keys%{$Results_r}) {
 							$Result2{$qual}{$sample}{${$nextReg_r}[$j]} = "NA";
 							$Result4{$sample}{$Chrom}{${$Regions_r}[${$nextReg_r}[$j]]{"Start"}}{${$Regions_r}[${$nextReg_r}[$j]]{"End"}} = "NA";
 							if (exists ${$regionIndice_r}{${$nextReg_r}[$j]}) {
-								print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[$j]]{"End"}-${$Regions_r}[${$nextReg_r}[$j]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[$j]]{"label"}."\t".(${$regionIndice_r}{${$nextReg_r}[$j]}+1)."\t";
+								#print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[$j]]{"End"}-${$Regions_r}[${$nextReg_r}[$j]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[$j]]{"label"}."\t".(${$regionIndice_r}{${$nextReg_r}[$j]}+1)."\t";
+								print $fh_allI ${$chromName_r}{$Chrom}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"Start"}."\t".${$Regions_r}[${$nextReg_r}[$j]]{"End"}."\t".(${$Regions_r}[${$nextReg_r}[$j]]{"End"}-${$Regions_r}[${$nextReg_r}[$j]]{"Start"}+1)." bp\t".${$Regions_r}[${$nextReg_r}[$j]]{"Infos"}."\t".(${$regionIndice_r}{${$nextReg_r}[$j]}+1)."\t";
 								if (exists ${$Regions_r}[${$nextReg_r}[$j]]{"Appel"}) { print $fh_allI "NA\t"; }
 								else { print $fh_allI "no\t"; }
 								if (exists ${$Regions_r}[${$nextReg_r}[$j]]{$sample}{"ratio2center"}) {
