@@ -86,7 +86,8 @@ GetOptions (\%opt,
 	"maxPlot=i",
 	"genePlot",
 	"interPlot",
-	"gatk:s",
+	"gatk3:s",
+	"gatk4:s",
 	"ram|x=i",
 	"cpu=i",
 	"bedtools=s",
@@ -139,7 +140,7 @@ if (@ARGV) {
 	print"Invalid parameters:\n";
 	foreach(@ARGV) { print"\t$_\n"; }
 	die "(forgotten \"-\"?)\n";
-	}
+}
 
 sub usage {
 die "usage:
@@ -149,123 +150,123 @@ die "usage:
 options:
 
 inputs:
-	-f / --file [file]: list of bam files (comma separated, or set several times)
-	-F / --fList [file]: file with such a list of bam files (one bam per line)
-	-d / --dir [dir]: directory(ies) where to find bam files (comma separated, or set several times)
-	-s / --suffix [str]: suffix to add before opening bam files
-	-r / --ref [file]: gene annotation file (can be .gz)
-	--fmt [gtf/gff3/ucsc] : gene annotation file format (ucsc <=> UCSC refGene) ; if not provided, determined from extension (txt => UCSC refGene)
-	-b / --bed [file]: bed file, used to analyse depth coverage
-	-m / --mut [file]: mut file, used to plot known mutations ; format: \"chr<tab>pos(1-based)<tab>info\" (vcf files are ok ; can be .gz)
-	-i / --id [str]: list of of genes/transcripts ids (comma separated, or set several times)
-	-I / --idList [file]: file with a list of of genes/transcripts ids (one id per line)
-	-g / --genome [file]: path to genome.fa file, if available (required if using GATK)
-	--sex_file [file]: format: patient<tab>sex
-	--raw_cov [file]: use this coverage tool output .cov file (to skip bam analysis)
-	--bed_cov [file]: use this DeCovA's output .cov.txt file (to skip cov bed analysis in CNV detect)
+    -f / --file [file]: list of bam files (comma separated, or set several times)
+    -F / --fList [file]: file with such a list of bam files (one bam per line)
+    -d / --dir [dir]: directory(ies) where to find bam files (comma separated, or set several times)
+    -s / --suffix [str]: suffix to add before opening bam files
+    -r / --ref [file]: gene annotation file (can be .gz)
+    --fmt [gtf/gff3/ucsc] : gene annotation file format (ucsc <=> UCSC refGene) ; if not provided, determined from extension (txt => UCSC refGene)
+    -b / --bed [file]: bed file, used to analyse depth coverage
+    -m / --mut [file]: mut file, used to plot known mutations ; format: \"chr<tab>pos(1-based)<tab>info\" (vcf files are ok ; can be .gz)
+    -i / --id [str]: list of of genes/transcripts ids (comma separated, or set several times)
+    -I / --idList [file]: file with a list of of genes/transcripts ids (one id per line)
+    -g / --genome [file]: path to genome.fa file, if available (required if using GATK)
+    --sex_file [file]: format: patient<tab>sex
+    --raw_cov [file]: use this coverage tool output .cov file (to skip bam analysis)
+    --bed_cov [file]: use this DeCovA's output .cov.txt file (to skip cov bed analysis in CNV detect)
 
 outputs:
-	-O / --outdir [dir]: out directory (default: folder named with date)
-	-S / --graphSum : will perform graphSums (sum of covered samples by position)
-	-A / --allSample : will perform graphAllSample (depthline by gene and by sample, all samples graph on same .png file)
-	-X / --bySample : will perform graphBySample (depthline by gene and by sample, one sample by .png file)
-	-M / --noDepthMut : does not print, foreach file, depth at known mutations provided by opt -m (default: yes if -opt m)
-	-P / --covPlot : will perform covPlots
-	-B / --covBed : will output cov of bed intervals
-	-C / --CNV : will output CNV foreach bed intervals
-	--Reseq : [float,0-1] : print bed interval if cov < value (def: do not print)
-	--geneReport : will print all uncovered genomic intervals (within gene region) in 1 txt file per sample (default: no)
-	--bedReport : will print all uncovered intervals (within bed intervals) in 1 txt file per sample (default: no)
-	--summary [Y/N] : to print summary txt file (default: yes if -S -A -X)
-	-k / --keepCov : do not erase coverage file at the end of the process
-	-K / --keepBed : do not erase bed file inferred from gene list, at the end of the process (and eventually rename)
+    -O / --outdir [dir]: out directory (default: folder named with date)
+    -S / --graphSum : will perform graphSums (sum of covered samples by position)
+    -A / --allSample : will perform graphAllSample (depthline by gene and by sample, all samples graph on same .png file)
+    -X / --bySample : will perform graphBySample (depthline by gene and by sample, one sample by .png file)
+    -M / --noDepthMut : does not print, foreach file, depth at known mutations provided by opt -m (default: yes if -opt m)
+    -P / --covPlot : will perform covPlots
+    -B / --covBed : will output cov of bed intervals
+    -C / --CNV : will output CNV foreach bed intervals
+    --Reseq : [float,0-1] : print bed interval if cov < value (def: do not print)
+    --geneReport : will print all uncovered genomic intervals (within gene region) in 1 txt file per sample (default: no)
+    --bedReport : will print all uncovered intervals (within bed intervals) in 1 txt file per sample (default: no)
+    --summary [Y/N] : to print summary txt file (default: yes if -S -A -X)
+    -k / --keepCov : do not erase coverage file at the end of the process
+    -K / --keepBed : do not erase bed file inferred from gene list, at the end of the process (and eventually rename)
 
 parameters:
   *gene/transcript regions analysis param.:
-	-N / --nonCoding : analyse also Non coding transcripts (default: no)
-	-U / --noUTR : does not take into account UTR regions, for graphs (default: yes)
-	-u / --noUTRinTxt : does not take into account UTR regions, for summary txt file and plots (default: yes)
-	-t / --depthThreshold [int]: depth thresholds (comma separated, or set several times)
-	-T / --printThreshold [int]: depth threshold used for txt outputs (must be one of those in opt -t; default : the smallest one)
-	--noGraphThreshold : all graphs will be printed, whatever the coverage 
-		(default: only the genes not fully covered at threshold in -opt -T will be drawn)
-	--noAllTranscripts : does not print All transcripts on same file, in graphBySample (default: yes)
-	--maxDepth [int]: max depth value when printing graph (optional)
-	-l / --expand2val [int]: length to add at each ends of exons, on graphs (default: 0) ; or [int1,int2] : lengths to add in 5' and 3'
-	--UDstream [int]: length to add at each ends of genes, on graphs ; or [int1,int2] : lengths to add upstram and downstream
-	--splitBedFromId : if padding creates overlapping exons, take the mid between them (for report)
-	--mergeBedFromId : merge overlapping exons
-	-L / --expand2bed : expand length of gene analysed regions to bed coord, if -l < bed , on graphs (default: no)
-	--Ltxt [+/-int]: does take into account expanded length (from -l and -L) for txt outputs (default: no), or add a different length
-	--UDtxt [+/-int]: does take into account up/downStream length for txt outputs (default: no), or add a different length
-	-R / --noReverse : does not reverse regions if sens of transcript = (-) (default: yes)
-	--nGraph : max nber of graphs per sheet (default : all samples or all transcripts)
+    -N / --nonCoding : analyse also Non coding transcripts (default: no)
+    -U / --noUTR : does not take into account UTR regions, for graphs (default: yes)
+    -u / --noUTRinTxt : does not take into account UTR regions, for summary txt file and plots (default: yes)
+    -t / --depthThreshold [int]: depth thresholds (comma separated, or set several times)
+    -T / --printThreshold [int]: depth threshold used for txt outputs (must be one of those in opt -t; default : the smallest one)
+    --noGraphThreshold : all graphs will be printed, whatever the coverage 
+        (default: only the genes not fully covered at threshold in -opt -T will be drawn)
+    --noAllTranscripts : does not print All transcripts on same file, in graphBySample (default: yes)
+    --maxDepth [int]: max depth value when printing graph (optional)
+    -l / --expand2val [int]: length to add at each ends of exons, on graphs (default: 0) ; or [int1,int2] : lengths to add in 5' and 3'
+    --UDstream [int]: length to add at each ends of genes, on graphs ; or [int1,int2] : lengths to add upstram and downstream
+    --splitBedFromId : if padding creates overlapping exons, take the mid between them (for report)
+    --mergeBedFromId : merge overlapping exons
+    -L / --expand2bed : expand length of gene analysed regions to bed coord, if -l < bed , on graphs (default: no)
+    --Ltxt [+/-int]: does take into account expanded length (from -l and -L) for txt outputs (default: no), or add a different length
+    --UDtxt [+/-int]: does take into account up/downStream length for txt outputs (default: no), or add a different length
+    -R / --noReverse : does not reverse regions if sens of transcript = (-) (default: yes)
+    --nGraph : max nber of graphs per sheet (default : all samples or all transcripts)
 
   *plot param:
-	--binPlot [int]: bin width for covPlot (default=10)
-	--maxPlot [int]: max depth for covPlot (default=100)
-	--genePlot : will perform plots for regions extracted from genes coord, not only for bed intervals (default: no)
-	--interPlot : will produce intersection covPlot (default: no)
+    --binPlot [int]: bin width for covPlot (default=10)
+    --maxPlot [int]: max depth for covPlot (default=100)
+    --genePlot : will perform plots for regions extracted from genes coord, not only for bed intervals (default: no)
+    --interPlot : will produce intersection covPlot (default: no)
 
   *bam filters
- 	--dedup : do not take in account dup reads (default keep all reads; enter \"do\" to perform Picard deduplication) 
-	--mbq : minimum base quality (default 0; requires gatk)
-	--mmq : minimum mapping quality (default 0)
+    --dedup : do not take in account dup reads (default keep all reads; enter \"do\" to perform Picard deduplication) 
+    --mbq : minimum base quality (default 0; requires gatk)
+    --mmq : minimum mapping quality (default 0)
 
   *cov_bed param:
-	--cov_fields [min/max/tot/mean/median/cov]: fields foreach intervals in covBed (comma separated) (default: min,mean,cov)
-	--Lbed [int]: length added out of bed interval ends (default: 0)
-	--split_bed : splits overlapping bed intervals for Cov and CNV analyses
-	--no_overlap_bed : removes overlapping bed intervals for Cov and CNV analyses
-	--cut_bed [+/-cutL:x,minL:y,maxL:z,keepLast:s]: cut bed intervals in shorter fragments:
-				cutL : length of segmentation (def: 150)
-				minL : min length required to keep the last interval, after segmentation (def: --cutL/2)
-				maxL : length above which bed intervals will be segmented, in N segments of \"cutL\" length (def: as --cutL)
-				keepLast : if last interval shorter than minL :
-						enter m (merge) if want that last two ones are simply merged
-						enter h (half) if want that last two ones are output with length = half of their sum
-						enter n if want to through it out
-	--reAnnot_bed : removes and replaces 4th column of bed file with gene info
-		(optional args: g,t,e,i,o : indicates to annotate with gene/transcript/exon/intron/intergenic infos; default: all)
+    --cov_fields [min/max/tot/mean/median/cov]: fields foreach intervals in covBed (comma separated) (default: min,mean,cov)
+    --Lbed [int]: length added out of bed interval ends (default: 0)
+    --split_bed : splits overlapping bed intervals for Cov and CNV analyses
+    --no_overlap_bed : removes overlapping bed intervals for Cov and CNV analyses
+    --cut_bed [+/-cutL:x,minL:y,maxL:z,keepLast:s]: cut bed intervals in shorter fragments:
+                cutL : length of segmentation (def: 150)
+                minL : min length required to keep the last interval, after segmentation (def: --cutL/2)
+                maxL : length above which bed intervals will be segmented, in N segments of \"cutL\" length (def: as --cutL)
+                keepLast : if last interval shorter than minL :
+                        enter m (merge) if want that last two ones are simply merged
+                        enter h (half) if want that last two ones are output with length = half of their sum
+                        enter n if want to through it out
+    --reAnnot_bed : removes and replaces 4th column of bed file with gene info
+        (optional args: g,t,e,i,o : indicates to annotate with gene/transcript/exon/intron/intergenic infos; default: all)
 
   *CNV_detect param:
-	--level2 : \"avg\"/\"med\" : use average/median as center of depths of a region (def: med)(if spread2 is set, level2 is unset, unless explicitedly)
-	--spread2 : \"std\"/\"qtile\" : use standard deviation/deviation from quartile as dispersion of depths of a region (def: none)(std forces avg, qtile forces med)
-	--level_del [float [0-1]] (def: 0.8)
-	--level_dup [float >1] (def: 1.2)
-	--spread_del [float <0] (def: none)
-	--spread_dup [float >0]  (def: none)
-	--range [float]: samples kept for avg-std calculation if within mediane+/-range*quartile (def: none, ie all samples used)
-	--highQual [li:float/ls:float/si:float/ss:float/c:int]: flag as high qual if one of following criteria, comma separated :
-		li=level inf, ls=level sup, si=spread inf, ss=spread sup, c=consecutive :
-		ex : li:0.25,ls:1.75,si:-5,ss:5,c:2
-	--ex_region [float [0-1]] : region excluded from analysis if CNVs/N_samples >value (def: 1)
-	--ex_sample [float [0-1]] : sample excluded from analysis if CNVs/N_regions >value (def: 1)
-	--ex_cov [float [0-1]] : region excluded from analysis if none of the samples have cov >=value (def: 0)
-	--ex_DP [int] : region excluded from analysis if avg depth <=value (def: 0)
-	--max_nonCNVcons [int]: max nber of non-CNV consecutive intervals tolerated within a CNV (def: 0)
-	--max_nonCNVrate [int]: max rate of non-CNV intervals tolerated within a CNV (def: 0)
-	--ratioByGender [a/g/no]:	enter \"a\" : foreach region from all chrom, depth ratio computed separately for F and M ; 
-				enter \"g\" : foreach region from gonosomes only, depth ratio computed separately for F and M
-				def: no (depth ratio for F and M together)
-	--normAllChr : total depth used to norm sample depths = sum on all chr, whatever the sex (def: double the depth for chrX if male, and skip chrY in the sum)
-	--normDepth [mean/tot] : total depth used to norm sample depths = sum of total depths of each region or sum of mean depths of each region (def)
-	--graph_byGene : to enable graph for gene affected by a CNV (def: no)
-	--graph_byChr : to enable graph by chromosome (def: no)
-	--graph_byCNV : to enable graph around each CNV (def: yes)
-	--CNV_fields [min/max/med/avg/std/Q1/Q3]: list of fields foreach region (comma separated) (default: none)
+    --level2 : \"avg\"/\"med\" : use average/median as center of depths of a region (def: med)(if spread2 is set, level2 is unset, unless explicitedly)
+    --spread2 : \"std\"/\"qtile\" : use standard deviation/deviation from quartile as dispersion of depths of a region (def: none)(std forces avg, qtile forces med)
+    --level_del [float [0-1]] (def: 0.8)
+    --level_dup [float >1] (def: 1.2)
+    --spread_del [float <0] (def: none)
+    --spread_dup [float >0]  (def: none)
+    --range [float]: samples kept for avg-std calculation if within mediane+/-range*quartile (def: none, ie all samples used)
+    --highQual [li:float/ls:float/si:float/ss:float/c:int]: flag as high qual if one of following criteria, comma separated :
+        li=level inf, ls=level sup, si=spread inf, ss=spread sup, c=consecutive :
+        ex : li:0.25,ls:1.75,si:-5,ss:5,c:2
+    --ex_region [float [0-1]] : region excluded from analysis if CNVs/N_samples >value (def: 1)
+    --ex_sample [float [0-1]] : sample excluded from analysis if CNVs/N_regions >value (def: 1)
+    --ex_cov [float [0-1]] : region excluded from analysis if none of the samples have cov >=value (def: 0)
+    --ex_DP [int] : region excluded from analysis if avg depth <=value (def: 0)
+    --max_nonCNVcons [int]: max nber of non-CNV consecutive intervals tolerated within a CNV (def: 0)
+    --max_nonCNVrate [int]: max rate of non-CNV intervals tolerated within a CNV (def: 0)
+    --ratioByGender [a/g/no]:	enter \"a\" : foreach region from all chrom, depth ratio computed separately for F and M ; 
+                enter \"g\" : foreach region from gonosomes only, depth ratio computed separately for F and M
+                def: no (depth ratio for F and M together)
+    --normAllChr : total depth used to norm sample depths = sum on all chr, whatever the sex (def: double the depth for chrX if male, and skip chrY in the sum)
+    --normDepth [mean/tot] : total depth used to norm sample depths = sum of total depths of each region or sum of mean depths of each region (def)
+    --graph_byGene : to enable graph for gene affected by a CNV (def: no)
+    --graph_byChr : to enable graph by chromosome (def: no)
+    --graph_byCNV : to enable graph around each CNV (def: yes)
+    --CNV_fields [min/max/med/avg/std/Q1/Q3]: list of fields foreach region (comma separated) (default: none)
 
-  *external tools path:
-	--bedtools [dir/file]: enter path to executable, if not installed as root or not in path
-	--samtools [dir/file]: enter  path to executable, if not installed as root
-	--picard [dir/file]: enter path to executable .jar, if not installed as root
-	--gatk [+/-dir/file]: cov analysis will be performed by gatk (default:bedtools; enter path to executable, if not installed as root)
+    *external tools path:
+    --bedtools [file]: enter path to executable, if not installed as root or not in path
+    --samtools [file]: enter  path to executable, if not installed as root
+    --gatk3 [file]: path to gatk V3 .jar file
+    --gatk4 [file]: path to gatk V4 .jar file
 
-  *general:
-	-x / --ram [int]: memory for gatk (in Go)
-	--cpu [int]: multi-thread for gatk (def: 1)
-	-v / --version : current version 
-	-h / --help : help
+    *general:
+    -x / --ram [int]: memory for gatk (in Go)
+    --cpu [int]: multi-thread for gatk (def: 1)
+    -v / --version : current version 
+    -h / --help : help
 	\n";
 }
 
@@ -279,18 +280,18 @@ if (exists $opt{dir}) {
 	foreach (@dir) {
 		unless(-d $_) { die "!!!\n\t$_ directory not found\n"; }
 		unless ($_ =~ /\/$/) { $_ .= "/"; } 
-		}
 	}
+}
 #-f: files
 my $suff = "";
 if (exists $opt{suffix}) { 
 	$suff = $opt{suffix}; 
 	$suff =~ s/.bam$//;
-	}
+}
 my @Files = ();
 if (exists $opt{file}) {
 	@Files = split(/,/, join(',',@{$opt{file}}));
-	}
+}
 if (exists $opt{fList}) {
 	if (-f $opt{fList}) {
 		open(my $fh, "<", $opt{fList}) || die "!!!\n\tcan't open file $opt{fList} ($!)\n";
@@ -298,23 +299,25 @@ if (exists $opt{fList}) {
 			unless ($line =~ /^\s*$/) {
 				$line =~ s/\s*$//; $line =~ s/^\s*//;
 				push (@Files, $line);
-				}
 			}
-		close $fh;
 		}
-	else { die $opt{fList}." not found\n"; }
+		close $fh;
+	} else {
+		die $opt{fList}." not found\n";
 	}
+}
 foreach my $dir(@dir) {
 	find(\&subDir, $dir);
-	}
+}
 sub subDir {
-if ($suff) {
-	if (-f $_ && $_=~/$suff.bam$/) 
-		{ push(@Files, $File::Find::name); }
-	}
-else {
-	if (-f $_ && $_=~/.bam$/) 
-		{ push(@Files, $File::Find::name); }
+	if ($suff) {
+		if (-f $_ && $_=~/$suff.bam$/) {
+			push(@Files, $File::Find::name);
+		}
+	} else {
+		if (-f $_ && $_=~/.bam$/) {
+			push(@Files, $File::Find::name);
+		}
 	}
 }
 my(%fName,%path);	#fName: name of file, without path and extension
@@ -329,13 +332,19 @@ if (@Files) {
 	foreach (@Files) {
 		($fName{$_},$path{$_}) = fileparse($_,$extenS);
 		if (exists $opt{dir} && exists $opt{file}) {
-			if (scalar@dir>1) { die "!!!\n\tnot possible to affect path to files if several paths specified\n"; }
-			else { $path{$_} = $dir[0]; }
+			if (scalar@dir>1) {
+				die "!!!\n\tnot possible to affect path to files if several paths specified\n";
+			} else {
+				$path{$_} = $dir[0];
 			}
-		if (-f $path{$_}.$fName{$_}.$extenS) { print "\t\t".$path{$_}.$fName{$_}.$extenS."\n"; }
-		else { die "!!!\n\t".$path{$_}.$fName{$_}.$extenS." file not found\n"; }
+		}
+		if (-f $path{$_}.$fName{$_}.$extenS) {
+			print "\t\t".$path{$_}.$fName{$_}.$extenS."\n";
+		} else {
+			die "!!!\n\t".$path{$_}.$fName{$_}.$extenS." file not found\n";
 		}
 	}
+}
 print "\n";
 
 my $refFile = "";
@@ -343,9 +352,10 @@ if (exists $opt{"ref"}) {
 	if (-f $opt{"ref"}) {
 		$refFile = $opt{"ref"};
 		print "\t$refFile OK\n";
-		}
-	else { die "!!!\n\t".$opt{"ref"}." not found\n"; }
+	} else {
+		die "!!!\n\t".$opt{"ref"}." not found\n";
 	}
+}
 my $refFmt = "";
 if ($refFile) {
 	if (exists $opt{fmt}) {
@@ -353,14 +363,13 @@ if ($refFile) {
 		elsif ($opt{fmt} =~ /gtf/i) { $refFmt = "gtf"; }
 		elsif ($opt{fmt} =~ /gff/i) { $refFmt = "gff3"; }
 		else { die "!!!\n\t".$opt{fmt}." format not recognized (ucsc / gtf/ gff3)\n"; }
-		}
-	else {
+	} else {
 		if ($refFile =~ /.txt(.gz)?$/) { $refFmt = "ucsc"; }
 		elsif ($refFile =~ /.gtf(.gz)?$/) { $refFmt = "gtf"; }
 		elsif ($refFile =~ /.gff3(.gz)?$/) { $refFmt = "gff3"; }
 		else { die "!!!\n\t$refFile format not recognized\n"; }
-		}
 	}
+}
 
 my($bedFile,$bedName);
 if (exists $opt{bed}) { 
@@ -368,9 +377,10 @@ if (exists $opt{bed}) {
 		$bedFile = $opt{bed};
 		$bedName = fileparse($bedFile,".bed");
 		print "\t$bedFile OK\n";
-		}
-	else { die "!!!\n\t".$opt{bed}." not found\n"; }
+	} else {
+		die "!!!\n\t".$opt{bed}." not found\n";
 	}
+}
 
 my($mutFile,$mutFileName);
 if (exists $opt{mut}) { 
@@ -378,18 +388,20 @@ if (exists $opt{mut}) {
 		$mutFile = $opt{mut};
 		$mutFileName = fileparse($mutFile);
 		print "\t$mutFile OK\n";
-		}
-	else { die "!!!\n\t".$opt{mut}." not found\n"; }
+	} else {
+		die "!!!\n\t".$opt{mut}." not found\n";
 	}
+}
 
 my $outfile = "cov_";
-if ($opt{outfile})
-	{ $outfile = $opt{outfile}; }
+if ($opt{outfile}) {
+	$outfile = $opt{outfile};
+}
 
 my @IDs = ();
 if (exists $opt{id}) {
 	@IDs = split(/,/, join(',',@{$opt{id}}));
-	}
+}
 if (exists $opt{idList}) {
 	if (-f $opt{idList}) {
 		open(my $fh, "<", $opt{idList}) || die "!!!\n\tcan't open file $opt{idList} ($!)\n";
@@ -398,21 +410,22 @@ if (exists $opt{idList}) {
 				#$line =~ s/\s//g;
 				$line =~ s/\s+$//; $line =~ s/^\s+//;
 				push(@IDs, $line);
-				}
 			}
-		close $fh;
 		}
-	else { die "!!!\n\t".$opt{idList}." not found\n"; }
+		close $fh;
+	} else {
+		die "!!!\n\t".$opt{idList}." not found\n";
 	}
+}
 if (@IDs) {
 	my %IDs = ();
 	foreach my $id (@IDs) { 
 		$IDs{$id} = 1;
-		}
+	}
 	@IDs = sort(keys%IDs);
 	#print "Regions to analyse: \n";
 	#foreach (@IDs) { print "\t$_\n"; }
-	}
+}
 
 my $raw_cov_file = "";
 if (exists $opt{raw_cov}) {
@@ -420,9 +433,10 @@ if (exists $opt{raw_cov}) {
 		$raw_cov_file = $opt{raw_cov};
 		if (-s $raw_cov_file) { print "\t$raw_cov_file OK\n"; }
 		else { die "!!!\n\t$raw_cov_file empty\n"; }
-		}
-	else { die "!!!\n\t".$opt{raw_cov}." not found\n"; }
+	} else {
+			die "!!!\n\t".$opt{raw_cov}." not found\n";
 	}
+}
 if (@Files && $raw_cov_file) { die "!!!\n\tmust choose between providing bam files or cov files\n"; }
 
 my $bed_cov_file = "";
@@ -430,27 +444,30 @@ if (exists $opt{bed_cov}) {
 	if (-f $opt{bed_cov}) {
 		$bed_cov_file = $opt{bed_cov};
 		print "\t$bed_cov_file OK\n";
-		}
-	else { die "!!!\n\t".$opt{bed_cov}." not found\n"; }
+	} else {
+		die "!!!\n\t".$opt{bed_cov}." not found\n";
 	}
+}
 
 my $genom = "";
 if (exists $opt{genome}) {
 	if (-f $opt{genome}) {
 		$genom = $opt{genome}; 
 		print "\t$genom OK\n";
-		}
-	else { die "!!!\n\t".$opt{genome}." not found\n"; } 
+	} else {
+		die "!!!\n\t".$opt{genome}." not found\n";
 	}
+}
 
 my $fichier_sexe = "";
 if (exists $opt{sex_file}) { 
 	if (-f $opt{sex_file}) {
 		$fichier_sexe = $opt{sex_file};
 		print "\t$fichier_sexe OK\n";
-		}
-	else { die "!!!\n\t".$opt{sex_file}." not found\n"; }
+	} else {
+		die "!!!\n\t".$opt{sex_file}." not found\n";
 	}
+}
 
 ##jobs
 my %jobs = ();
@@ -616,18 +633,18 @@ if (exists $opt{UDstream}) {
 			my @len = split(/,/,$opt{UDstream});
 			$upstream = $len[0];
 			$downstream = $len[1];
-			}
-		else {
+			} else {
 			$upstream = $opt{UDstream};
 			$downstream = $opt{UDstream};
-			}
+		}
 		if ($upstream <= $len5) { $upstream = 0; }
 		if ($downstream <= $len3) { $downstream = 0; }
 		#if ($upstream < $len5 || $downstream < $len3)
 		#	{ die "upstream/downstream expansion must be longer than padding $upstream <= $len5  $downstream <= $len3\n"; }
-		}
-	else { die "!!!\n\tupstream/downstream expansion not compatible without UTR\n"; }
+	} else {
+		die "!!!\n\tupstream/downstream expansion not compatible without UTR\n";
 	}
+}
 
 my $UpInTxt = 0 ; my $DownInTxt = 0;
 if (exists $opt{UDtxt}) {
@@ -637,20 +654,21 @@ if (exists $opt{UDtxt}) {
 				my @len = split(/,/,$opt{UDtxt});
 				$UpInTxt = $len[0];
 				$DownInTxt = $len[1];
-				}
-			else {
+			} else {
 				$UpInTxt = $opt{UDtxt};
 				$DownInTxt = $opt{UDtxt};
-				}
+			}
 			if ($UpInTxt <= $lenTxt5) { $UpInTxt = 0; }
 			if ($DownInTxt <= $lenTxt3) { $DownInTxt = 0; }
 			#if ($UpInTxt < $lenTxt5 || $DownInTxt < $lenTxt3)
 			#	{ die "upstream/downstream expansion must be longer than padding $UpInTxt <= $lenTxt5 || $DownInTxt <= $lenTxt3\n"; }
-			}
-		else { die "!!!\n\tupstream/downstream expansion not compatible without UTR\n"; }
+		} else {
+			die "!!!\n\tupstream/downstream expansion not compatible without UTR\n";
 		}
-	else { $UpInTxt = $upstream; $DownInTxt = $downstream; }
+	} else {
+		$UpInTxt = $upstream; $DownInTxt = $downstream;
 	}
+}
 
 my $Expand = "";
 if (exists $opt{expand2bed})
@@ -690,28 +708,34 @@ if (exists $opt{bedtools})
 my $samT = "";
 if (exists $opt{samtools})
 	{ $samT = $opt{samtools}; }
-my $picard = "";
-if (exists $opt{picard})
-	{ $picard = $opt{picard}; }
-my $gatk = "";
-if (exists $opt{gatk}) { 
-	$gatk = $opt{gatk}; 
-	if (!$gatk) { $gatk = 1; }	#if exists, but no value: means, just use it, but will test the default command
-	}
+my %gatk = ();
+if (exists $opt{gatk3}) {
+	$gatk{"version"} = 3; 
+	$gatk{"jar"} = $opt{gatk3}; 
+}
+my $gatk4 = "";
+if (exists $opt{gatk4}) { 
+	$gatk{"version"} = 4; 
+	$gatk{"jar"} = $opt{gatk4}; 
+}
 my $ram = "";
 if (exists $opt{ram}) { 
 	$ram = $opt{ram};
-	}
+}
 my $threads = "";
 if (exists $opt{cpu}) { 
 	$threads = $opt{cpu};
-	}
+}
 my $dedup = "";
 if (exists $opt{dedup}) { 
-	if ($opt{dedup} eq "do") { $dedup = "do"; }
-	elsif ($opt{dedup} eq "") { $dedup = 1; }
-	else { die "!!!\n\tnot recognized value for --dedup arg.\n"; }
+	if ($opt{dedup} eq "do") {
+		$dedup = "do";
+	} elsif ($opt{dedup} eq "") {
+		$dedup = 1;
+	} else {
+		die "!!!\n\tnot recognized value for --dedup arg.\n";
 	}
+}
 my $mbq = "";
 if (exists $opt{mbq}) { $mbq = $opt{mbq}; }
 my $mmq = "";
@@ -954,149 +978,120 @@ if ($genom) {
 			$chromName{"fasta"}{$chr} = $tab[0];
 			push(@chromOrder,$chr);
 			$chromLength{$chr} = $tab[1];
-			}
-		close $fh;
 		}
+		close $fh;
 	}
+}
 
 #progr
 my(%pathCmd);
 use File::Which;
 
 #check R
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"CNV"} || $jobs{"covMut"}) {
+if ($jobs{"graphSum"} 
+ || $jobs{"graphAllSampls"} 
+ || $jobs{"graphBySample"} 
+ || $jobs{"covPlot"} 
+ || $jobs{"genePlot"} 
+ || $jobs{"interSplot"} 
+ || $jobs{"CNV"} 
+ || $jobs{"covMut"}) {
 	$pathCmd{"R"} = which('R');
-	if ($pathCmd{"R"}) { print "\tR tools OK\n"; }
-	else { die "\n!!!\tR tools not installed or not found\n"; }
+	if ($pathCmd{"R"}) {
+		print "\tR tools OK\n";
+	} else {
+		die "\n!!!\tR tools not installed or not found\n";
 	}
+}
 
 ##sName: name of sample in bam file (unless samtools: name of file without extension)
 ##sName2: not redundant name of sample
 my(%sName,%sName2,$smplIdx,%bamHeaders);
 my $bedTversion = ""; 
 
-if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"} ) {
+if ( $jobs{"graphSum"} 
+ || $jobs{"graphAllSampls"} 
+ || $jobs{"graphBySample"} 
+ || $jobs{"geneSummary"} 
+ || $jobs{"geneReport"} 
+ || $jobs{"covPlot"} 
+ || $jobs{"genePlot"} 
+ || $jobs{"interSplot"} 
+ || $jobs{"covBed"} 
+ || $jobs{"covMut"} ) {
 	unless ($raw_cov_file) {
 		##check external softwares:
 		##samtools
 		if ($samT) {
 			#system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
 			$pathCmd{$samT} = which($samT);
-			if ($pathCmd{$samT}) { print "\tsamtools OK\n"; }
-			else {
-				$samT =~ s/samtools$//;
-				$samT =~ s/\/$//;
-				if ($samT eq "") { $samT = "."; }
-				$samT .= "/samtools";
-				$pathCmd{$samT} = which($samT);
-				if ($pathCmd{$samT}) { print "\tsamtools OK\n"; }
-				else { $samT = ""; }
-				}
+			if ($pathCmd{$samT}) {
+				print "\tsamtools OK\n";
+			} else {
+				die "\n!!!\t$samT samtools bin file not found\n";
 			}
-		else {
+		} else {
 			$samT = "samtools";
 			$pathCmd{$samT} = which($samT);
-			if ($pathCmd{$samT}) { print "\tsamtools OK\n"; }
-			else { $samT = ""; }
-			}	
-		##picard tools
-		if ($picard) {
-			my $picardName = $picard;
-			$picardName =~ s/\.jar$//;
-			$picardName =~ s/picard$//;
-			$picardName =~ s/\/$//;
-			$picardName .= "/picard.jar";
-			if (-e $picardName) {
-				if ($ram) { $picard = "java -Xmx$ram"."g -jar $picardName"; }
-				else { $picard = "java -jar $picardName"; }
-				print "\tpicard-tools OK\n"; 
-				}
-			else {
-				print "$picardName .jar file not found; test for command\n";
-				$pathCmd{$picard} = which($picard);
-				if ($pathCmd{$picard}) { print "\tpicard-tools OK\n"; }
-				else { $picard = ""; }
-				}
+			if ($pathCmd{$samT}) {
+				print "\tsamtools OK\n";
+			} else {
+				$samT = "";
 			}
-		else {
-			$picard = "picard-tools"; #"PicardCommandLine"
-			$pathCmd{$picard} = which($picard);
-			if ($pathCmd{$picard}) { print "\tpicard-tools OK\n"; }
-			else { $picard = ""; }
-			}
+		}	
 		##gatk
 		## gatk == 1 if want to use gatk; so that test for existing command won't be evaluated if don't want to use it
-		if ($mbq && !$gatk) { $gatk = 1; }
-		if ($gatk) {
-			if ($gatk ne "1") {
-				my $gatkName = $gatk;
-				$gatkName =~ s/\.jar$//;
-				$gatkName =~ s/GenomeAnalysisTK$//;
-				$gatkName =~ s/\/$//;
-				$gatkName .= "/GenomeAnalysisTK.jar";
-				if (-e $gatkName) {
-					if ($ram) { $gatk = "java -jar -Xmx$ram"."g $gatkName"; }
-					else { $gatk = "java -jar $gatkName"; }
-					print "\tGATK OK\n";
-					}
-				else {
-					print "$gatkName .jar file not found; test for command\n";
-					$pathCmd{$gatk} = which($gatk);
-					if ($pathCmd{$gatk}) {
-						if ($ram) { $gatk .= " -Xmx$ram"."g"; }
-						print "\tGATK OK\n";
-						}
-					else { die "\n!!!\tGATK .jar file not found\n"; } #$gatk = ""; }
-					}
-				}
-			else {
-				$gatk = "GenomeAnalysisTK";
-				$pathCmd{$gatk} = which($gatk); 
-				if ($pathCmd{$gatk}) {
-					if ($ram) { $gatk .= " -Xmx$ram"."g"; }
-					print "\tGATK OK\n"; 
-					}
-				else { die "\n!!!\tGATK cmd not found\n"; } #$gatk = ""; }
-				}
-			foreach (@Files) { $smplIdx->{$_} = ""; }	#to initialize
+		#if ($mbq && !$gatk) { $gatk = 1; }
+		if (%gatk) {
+			if (-f $gatk{"jar"}) {
+				if ($ram) {
+					$gatk{"exec"} = "java -jar -Xmx$ram"."g ".$gatk{"jar"};	#-Djava.io.tmpdir=$tmpDir
+				} else {
+					$gatk{"exec"} = "java -jar ".$gatk{"jar"}; }
+				print "\tGATK OK\n";
+			} else {
+				die "\n!!!\t".$gatk{"jar"}." GATK .jar file not found\n";
 			}
-		if ($mbq && !$gatk) { die "\n!!!\tGATK needed for min base quality filter\n"; }
+			foreach (@Files) { $smplIdx->{$_} = ""; }	#to initialize
+		} else {
 		##bedtools
-		if (!$gatk) {
 			if ($bedT) {
 				#system "$bedT";
-				$pathCmd{$bedT} = which($bedT); 
-				if ($pathCmd{$bedT}) { print "\tbedtools OK\n"; }
-				else {
-					$bedT =~ s/bedtools$//;
-					$bedT =~ s/\/$//;
-					if ($bedT eq "") { $bedT = "."; }
-					$bedT.="/bedtools";
-					$pathCmd{$bedT} = which($bedT); 
-					if ($pathCmd{$bedT})  { print "\tbedtools OK\n"; }
-					else { $bedT = ""; }
-					}
+				$pathCmd{$bedT} = which($bedT);
+				if ($pathCmd{$bedT}) {
+					print "\tbedtools OK\n";
+				} else {
+					die "\n!!!\t$bedT bedtools bin file not found\n";
 				}
-			else {
+			} else {
 				$bedT = "bedtools";
 				$pathCmd{$bedT} = which($bedT);
-				if ($pathCmd{$bedT}) { print "\tbedtools OK\n"; }
-				else { $bedT = ""; }
+				if ($pathCmd{$bedT}) {
+					print "\tbedtools OK\n";
+				} else {
+					die "\n!!!\tbedtools exec not found in \$PATH\n";
 				}
+			}
 			if ($bedT) {
 				$bedTversion = `$bedT --version`;
 				$bedTversion =~ /^bedtools v(\d+)\.(\d+)/;
-				if ( ($1 < 2) || ($1 == 2 && $2 < 24) ) { $bedTversion = 1; }
-				else	{ $bedTversion = 2; }
+				if ( ($1 < 2) || ($1 == 2 && $2 < 24) ) {
+					$bedTversion = 1;
+				} else	{
+					$bedTversion = 2;
 				}
 			}
+		}
 		##softwares requirements according to options and actions:
-		if ($mmq && !$gatk) {
-			unless ($samT) { die "\n!!!\tsamtools not installed or not found (required for min mapping quality filter)\n"; }
-			}
+		if ($mbq && !%gatk) {
+			die "\n!!!\tGATK required for min base quality filter\n";
+		}
+		if ($mmq && !%gatk) {
+			die "\n!!!\tGATK required for min mapping quality filter\n";
+		}
 		#if ($jobs{"CNV"} && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
-		if ($dedup eq "do" && !$picard) { die "\n!!!\tpicard tools not installed or not found (required for discarding duplicates)\n"; }
-		if (!$bedT && !$gatk) { die "\n!!!\tbedtools or GATK required\n"; }
+		#if ($dedup eq "do" && !$picard) { die "\n!!!\tpicard tools not installed or not found (required for discarding duplicates)\n"; }
+		if (!$bedT && !%gatk) { die "\n!!!\tbedtools or GATK required\n"; }
 
 		##find sample names in bam
 		##sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
@@ -1115,20 +1110,18 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 					$sName2{$f} = $SM."_".$ID;
 					foreach (@{ $allID{$SM} })
 						{ $sName2{$_} = $SM."_".$ID; }
-					}
-				else {
+				} else {
 					$sName{$f} = $SM;
 					$sName2{$f} = $SM;
-					}
-				push(@{ $allID{$SM} },$f);
 				}
+				push(@{ $allID{$SM} },$f);
 			}
-		else {
+		} else {
 			foreach (@Files) {
 				$sName{$_} = $fName{$_};
 				$sName2{$_} = $fName{$_};
-				}
 			}
+		}
 		#sort @Files according to %sName2 lexical order
 		@Files = (sort {$sName2{$a} cmp $sName2{$b}} (keys %sName2));
 
@@ -1140,9 +1133,9 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 						my $cmd = "$samT index $file";
 						print "$cmd\n";
 						system "$cmd";
-						}
 					}
 				}
+			}
 			#@chromOrder from 1st bam, if not already set
 			unless (@chromOrder) {
 				if (%bamHeaders) {
@@ -1156,36 +1149,34 @@ if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $
 							$chromName{"fasta"}{$chr} = $chrName;
 							push(@chromOrder, $chr);
 							$chromLength{$chr} = $len;
-							}
-						last;
 						}
+						last;
 					}
 				}
 			}
+		}
 		## check requirement for genome.fa and genome.fa.fai
-		if ($gatk) {
+		if (%gatk) {
 			unless ($genom) { die "\n!!!\treference genome.fa required\n"; }
 			unless (-e "$genom.fai") { die "\n!!!\tindex genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
-			}
-		else  {
+		} else  {
 			if ($bedTversion == 2) {
 				unless (%chromLength) { die "\n!!!\tindex genome.fa.fai required (to generate chomLength file for bedtools2)\n"; }
-				}
 			}
-		## check for "chr" in chrom names, for fepth analysis
+		}
+		## check for "chr" in chrom names, for depth analysis
 		if (@chromOrder) {
 			if ($chromName{"fasta"}{$chromOrder[0]} =~ /^chr/i) {
 				$withChr{"all"} = "_wChr.bed";
 				foreach (@Files) { $withChr{$_} = "_wChr.bed"; } 
-				}
-			else {
+			} else {
 				$withChr{"all"} = "_0Chr.bed";
 				foreach (@Files) { $withChr{$_} = "_0Chr.bed"; } 
-				}
 			}
 		}
-
 	}
+
+}
 
 
 #create output dirs
@@ -1195,44 +1186,56 @@ my $outdir = "";
 my $tmpDir = "";
 my $chromLength = "";
 my @tmpFiles = (); ##tmp files to rm when ends
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"CNV"} || $jobs{"covMut"}) {
+if ($jobs{"graphSum"}
+ || $jobs{"graphAllSampls"}
+ || $jobs{"graphBySample"}
+ || $jobs{"geneSummary"}
+ || $jobs{"geneReport"}
+ || $jobs{"covPlot"}
+ || $jobs{"genePlot"}
+ || $jobs{"interSplot"}
+ || $jobs{"covBed"}
+ || $jobs{"CNV"}
+ || $jobs{"covMut"}) {
 	if (exists $opt{outdir}) { 
 		$outdir = $opt{outdir}; 
 		$outdir =~ s/\/$//;
 		if (-d $outdir) {
 			if ($jobs{"CNV"} && $bed_cov_file) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
 			else { $outdir .= "/covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
-			}
 		}
-	else {
-		if ($jobs{"CNV"} && $bed_cov_file) { $outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
-		else { $outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+	} else {
+		if ($jobs{"CNV"} && $bed_cov_file) {
+			$outdir = "CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime);
+		} else {
+			$outdir = "covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime);
 		}
+	}
 	mkdir($outdir);
 	$tmpDir = "$outdir/tmp_files";
 	mkdir($tmpDir);
-	}
-else {
+} else {
 	if (exists $opt{outdir}) { 
 		$outdir = $opt{outdir}; 
 		$outdir =~ s/\/$//;
 		unless (-d $outdir) { mkdir($outdir); }
-		}
-	else { $outdir = "."; }
+	} else {
+		$outdir = ".";
 	}
+}
 
 my $depthFilePerChr = {};
 if ($raw_cov_file) {
+
 	print "\n\n####\n\nreading $raw_cov_file\n\n####\n";
 	my $fhIn;
 	if ($raw_cov_file =~ /.gz$/) {
 		use IO::Zlib;
 		$fhIn = new IO::Zlib;
-		$fhIn->open($raw_cov_file, "rb")
-		}
-	else {
+		$fhIn->open($raw_cov_file, "rb")	
+	} else {
 		open($fhIn, "<", $raw_cov_file) or die "\n!!!\tcould not read $raw_cov_file ($!)\n";
-		}
+	}
 	## gets sample names
 	print "\n\tgetting sample names\n";
 	my $firstLine = <$fhIn>;
@@ -1245,8 +1248,8 @@ if ($raw_cov_file) {
 			$fName{$smpl} = $smpl;
 			$sName2{$smpl} = $smpl;
 			$smplIdx->{$smpl} = $i;
-			}
 		}
+	}
 	unless (@Files) { die "\n!!!\tnot able to find sample names in $raw_cov_file\nmissing header line?\n"; }
 	## gets @chromOrder, writes to depthFilePerChrom
 	print "\n\tgetting chrom Order and writting to depthFilePerChr\n";
@@ -1264,30 +1267,41 @@ if ($raw_cov_file) {
 				$chromName{"fasta"}{$chr} = $chrName;
 				push(@chromOrder,$chr);
 				$allChr{$chr} = 1;
-				}
+			}
 			if ($currentChr ne "") { close $fhChr; }
 			$currentChr = $chr;
 			${$depthFilePerChr}{"raw"}{$chr} = "$tmpDir/$chr"."_cov.txt";
 			open($fhChr, ">", ${$depthFilePerChr}{"raw"}{$chr}) || die "\n!!!\tcould not create ".${$depthFilePerChr}{"raw"}{$chr}." ($!)\n";
-			}
+		}
 		if (defined $fhChr) {
 			$line =~ s/^\w+://;
 			print $fhChr $line;
-			}
 		}
-	close $fhChr; close $fhIn;
 	}
+	close $fhChr; close $fhIn;
 
-else {
-	if ( ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) && !$gatk && $bedTversion == 2) {
+} else {
+
+	if ( ($jobs{"graphSum"} 
+		|| $jobs{"graphAllSampls"} 
+		|| $jobs{"graphBySample"} 
+		|| $jobs{"geneSummary"} 
+		|| $jobs{"geneReport"} 
+		|| $jobs{"covPlot"} 
+		|| $jobs{"genePlot"} 
+		|| $jobs{"interSplot"} 
+		|| $jobs{"covBed"} 
+		|| $jobs{"covMut"}) 
+	&& !%gatk && $bedTversion == 2) {
 		if (%chromLength) {
 			$chromLength = "$tmpDir/chromLength.txt";		#used by bedtools
 			open (my $fhOut, ">", "$chromLength");
 			foreach (@chromOrder) { print $fhOut $chromName{"fasta"}{$_}."\t$chromLength{$_}\n"; }
 			close $fhOut;
-			}
 		}
 	}
+
+}
 
 #read sex file, just to check existing sample names
 if ($fichier_sexe && scalar(keys%sName2)>0) {
@@ -1615,7 +1629,16 @@ foreach my $gene (keys%{$Genes_r}) {
 my(%bam2Use);
 my $depthFile = "$outdir/allsamples_depth.txt";
 use DeCovA::depthProgr;
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) {
+if ($jobs{"graphSum"}
+ || $jobs{"graphAllSampls"}
+ || $jobs{"graphBySample"}
+ || $jobs{"geneSummary"}
+ || $jobs{"geneReport"}
+ || $jobs{"covPlot"}
+ || $jobs{"genePlot"}
+ || $jobs{"interSplot"}
+ || $jobs{"covBed"}
+ || $jobs{"covMut"}) {
 
 	print "\n\n####\n\nper base depth analysis\n\n####\n";
 
@@ -1641,13 +1664,13 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 				open ($fhI, "<", "$tmpDir/original_0Chr.bed") || die "\n!!!\tcan't open file $tmpDir/original_0Chr.bed ($!)\n";
 				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
-				}
+			}
 			if (($UTRinTxt > $wUTR) || ($lenTxt5 > $len5) || ($lenTxt3 > $len3) || ($UpInTxt > $upstream) || ($DownInTxt > $downstream)) {
 				DeCovA::bedProcessing::printBed("$tmpDir/txtRegions",$ref_Intervals,\@chromOrder);
 				open ($fhI, "<", "$tmpDir/txtRegions_0Chr.bed") || die "\n!!!\tcan't open file $tmpDir/txtRegions_0Chr.bed ($!)\n";
 				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
-				}
+			}
 			if ($mutFile) {
 				open ($fhI, "<", "$mutFile") || die "\n!!!\tcan't open file $mutFile ($!)\n";
 				while (my $line = <$fhI>) {
@@ -1655,17 +1678,16 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 					my @tab = split(/\t/,$line);
 					$tab[0] =~ s/^chr//;
 					print $fhO $tab[0]."\t".($tab[1]-1)."\t".$tab[1]."\n";
-					}
-				close $fhI;
 				}
+				close $fhI;
+			}
 			close $fhO; 
 			my $merge_r = DeCovA::bedProcessing::readBed("$tmpDir/$intervalName.bed");
 			mergeIntervalsInRef($merge_r);
 			DeCovA::bedProcessing::printBed("$tmpDir/$intervalName",$merge_r,\@chromOrder);
 			unlink "$tmpDir/$intervalName.bed";
-			}
 		}
-	else {
+	} else {
 		if ($mutFile) {
 			if ($bedFile) { $intervalName = "merge"; }
 			else  { $intervalName = "muts"; }
@@ -1676,27 +1698,27 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 				my @tab = split(/\t/,$line);
 				$tab[0] =~ s/^chr//;
 				print $fhO $tab[0]."\t".($tab[1]-1)."\t".$tab[1]."\n";
-				}
+			}
 			close $fhI;
 			if ($bedFile) {
 				open ($fhI, "<", "$tmpDir/original_0Chr.bed") || die "\n!!!\tcan't open file $tmpDir/original_0Chr.bed ($!)\n";
 				while (my $line = <$fhI>) { print $fhO $line; }
 				close $fhI;
-				}
+			}
 			close $fhO;
 			my $merge_r = DeCovA::bedProcessing::readBed("$tmpDir/$intervalName.bed");
 			mergeIntervalsInRef($merge_r);
 			DeCovA::bedProcessing::printBed("$tmpDir/$intervalName",$merge_r,\@chromOrder);
 			unlink "$tmpDir/$intervalName.bed";
-			}
-		else {
+		} else {
 			if ($bedFile) { $intervalName = "original"; }
-			}
 		}
+	}
 
-	if (! defined $intervalName) { print "no intervals to get depth for\n"; }
-
-	else {
+	if (! defined $intervalName) {
+		print "no intervals to get depth for\n";
+	
+	} else {
 
 		$intervalName = "$tmpDir/$intervalName";
 
@@ -1717,113 +1739,74 @@ if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $j
 						my $posInDepthFile = $1;
 						my $stayInThisLine = 1;
 						while ($stayInThisLine) {
-							if ($posInDepthFile < $Starts[$s]) { $stayInThisLine = 0; }
-							else {
+							if ($posInDepthFile < $Starts[$s]) {
+								$stayInThisLine = 0;
+							} else {
 								if ($posInDepthFile <= ${$intervals_r}{$chr}{$Starts[$s]}) {
 									if ($posInDepthFile == $posInIntervals) {
 										$posInIntervals++;
 										$stayInThisLine = 0;
-										}
-									else {
+									} else {
 										die "\n!!!\tat least 1 position to be analysed ($chr:$posInIntervals) not found in cov file (last line: $chr: $posInDepthFile)\n";
-										}
 									}
-								else {
+								} else {
 									if ($s < $#Starts) {
 										$s++;
 										$posInIntervals = $Starts[$s];
-										}
-									else { $stayInThisLine = 0; }
+									} else {
+										$stayInThisLine = 0;
 									}
 								}
 							}
-						if ($posInDepthFile > ${$intervals_r}{$chr}{$Starts[-1]}) { last; }
 						}
+						if ($posInDepthFile > ${$intervals_r}{$chr}{$Starts[-1]}) {
+							last;
+						}
+					}
 					close $fhIn;
 					unless (($posInIntervals-1) == ${$intervals_r}{$chr}{$Starts[$s]}) {
 						die "\n!!!\tat least 1 position to be analysed not found in cov file
 	(last position evaluated: $chr : ".($posInIntervals-1)."
 	last interval end: $chr : ".${$intervals_r}{$chr}{$Starts[$s]}." )\n";
-						}
 					}
-				else { die "\n!!!\tsome chrom to be analysed not found in cov file ( $chr )\n"; }
+				} else {
+					die "\n!!!\tsome chrom to be analysed not found in cov file ( $chr )\n";
 				}
-
 			}
 
-		 else {
+		}  else {
 			##perform depth analysis
-
-			##bamFilter?
-			if (($gatk && $dedup eq "do") || (!$gatk && ($mmq || $dedup))) {
-				print "\n\tfiltering bam files\n";
-				foreach my $f (@Files) {
-					print "\n\t$f :\n";
-					my $isChr;
-					if ($withChr{$f}) { $isChr = $withChr{$f}; }
-					else { $isChr = "_0Chr.bed"; }
-					DeCovA::depthProgr::samT_filter($samT,"$intervalName$isChr",$threads,$gatk,$mmq,$f,"$tmpDir/".$fName{$f}."_onBed.bam");
-					my $cmd = "$samT view -c $tmpDir/".$fName{$f}."_onBed.bam";
+			foreach my $f (@Files) {
+				$bam2Use{$f} = $f;
+				if (!$withChr{$f} && $samT) {
+					my $isChr = "_0Chr.bed";
+					my $cmd = "$samT view -c -L $intervalName$isChr $f";
 					my $count = `$cmd`;
 					print "reads from ".$fName{$f}." falling within target regions: $count\n";
-					unless ($withChr{$f}) {
-						if ($count == 0) {
-							print "trying other reference genome:\n";
-							$isChr = "_wChr.bed";
-							DeCovA::depthProgr::samT_filter($samT,"$intervalName$isChr",$threads,$gatk,$mmq,$f,"$tmpDir/".$fName{$f}."_onBed.bam");
-							$cmd = "$samT view -c $tmpDir/".$fName{$f}."_onBed.bam";
-							$count = `$cmd`;
-							print "reads from ".$fName{$f}." falling within target regions: $count\n";
-							}
-						$withChr{$f} = $isChr;
-						}
-					$bam2Use{$f} = "$tmpDir/".$fName{$f}."_onBed.bam";
-					if (($gatk && $dedup eq "do") || (!$gatk && $dedup)) {
-						$cmd = "$picard MarkDuplicates I=".$bam2Use{$f}." O=$tmpDir/".$fName{$f}."_dedup.bam M=$tmpDir/".$fName{$f}.".dedup-metrics REMOVE_DUPLICATES=true CREATE_INDEX=true TMP_DIR=$tmpDir";
-						print "$cmd\n";
-						system "$cmd";
-						if ($?) { die "\n!!!\tpicard tools not happy\n"; }
-						else {
-							$bam2Use{$f} = "$tmpDir/".$fName{$f}."_dedup.bam";
-							unlink "$tmpDir/".$fName{$f}."_onBed.bam", "$tmpDir/".$fName{$f}."_onBed.bam.bai";
-							}
-						}
-					}
-				}
-			else {
-				foreach my $f (@Files) {
-					$bam2Use{$f} = $f;
-					if (!$withChr{$f} && $samT) {
-						my $isChr = "_0Chr.bed";
-						my $cmd = "$samT view -c -L $intervalName$isChr $f";
-						my $count = `$cmd`;
+					if ($count == 0) {
+						print "trying other reference genome:\n";
+						$isChr = "_wChr.bed";
+						$cmd = "$samT view -c -L $intervalName$isChr $f";
+						$count = `$cmd`;
 						print "reads from ".$fName{$f}." falling within target regions: $count\n";
-						if ($count == 0) {
-							print "trying other reference genome:\n";
-							$isChr = "_wChr.bed";
-							$cmd = "$samT view -c -L $intervalName$isChr $f";
-							$count = `$cmd`;
-							print "reads from ".$fName{$f}." falling within target regions: $count\n";
-							}
-						$withChr{$f} = $isChr;
-						}
 					}
-				}
-
-			##depth analysis
-			if ($gatk) {
-				print "\n\tdepth analysis using $gatk\n";
-				($smplIdx, $depthFilePerChr) = DeCovA::depthProgr::gatkCov($intervalName,\@Files,\%sName,\%bam2Use,$depthFile,$tmpDir,$withChr{"all"},$mmq,$mbq,$dedup,$threads,$gatk,$genom,$jobs{"keepCov"});
-				}
-			else {
-				print "\n\tdepth analysis using $bedT\n";
-				($smplIdx, $depthFilePerChr) = DeCovA::depthProgr::bedToolsCov($intervalName,\@Files,\%sName,\%fName,\%bam2Use,$depthFile,$tmpDir,\%withChr,$chromLength,$bedT,$bedTversion,$jobs{"keepCov"});
+					$withChr{$f} = $isChr;
 				}
 			}
 
+			##depth analysis
+			if (%gatk) {
+				print "\n\tdepth analysis using ".$gatk{"jar"}."\n";
+				($smplIdx, $depthFilePerChr) = DeCovA::depthProgr::gatkCov($intervalName,\@Files,\%sName,\%bam2Use,$depthFile,$tmpDir,$withChr{"all"},$mmq,$mbq,$dedup,$threads,\%gatk,$genom,$jobs{"keepCov"});
+			} else {
+				print "\n\tdepth analysis using $bedT\n";
+				($smplIdx, $depthFilePerChr) = DeCovA::depthProgr::bedToolsCov($intervalName,\@Files,\%sName,\%fName,\%bam2Use,$depthFile,$tmpDir,\%withChr,$chromLength,$bedT,$bedTversion,$jobs{"keepCov"});
+			}
 		}
 
 	}
+
+}
 
 
 
