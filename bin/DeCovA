@@ -81,6 +81,7 @@ GetOptions (\%opt,
 	"summary:s",
 	"keepCov|k",
 	"keepBed|K:s",
+	"keepTmpBed:s",
 	"raw_cov=s",
 	"binPlot=i",
 	"maxPlot=i",
@@ -178,8 +179,9 @@ outputs:
     --geneReport : will print all uncovered genomic intervals (within gene region) in 1 txt file per sample (default: no)
     --bedReport : will print all uncovered intervals (within bed intervals) in 1 txt file per sample (default: no)
     --summary [Y/N] : to print summary txt file (default: yes if -S -A -X)
-    -k / --keepCov : do not erase coverage file at the end of the process
-    -K / --keepBed : do not erase bed file inferred from gene list, at the end of the process (and eventually rename)
+    -k / --keepCov : do not discard coverage file at the end of the process
+    -K / --keepBed : do not discard bed file inferred from gene list, at the end of the process (and eventually rename)
+    --keepTmpBed : do not discard temp. bed file processed for depth analysis (and eventually rename)
 
 parameters:
   *gene/transcript regions analysis param.:
@@ -437,7 +439,9 @@ if (exists $opt{raw_cov}) {
 			die "!!!\n\t".$opt{raw_cov}." not found\n";
 	}
 }
-if (@Files && $raw_cov_file) { die "!!!\n\tmust choose between providing bam files or cov files\n"; }
+if (@Files && $raw_cov_file) {
+	die "!!!\n\tmust choose between providing bam files or cov files\n";
+}
 
 my $bed_cov_file = "";
 if (exists $opt{bed_cov}) { 
@@ -472,106 +476,149 @@ if (exists $opt{sex_file}) {
 ##jobs
 my %jobs = ();
 $jobs{"bedReport"} = 0;
-if (exists $opt{bedReport})
-	{ $jobs{"bedReport"} = 1; }
 $jobs{"graphSum"} = "";
-if (exists $opt{graphSum})
-	{ $jobs{"graphSum"} = 1; }
 $jobs{"graphAllSampls"} = "";
-if (exists $opt{allSample})
-	{ $jobs{"graphAllSampls"} = 1; }
 $jobs{"graphBySample"} = "";
-if (exists $opt{bySample})
-	{ $jobs{"graphBySample"} = 1; }
 $jobs{"covMut"} = "";
-if ($mutFile) { $jobs{"covMut"} = 1; }
-if (exists $opt{noDepthMut})
-	{ $jobs{"covMut"} = ""; }
 $jobs{"covPlot"} = "";
+$jobs{"interSplot"} = "";
+$jobs{"genePlot"} = "";
+$jobs{"covBed"} = "";
+$jobs{"2Reseq"} = "";
+$jobs{"CNV"} = "";
+$jobs{"geneReport"} = "";
+$jobs{"geneSummary"} = "";
+$jobs{"keepCov"} = "";
+$jobs{"keepBed"} = "";
+$jobs{"keepTmpBed"} = "";
+
+if (exists $opt{bedReport}) { $jobs{"bedReport"} = 1; }
+if (exists $opt{graphSum}) { $jobs{"graphSum"} = 1; }
+if (exists $opt{allSample}) { $jobs{"graphAllSampls"} = 1; }
+if (exists $opt{bySample}) { $jobs{"graphBySample"} = 1; }
+if ($mutFile) { $jobs{"covMut"} = 1; }
+if (exists $opt{noDepthMut}) { $jobs{"covMut"} = ""; }
 if (exists $opt{covPlot}) {
 	$jobs{"covPlot"} = 1;
 	use DeCovA::histCov;
-	}
-$jobs{"interSplot"} = "";
+}
 if (exists $opt{interPlot}) {
 	$jobs{"interSplot"} = 1;
 	use DeCovA::histCov;
-	}
-$jobs{"genePlot"} = "";
-if (exists $opt{genePlot})
-	{ $jobs{"genePlot"} = 1; }
-$jobs{"covBed"} = "";
-if (exists $opt{covBed})
-	{ $jobs{"covBed"} = 1; }
-$jobs{"2Reseq"} = "";
-if (exists $opt{Reseq})
-	{ $jobs{"2Reseq"}=$opt{Reseq}; }
-$jobs{"CNV"} = "";
-if (exists $opt{CNV})
-	{ $jobs{"CNV"} = 1; }
-$jobs{"geneReport"} = "";
-if (exists $opt{geneReport})
-	{ $jobs{"geneReport"} = 1; }
-$jobs{"geneSummary"} = "";
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"})		# || @IDs)
-	{ $jobs{"geneSummary"} = 1; }
+}
+if (exists $opt{genePlot}) { $jobs{"genePlot"} = 1; }
+if (exists $opt{covBed}) { $jobs{"covBed"} = 1; }
+if (exists $opt{Reseq}) { $jobs{"2Reseq"}=$opt{Reseq}; }
+if (exists $opt{CNV}) { $jobs{"CNV"} = 1; }
+if (exists $opt{geneReport}) { $jobs{"geneReport"} = 1; }
+if ($jobs{"graphSum"}
+	|| $jobs{"graphAllSampls"}
+	|| $jobs{"graphBySample"}) {
+	$jobs{"geneSummary"} = 1;
+}
 if (exists $opt{summary}) {
 	if ($opt{summary}) {
-		if ($opt{summary} =~ /^y|^o/i) { $jobs{"geneSummary"} = 1; }
-		elsif ($opt{summary} =~ /^n/i) { $jobs{"geneSummary"} = ""; }
-		else { die "!!!\n\topt summary no recognized (y/n)"; }
+		if ($opt{summary} =~ /^y|^o/i) {
+			$jobs{"geneSummary"} = 1;
+		} elsif ($opt{summary} =~ /^n/i) {
+			$jobs{"geneSummary"} = "";
+		} else {
+			die "!!!\n\topt summary no recognized (y/n)";
 		}
-	else { $jobs{"geneSummary"} = 1; }
-	}
-$jobs{"keepCov"} = "";
+	} else { $jobs{"geneSummary"} = 1; }
+}
 if (exists $opt{keepCov}) { $jobs{"keepCov"} = 1; }
-$jobs{"keepBed"} = "";
+
+## new bed names
+=pod
 my $keepBedName = "";
-if ($bedName) { $keepBedName = $bedName; }
-else { $keepBedName = "allID"; }
+if ($bedName) {
+	$keepBedName = $bedName;
+} else {
+	$keepBedName = "allID";
+}
+=cut
+my $keepBedName = "intervals";
 my $keepBedDir = ".";
 if (exists $opt{keepBed}) {
 	$jobs{"keepBed"} = 1;
 	if ($opt{keepBed}) { 
 		#$keepBedName = $opt{keepBed};
 		#$keepBedName =~ s/\.bed$//;
-		if (-f $opt{keepBed}) { die "!!!\n\t$opt{keepBed} already exists\n"; }
 		my($name,$dir) = fileparse($opt{keepBed},".bed");
 		if ($name) { $keepBedName = $name; }
 		if ($dir) {
-			if (-d $keepBedDir) { $keepBedDir = $dir; }
-			else { die "!!!\n\t$keepBedDir not found\n"; }
+			if (-d $dir) {
+				$keepBedDir = $dir;
+			} else {
+				die "!!!\n\t$dir not found\n";
 			}
 		}
 	}
+	if (-f "$keepBedDir/$keepBedName.bed") { die "!!!\n\t$keepBedDir/$keepBedName.bed already exists\n"; }
+}
+
+my $keepTmpBedName = "";
+if ($bedName) {
+	$keepTmpBedName = "$bedName.forDepth";
+} else {
+	$keepTmpBedName = "intervals.forDepth";
+}
+my $keepTmpBedDir = ".";
+if (exists $opt{keepTmpBed}) {
+	$jobs{"keepTmpBed"} = 1;
+	if ($opt{keepTmpBed}) { 
+		my($name,$dir) = fileparse($opt{keepTmpBed},".bed");
+		if ($name) { $keepTmpBedName = $name; }
+		if ($dir) {
+			if (-d $dir) {
+				$keepTmpBedDir = $dir;
+			} else {
+				die "!!!\n\t$dir not found\n";
+			}
+		}
+	}
+	if (-f "$keepTmpBedDir/$keepTmpBedName.bed") {
+		die "!!!\n\t$keepTmpBedDir/$keepTmpBedName.bed already exists\n";
+	}
+}
 
 ##refseq gene analysis param
 my(@Thresholds,$pThreshold);
-if (exists $opt{printThreshold})
-	{ $pThreshold = $opt{printThreshold}; }
+if (exists $opt{printThreshold}) {
+	$pThreshold = $opt{printThreshold};
+}
 if (exists $opt{depthThreshold}) {
 	@Thresholds = split(/,/, join(',',@{$opt{depthThreshold}}));
 	foreach (@Thresholds) {
-		if ($_ =~ /^\d+$/) { next; }		#{ print "depth threshold: $_\n"; }
-		else { die "!!!\n\t$_ depth threshold value need to be an integer\n"; }
+		if ($_ =~ /^\d+$/) {
+			next;		#{ print "depth threshold: $_\n"; }
+		} else {
+			die "!!!\n\t$_ depth threshold value need to be an integer\n";
 		}
+	}
 	@Thresholds = sort{$b<=>$a}@Thresholds;	#decroissant
 	#check if $pThreshold one of those in @Thresholds
 	if ($pThreshold) {
 		my $ok=0;
 		foreach (@Thresholds) {
-			if ($pThreshold==$_) 
-				{ $ok=1; last; }
+			if ($pThreshold==$_) {
+				$ok = 1;
+				last;
 			}
-		unless ($ok) 
-			{ die "!!!\n\topt -T threshold value need to be 1 of those in opt -t\n"; }
 		}
-	else { $pThreshold = $Thresholds[-1]; }
+		unless ($ok) {
+			die "!!!\n\topt -T threshold value need to be 1 of those in opt -t\n";
+		}
+	} else {
+		$pThreshold = $Thresholds[-1];
+	}
 	#print "threshold for summary: $pThreshold \n";
+} else { 
+	if ($pThreshold) {
+		@Thresholds = ($pThreshold);
 	}
-else { 
-	if ($pThreshold) { @Thresholds = ($pThreshold); }
-	}
+}
 ##regions extent
 my $wNonCod = "";
 if (exists $opt{nonCoding})
@@ -671,43 +718,54 @@ if (exists $opt{UDtxt}) {
 }
 
 my $Expand = "";
-if (exists $opt{expand2bed})
-	{ $Expand = 1; }
+if (exists $opt{expand2bed}) {
+	$Expand = 1;
+}
 
 my $spacer = 0;
 
 my $Rev = 1;
-if (exists $opt{noReverse})
-	{ $Rev = 0; }
+if (exists $opt{noReverse}) {
+	$Rev = 0;
+}
 
 my $AllTranscripts = 1;		##all transcripts on same graph; no longer disable possibility
-if (exists $opt{noEachTranscript}) 
-	{ $AllTranscripts = 0; }
+if (exists $opt{noEachTranscript}) {
+	$AllTranscripts = 0;
+}
 
 my $gThreshold = 1;
-if (exists $opt{noGraphThreshold})
-	{  $gThreshold=""; }
+if (exists $opt{noGraphThreshold}) {
+	$gThreshold="";
+}
 
 my $nGraf = "max";
-if (exists $opt{nGraph} && $opt{nGraph}!=0)
-	{ $nGraf = $opt{nGraph}; }
+if (exists $opt{nGraph} && $opt{nGraph}!=0) {
+	$nGraf = $opt{nGraph};
+}
 
 ## plots param
 my $bin = 10; #nber of bin for bar plots
-if (exists $opt{binPlot})
-	{ $bin = $opt{binPlot}; }
+if (exists $opt{binPlot}) {
+	$bin = $opt{binPlot};
+}
 my $maxPl = 100; #max depth for bar plots
-if (exists $opt{maxPlot})
-	{ $maxPl = $opt{maxPlot}; }
-if (($maxPl % $bin) != 0) { die "!!!\n\tbinPlot needs to be a multiple of maxPlot\n"; }
+if (exists $opt{maxPlot}) {
+	$maxPl = $opt{maxPlot};
+}
+if (($maxPl % $bin) != 0) {
+	die "!!!\n\tbinPlot needs to be a multiple of maxPlot\n";
+}
 
 ##external tools paths and param
 my $bedT = "";
-if (exists $opt{bedtools})
-	{ $bedT = $opt{bedtools}; }
+if (exists $opt{bedtools}) {
+	$bedT = $opt{bedtools};
+}
 my $samT = "";
-if (exists $opt{samtools})
-	{ $samT = $opt{samtools}; }
+if (exists $opt{samtools}) {
+	$samT = $opt{samtools};
+}
 my %gatk = ();
 if (exists $opt{gatk3}) {
 	$gatk{"version"} = 3; 
@@ -737,18 +795,25 @@ if (exists $opt{dedup}) {
 	}
 }
 my $mbq = "";
-if (exists $opt{mbq}) { $mbq = $opt{mbq}; }
+if (exists $opt{mbq}) {
+	$mbq = $opt{mbq};
+}
 my $mmq = "";
-if (exists $opt{mmq}) { $mmq = $opt{mmq}; }
+if (exists $opt{mmq}) {
+	$mmq = $opt{mmq};
+}
 
 
 
 ##bed param
 my $lenForBed = 0;
 if (exists $opt{Lbed}) {
-	if ($opt{Lbed} =~ /^\d+$/) { $lenForBed = $opt{Lbed}; }
-	else { die "!!!\n\t--Lbed value need to be an integer\n"; }
+	if ($opt{Lbed} =~ /^\d+$/) {
+		$lenForBed = $opt{Lbed};
+	} else {
+		die "!!!\n\t--Lbed value need to be an integer\n";
 	}
+}
 
 my $splitBed = "";
 if (exists $opt{split_bed}) { $splitBed = 1; }
@@ -771,24 +836,26 @@ if (exists $opt{cut_bed}) {
 					if ($o eq "minL") { $minL=1; }
 					if ($o eq "maxL") { $maxL=1; }
 					if ($o eq "keepLast") {
-						if ($1 =~ /^m/i) { $cutB_opt{"$o"} = "merge"; }
-						elsif  ($1 =~ /^h/i) { $cutB_opt{"$o"} = "half"; }
-						elsif  ($1 =~ /^n/i) { $cutB_opt{"$o"} = ""; }
-						else { die "!!!\n\tcut_bed opt \"keepLast\" not recognized ($1?) (\"h\" , \"m\" or \"n\")\n"; }
+						if ($1 =~ /^m/i) { $cutB_opt{"$o"} = "merge";
+						} elsif  ($1 =~ /^h/i) {
+							$cutB_opt{"$o"} = "half";
+						} elsif  ($1 =~ /^n/i) {
+							$cutB_opt{"$o"} = "";
+						} else {
+							die "!!!\n\tcut_bed opt \"keepLast\" not recognized ($1?) (\"h\" , \"m\" or \"n\")\n";
 						}
-					else { $cutB_opt{"$o"} = $1; }
-					$ok=1;
+					} else {
+						$cutB_opt{"$o"} = $1;
 					}
-
-				
-
+					$ok=1;
 				}
-			unless ($ok) { die "!!!\n\tcut_bed opt not recognized ($a?)\n"; }
 			}
+			unless ($ok) { die "!!!\n\tcut_bed opt not recognized ($a?)\n"; }
+		}
 		unless ($minL) { $cutB_opt{"minL"} = int($cutB_opt{"cutL"}/2); }
 		unless ($maxL) { $cutB_opt{"maxL"} = $cutB_opt{"cutL"}; }
-		}
 	}
+}
 #if ($splitBed && $cutBed) { die "not able to split overlapping and cut long intervals, sorry...\n";}
 
 my %reAnnotBed = ();
@@ -798,16 +865,16 @@ if (exists $opt{reAnnot_bed}) {
 		foreach ( split(//,$opt{reAnnot_bed}) ) {
 			if ($_ =~ /g|t|e|i|o/i) {
 					$reAnnotBed{"item"}{lc($_)} = 1;
-				}
-			else { die "\n!!!\topt --reAnnot_bed value not recognized (comma separated g/t/e/i/o)\n"; }
+			} else {
+				die "\n!!!\topt --reAnnot_bed value not recognized (comma separated g/t/e/i/o)\n";
 			}
 		}
-	else {
+	} else {
 		foreach ("g","t","e","i","o") {
 			$reAnnotBed{"item"}{$_} = 1;
-			}
 		}
 	}
+}
 
 my @covFields =(); 
 if ($pThreshold) { @covFields = ("min","mean","cov"); }
@@ -817,8 +884,8 @@ if (exists $opt{cov_fields}) {
 	@covFields = split(/,/, join(',',@{$opt{cov_fields}}));
 	foreach (@covFields) {
 		unless (exists $covFieldList{$_}) { die "\n!!!\tcov field not recognized (min,max,tot,mean,median,cov)\n"; }
-		}
 	}
+}
 
 ## CNV param
 my %CNV_opt;
@@ -832,11 +899,17 @@ if (exists $opt{level2}) {
 	$CNV_opt{"center_test"} = 1;
 	}
 if (exists $opt{spread2}) {
-	if ($opt{spread2} =~ /^std/i) { $CNV_opt{"spread"} = "std"; $CNV_opt{"center"} = "avg"; }
-	elsif ($opt{spread2} =~ /^q/i) { $CNV_opt{"spread"} = "Qtile"; $CNV_opt{"center"} = "med"; }
-	else { die "\n!!!\topt --spread2 not recognized (std/qtile)\n"; }
-	$CNV_opt{"spread_test"} = 1;
+	if ($opt{spread2} =~ /^std/i) {
+		$CNV_opt{"spread"} = "std";
+		$CNV_opt{"center"} = "avg";
+	} elsif ($opt{spread2} =~ /^q/i) {
+		$CNV_opt{"spread"} = "Qtile";
+		$CNV_opt{"center"} = "med";
+	} else {
+		die "\n!!!\topt --spread2 not recognized (std/qtile)\n";
 	}
+	$CNV_opt{"spread_test"} = 1;
+}
 $CNV_opt{"seuil_del"} = 0.8;
 if (exists $opt{level_del}) { $CNV_opt{"seuil_del"} = $opt{level_del}; }
 $CNV_opt{"seuil_dup"} = 1.2;
@@ -848,14 +921,21 @@ if (exists $opt{highQual}) {
 	my @tab1 = split(/,/,$opt{highQual});
 	foreach my $string (@tab1) {
 		my @tab2 = split(/:/,$string);
-		if ($tab2[0] =~ /^li/i) { $CNV_opt{"trueCNV"}{"level"}{"del"} = $tab2[1]; }
-		elsif ($tab2[0] =~ /^ls/i) { $CNV_opt{"trueCNV"}{"level"}{"dup"} = $tab2[1]; }
-		elsif ($tab2[0] =~ /^si/i) { $CNV_opt{"trueCNV"}{"spread"}{"del"} = $tab2[1]; }
-		elsif ($tab2[0] =~ /^ss/i) { $CNV_opt{"trueCNV"}{"spread"}{"dup"} = $tab2[1]; }
-		elsif ($tab2[0] =~ /^c/i) { $CNV_opt{"trueCNV"}{"conseC"} = $tab2[1]; }
-		else  { die "\n!!!\topt --highQual not recognized (li/ls/si/ss/c)\n"; }
+		if ($tab2[0] =~ /^li/i) {
+			$CNV_opt{"trueCNV"}{"level"}{"del"} = $tab2[1];
+		} elsif ($tab2[0] =~ /^ls/i) {
+			$CNV_opt{"trueCNV"}{"level"}{"dup"} = $tab2[1];
+		} elsif ($tab2[0] =~ /^si/i) {
+			$CNV_opt{"trueCNV"}{"spread"}{"del"} = $tab2[1];
+		} elsif ($tab2[0] =~ /^ss/i) {
+			$CNV_opt{"trueCNV"}{"spread"}{"dup"} = $tab2[1];
+		} elsif ($tab2[0] =~ /^c/i) {
+			$CNV_opt{"trueCNV"}{"conseC"} = $tab2[1];
+		} else {
+			die "\n!!!\topt --highQual not recognized (li/ls/si/ss/c)\n";
 		}
 	}
+}
 $CNV_opt{"seuil_region"} = 1;
 if (exists $opt{ex_region}) { $CNV_opt{"seuil_region"} = $opt{ex_region}; }
 $CNV_opt{"seuil_patient"} = 1;
@@ -871,17 +951,26 @@ $CNV_opt{"max_Non_CNV_rate"} = "";
 if (exists $opt{max_nonCNVrate}) { $CNV_opt{"max_Non_CNV_rate"} = $opt{max_nonCNVrate}; }
 $CNV_opt{"ratioByGender"} = "";
 if (exists $opt{ratioByGender}) {
-	if ($opt{ratioByGender}=~/^a/i) { $CNV_opt{"ratioByGender"} = "all"; }
-	elsif ($opt{ratioByGender}=~/^g/i) { $CNV_opt{"ratioByGender"} = "gono"; }
-	elsif ($opt{ratioByGender}=~/^n/i) { $CNV_opt{"ratioByGender"} = ""; }
-	else { die "\n!!!\topt --ratioByGender not recognized (a/g/n)\n"; }
+	if ($opt{ratioByGender}=~/^a/i) {
+		$CNV_opt{"ratioByGender"} = "all";
+	} elsif ($opt{ratioByGender}=~/^g/i) {
+		$CNV_opt{"ratioByGender"} = "gono";
+	} elsif ($opt{ratioByGender}=~/^n/i) {
+		$CNV_opt{"ratioByGender"} = "";
+	} else {
+		die "\n!!!\topt --ratioByGender not recognized (a/g/n)\n";
 	}
+}
 $CNV_opt{"RefDepth"} = "mean";
 if (exists $opt{normDepth}) {
-	if ($opt{normDepth}=~/^m/i) { $CNV_opt{"RefDepth"} = "mean"; }
-	elsif ($opt{normDepth}=~/^t/i) { $CNV_opt{"RefDepth"} = "tot"; }
-	else { die "\n!!!\topt --normDepth not recognized (mean/tot)\n"; }
+	if ($opt{normDepth}=~/^m/i) {
+		$CNV_opt{"RefDepth"} = "mean";
+	} elsif ($opt{normDepth}=~/^t/i) {
+		$CNV_opt{"RefDepth"} = "tot";
+	} else {
+		die "\n!!!\topt --normDepth not recognized (mean/tot)\n";
 	}
+}
 $CNV_opt{"RefNoChrY"} = 1;
 if (exists $opt{normAllChr}) { $CNV_opt{"RefNoChrY"} = ""; }
 $CNV_opt{"geneGraph"} = "";
@@ -891,17 +980,22 @@ $CNV_opt{"chromGraph"} = "";
 if (exists $opt{graph_byChr} && ($opt{graph_byChr} eq "" || $opt{graph_byChr}=~/^y|o/i)) { $CNV_opt{"chromGraph"} = 1; }
 $CNV_opt{"CNVgraph"} = 1;
 if (exists $opt{graph_byCNV}) {
-	if ($opt{graph_byCNV} eq "" || $opt{graph_byCNV}=~/^y|o/i) { $CNV_opt{"CNVgraph"} = 1; }
-	elsif ($opt{graph_byCNV}=~/^n/i) { $CNV_opt{"CNVgraph"} = ""; }
+	if ($opt{graph_byCNV} eq "" || $opt{graph_byCNV}=~/^y|o/i) {
+		$CNV_opt{"CNVgraph"} = 1;
+	} elsif ($opt{graph_byCNV}=~/^n/i) {
+		$CNV_opt{"CNVgraph"} = "";
 	}
+}
 @{ $CNV_opt{"fields"} } = ();
 if (exists $opt{CNV_fields}) {
 	@{ $CNV_opt{"fields"} } = split(/,/, join(',',@{$opt{CNV_fields}}));
 	my %CNVfieldList = ("min"=>1,"max"=>1,"med"=>1,"avg"=>1,"std"=>1,"Q1"=>1,"Q3"=>1);
 	foreach (@{ $CNV_opt{"fields"} }) {
-		unless (exists $CNVfieldList{$_}) { die "\n!!!\t$_ CNV field not recognized (min,max,norm)\n"; }
+		unless (exists $CNVfieldList{$_}) {
+			die "\n!!!\t$_ CNV field not recognized (min,max,norm)\n";
 		}
 	}
+}
 $CNV_opt{"switch2graphByCNV"} = 250;
 $CNV_opt{"maxGeneLab"} = 200;
 $CNV_opt{"maxGeneSep"} = 500;
@@ -918,46 +1012,125 @@ $CNV_opt{"ploidy"} = 2;
 #unless (exists $opt{file} || exists $opt{dir}) { die "requires a list of bam files to analysed (opt -f), or a directory where to find such files (opt -d)\n"; }
 if ($bed_cov_file) {
 	$jobs{"CNV"} = 1;
-	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"})
-		{ die "\n!!!\tactions other than CNV_detect not allowed if .cov.txt file provided\n"; }
+	if ( $jobs{"graphSum"}
+		|| $jobs{"graphAllSampls"}
+		|| $jobs{"graphBySample"}
+		|| $jobs{"geneSummary"}
+		|| $jobs{"geneReport"}
+		|| $jobs{"covPlot"}
+		|| $jobs{"genePlot"}
+		|| $jobs{"interSplot"}
+		|| $jobs{"covBed"}
+		|| $jobs{"covMut"} ) {
+		die "\n!!!\tactions other than CNV_detect not allowed if .cov.txt file provided\n";
 	}
+}
 if ($jobs{"CNV"} && !$bed_cov_file) {
 	$jobs{"covBed"} = 1;
-	}
+}
 
 if ($jobs{"bedReport"} || $jobs{"2Reseq"}) {
 	$jobs{"covBed"} = 1;
-	}
+}
 
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"}) {
+if ($jobs{"graphSum"}
+	|| $jobs{"graphAllSampls"}
+	|| $jobs{"graphBySample"}
+	|| $jobs{"geneSummary"}
+	|| $jobs{"geneReport"}
+	|| $jobs{"covPlot"}
+	|| $jobs{"genePlot"}
+	|| $jobs{"interSplot"}
+	|| $jobs{"covBed"}
+	|| $jobs{"covMut"}) {
 	if (!@Files && !$raw_cov_file) { die "\n!!!\tno .bam files (or coverage file) provided\n"; }
-	}
+}
 
 if ($raw_cov_file) { $jobs{"keepCov"} = ""; }
 
 #unless ($mutFile || ($jobs{"CNV"} && $bed_cov_file)) {
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"}) {
-	unless ($bedFile || @IDs) 
-		{ die "\n!!!\t.bed file (opt -b) or list of genes or transcripts id required (opt -i)\n"; }
+if ($jobs{"graphSum"}
+	|| $jobs{"graphAllSampls"}
+	|| $jobs{"graphBySample"}
+	|| $jobs{"geneSummary"}
+	|| $jobs{"geneReport"}
+	|| $jobs{"covPlot"}
+	|| $jobs{"genePlot"}
+	|| $jobs{"interSplot"}
+	|| $jobs{"covBed"}) {
+	unless ($bedFile || @IDs) {
+		die "\n!!!\t.bed file (opt -b) or list of genes or transcripts id required (opt -i/-I)\n";
 	}
+}
 
 unless (@Thresholds) {
 	if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || ($jobs{"CNV"} && $CNV_opt{"seuil_cov"})) { die "\n!!!\tat least 1 threshold value required (opt -t)\n"; }
 	if ($jobs{"covBed"}) {
 		foreach(@covFields) {
 			if ($_ eq "cov") { die "\n!!!\tat least 1 threshold value required (opt -t)\n"; }
-			}
-		if ($jobs{"bedReport"})  { die "\n!!!\tat least 1 threshold value required (opt -t)\n"; }
 		}
+		if ($jobs{"bedReport"})  { die "\n!!!\tat least 1 threshold value required (opt -t)\n"; }
 	}
+}
 
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"genePlot"} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"}) || ($bedFile && %reAnnotBed) || @IDs) { 
+if ( $jobs{"graphSum"}
+	|| $jobs{"graphAllSampls"}
+	|| $jobs{"graphBySample"}
+	|| $jobs{"genePlot"}
+	|| ($jobs{"CNV"} && $CNV_opt{"geneGraph"})
+	|| ($bedFile && %reAnnotBed)
+	|| @IDs
+	|| $jobs{"keepTmpBed"} ) {
 	unless ($refFile) { die "\n!!!\tRefSeq file required (opt -r)\n"; } 
-	}
+}
 
-unless ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"CNV"} || $jobs{"covMut"} || $jobs{"keepCov"} || $jobs{"keepBed"}) {
+unless ( $jobs{"graphSum"}
+		|| $jobs{"graphAllSampls"}
+		|| $jobs{"graphBySample"}
+		|| $jobs{"geneSummary"}
+		|| $jobs{"geneReport"}
+		|| $jobs{"covPlot"}
+		|| $jobs{"genePlot"}
+		|| $jobs{"interSplot"}
+		|| $jobs{"covBed"}
+		|| $jobs{"CNV"}
+		|| $jobs{"covMut"}
+		|| $jobs{"keepCov"}
+		|| $jobs{"keepBed"}
+		|| $jobs{"keepTmpBed"} ) {
 	die "\n!!!\tno job selected!\n";
-	}
+}
+
+$jobs{"with_DephFile_Required"} = "";
+if ( $jobs{"graphSum"} 
+	|| $jobs{"graphAllSampls"} 
+	|| $jobs{"graphBySample"} 
+	|| $jobs{"geneSummary"} 
+	|| $jobs{"geneReport"} 
+	|| $jobs{"covPlot"} 
+	|| $jobs{"genePlot"} 
+	|| $jobs{"interSplot"} 
+	|| $jobs{"covBed"} 
+	|| $jobs{"covMut"} ) {
+	$jobs{"with_DephFile_Required"} = 1;
+}
+
+$jobs{"output_dir_2_keep"} = "";
+if ( $jobs{"with_DephFile_Required"} || $jobs{"CNV"} ) {
+	$jobs{"output_dir_2_keep"} = 1;
+}
+
+$jobs{"with_gene_coordinates_required"} = "";
+if ($jobs{"graphSum"} 
+	|| $jobs{"graphAllSampls"} 
+	|| $jobs{"graphBySample"} 
+	|| $jobs{"genePlot"} 
+	|| $jobs{"geneSummary"} 
+	|| $jobs{"geneReport"} 
+	|| $jobs{"keepTmpBed"} 
+	|| ($jobs{"CNV"} && $CNV_opt{"geneGraph"}) ) {
+	$jobs{"with_gene_coordinates_required"} = 1;
+}
 
 
 ###################
@@ -1009,173 +1182,160 @@ if ($jobs{"graphSum"}
 my(%sName,%sName2,$smplIdx,%bamHeaders);
 my $bedTversion = ""; 
 
-if ( $jobs{"graphSum"} 
- || $jobs{"graphAllSampls"} 
- || $jobs{"graphBySample"} 
- || $jobs{"geneSummary"} 
- || $jobs{"geneReport"} 
- || $jobs{"covPlot"} 
- || $jobs{"genePlot"} 
- || $jobs{"interSplot"} 
- || $jobs{"covBed"} 
- || $jobs{"covMut"} ) {
-	unless ($raw_cov_file) {
-		##check external softwares:
-		##samtools
-		if ($samT) {
-			#system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
-			$pathCmd{$samT} = which($samT);
-			if ($pathCmd{$samT}) {
-				print "\tsamtools OK\n";
+if ( $jobs{"with_DephFile_Required"} && !$raw_cov_file ) {
+	##check external softwares:
+	##samtools
+	if ($samT) {
+		#system "$samT"; #write the name of calling script of picard #> /dev/null 2>&1
+		$pathCmd{$samT} = which($samT);
+		if ($pathCmd{$samT}) {
+			print "\tsamtools OK\n";
+		} else {
+			die "\n!!!\t$samT samtools bin file not found\n";
+		}
+	} else {
+		$samT = "samtools";
+		$pathCmd{$samT} = which($samT);
+		if ($pathCmd{$samT}) {
+			print "\tsamtools OK\n";
+		} else {
+			$samT = "";
+		}
+	}	
+	##gatk
+	## gatk == 1 if want to use gatk; so that test for existing command won't be evaluated if don't want to use it
+	#if ($mbq && !$gatk) { $gatk = 1; }
+	if (%gatk) {
+		if (-f $gatk{"jar"}) {
+			if ($ram) {
+				$gatk{"exec"} = "java -jar -Xmx$ram"."g ".$gatk{"jar"};	#-Djava.io.tmpdir=$tmpDir
 			} else {
-				die "\n!!!\t$samT samtools bin file not found\n";
+				$gatk{"exec"} = "java -jar ".$gatk{"jar"}; }
+			print "\tGATK OK\n";
+		} else {
+			die "\n!!!\t".$gatk{"jar"}." GATK .jar file not found\n";
+		}
+		foreach (@Files) { $smplIdx->{$_} = ""; }	#to initialize
+	} else {
+	##bedtools
+		if ($bedT) {
+			#system "$bedT";
+			$pathCmd{$bedT} = which($bedT);
+			if ($pathCmd{$bedT}) {
+				print "\tbedtools OK\n";
+			} else {
+				die "\n!!!\t$bedT bedtools bin file not found\n";
 			}
 		} else {
-			$samT = "samtools";
-			$pathCmd{$samT} = which($samT);
-			if ($pathCmd{$samT}) {
-				print "\tsamtools OK\n";
+			$bedT = "bedtools";
+			$pathCmd{$bedT} = which($bedT);
+			if ($pathCmd{$bedT}) {
+				print "\tbedtools OK\n";
 			} else {
-				$samT = "";
-			}
-		}	
-		##gatk
-		## gatk == 1 if want to use gatk; so that test for existing command won't be evaluated if don't want to use it
-		#if ($mbq && !$gatk) { $gatk = 1; }
-		if (%gatk) {
-			if (-f $gatk{"jar"}) {
-				if ($ram) {
-					$gatk{"exec"} = "java -jar -Xmx$ram"."g ".$gatk{"jar"};	#-Djava.io.tmpdir=$tmpDir
-				} else {
-					$gatk{"exec"} = "java -jar ".$gatk{"jar"}; }
-				print "\tGATK OK\n";
-			} else {
-				die "\n!!!\t".$gatk{"jar"}." GATK .jar file not found\n";
-			}
-			foreach (@Files) { $smplIdx->{$_} = ""; }	#to initialize
-		} else {
-		##bedtools
-			if ($bedT) {
-				#system "$bedT";
-				$pathCmd{$bedT} = which($bedT);
-				if ($pathCmd{$bedT}) {
-					print "\tbedtools OK\n";
-				} else {
-					die "\n!!!\t$bedT bedtools bin file not found\n";
-				}
-			} else {
-				$bedT = "bedtools";
-				$pathCmd{$bedT} = which($bedT);
-				if ($pathCmd{$bedT}) {
-					print "\tbedtools OK\n";
-				} else {
-					die "\n!!!\tbedtools exec not found in \$PATH\n";
-				}
-			}
-			if ($bedT) {
-				$bedTversion = `$bedT --version`;
-				$bedTversion =~ /^bedtools v(\d+)\.(\d+)/;
-				if ( ($1 < 2) || ($1 == 2 && $2 < 24) ) {
-					$bedTversion = 1;
-				} else	{
-					$bedTversion = 2;
-				}
+				die "\n!!!\tbedtools exec not found in \$PATH\n";
 			}
 		}
-		##softwares requirements according to options and actions:
-		if ($mbq && !%gatk) {
-			die "\n!!!\tGATK required for min base quality filter\n";
-		}
-		if ($mmq && !%gatk) {
-			die "\n!!!\tGATK required for min mapping quality filter\n";
-		}
-		#if ($jobs{"CNV"} && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
-		#if ($dedup eq "do" && !$picard) { die "\n!!!\tpicard tools not installed or not found (required for discarding duplicates)\n"; }
-		if (!$bedT && !%gatk) { die "\n!!!\tbedtools or GATK required\n"; }
-
-		##find sample names in bam
-		##sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
-		if ($samT) {
-			my %allID;
-			foreach my $f (@Files) {
-				# @RG	ID:id	SM:sample	LB:lb	PL:Illumina	PU:pu
-				@{ $bamHeaders{$f} } = `$samT view -H $f`;
-				my @RGs = grep(/^\@RG/, @{ $bamHeaders{$f} });
-				$RGs[0] =~ /\tID:(.+?)(\t|\n)/;
-				my $ID = $1;
-				$RGs[0] =~ /\tSM:(.+?)(\t|\n)/;
-				my $SM = $1;
-				if (exists $allID{$SM}) {
-					$sName{$f} = $SM;
-					$sName2{$f} = $SM."_".$ID;
-					foreach (@{ $allID{$SM} })
-						{ $sName2{$_} = $SM."_".$ID; }
-				} else {
-					$sName{$f} = $SM;
-					$sName2{$f} = $SM;
-				}
-				push(@{ $allID{$SM} },$f);
-			}
-		} else {
-			foreach (@Files) {
-				$sName{$_} = $fName{$_};
-				$sName2{$_} = $fName{$_};
-			}
-		}
-		#sort @Files according to %sName2 lexical order
-		@Files = (sort {$sName2{$a} cmp $sName2{$b}} (keys %sName2));
-
-		if (@Files) {
-			#bam index
-			if ($samT) {
-				foreach my $file (@Files) {
-					unless (-e "$file.bai") {
-						my $cmd = "$samT index $file";
-						print "$cmd\n";
-						system "$cmd";
-					}
-				}
-			}
-			#@chromOrder from 1st bam, if not already set
-			unless (@chromOrder) {
-				if (%bamHeaders) {
-					foreach my $file (keys%bamHeaders) {
-						## @SQ	SN:chr1	LN:249250621
-						my @SQs = grep(/^\@SQ/, @{ $bamHeaders{$file} });
-						foreach my $sq (@SQs) {
-							$sq =~ /\tSN:(.+?)\tLN:(\d+)\n/;
-							my $chrName = $1; my $len = $2;
-							my $chr = $chrName; $chr =~ s/^chr//i;
-							$chromName{"fasta"}{$chr} = $chrName;
-							push(@chromOrder, $chr);
-							$chromLength{$chr} = $len;
-						}
-						last;
-					}
-				}
-			}
-		}
-		## check requirement for genome.fa and genome.fa.fai
-		if (%gatk) {
-			unless ($genom) { die "\n!!!\treference genome.fa required\n"; }
-			unless (-e "$genom.fai") { die "\n!!!\tindex genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
-		} else  {
-			if ($bedTversion == 2) {
-				unless (%chromLength) { die "\n!!!\tindex genome.fa.fai required (to generate chomLength file for bedtools2)\n"; }
-			}
-		}
-		## check for "chr" in chrom names, for depth analysis
-		if (@chromOrder) {
-			if ($chromName{"fasta"}{$chromOrder[0]} =~ /^chr/i) {
-				$withChr{"all"} = "_wChr.bed";
-				foreach (@Files) { $withChr{$_} = "_wChr.bed"; } 
-			} else {
-				$withChr{"all"} = "_0Chr.bed";
-				foreach (@Files) { $withChr{$_} = "_0Chr.bed"; } 
+		if ($bedT) {
+			$bedTversion = `$bedT --version`;
+			$bedTversion =~ /^bedtools v(\d+)\.(\d+)/;
+			if ( ($1 < 2) || ($1 == 2 && $2 < 24) ) {
+				$bedTversion = 1;
+			} else	{
+				$bedTversion = 2;
 			}
 		}
 	}
+	##softwares requirements according to options and actions:
+	if ($mbq && !%gatk) {
+		die "\n!!!\tGATK required for min base quality filter\n";
+	}
+	if ($mmq && !%gatk) {
+		die "\n!!!\tGATK required for min mapping quality filter\n";
+	}
+	#if ($jobs{"CNV"} && ($CNV_opt{"RefDepth"} eq "tot") && !$samT) { die "samtools not installed or not found\n"; }
+	#if ($dedup eq "do" && !$picard) { die "\n!!!\tpicard tools not installed or not found (required for discarding duplicates)\n"; }
+	if (!$bedT && !%gatk) { die "\n!!!\tbedtools or GATK required\n"; }
 
+	##find sample names in bam
+	##sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
+	if ($samT) {
+		my %allID;
+		foreach my $f (@Files) {
+			# @RG	ID:id	SM:sample	LB:lb	PL:Illumina	PU:pu
+			@{ $bamHeaders{$f} } = `$samT view -H $f`;
+			my @RGs = grep(/^\@RG/, @{ $bamHeaders{$f} });
+			$RGs[0] =~ /\tID:(.+?)(\t|\n)/;
+			my $ID = $1;
+			$RGs[0] =~ /\tSM:(.+?)(\t|\n)/;
+			my $SM = $1;
+			if (exists $allID{$SM}) {
+				$sName{$f} = $SM;
+				$sName2{$f} = $SM."_".$ID;
+				foreach (@{ $allID{$SM} })
+					{ $sName2{$_} = $SM."_".$ID; }
+			} else {
+				$sName{$f} = $SM;
+				$sName2{$f} = $SM;
+			}
+			push(@{ $allID{$SM} },$f);
+		}
+	} else {
+		foreach (@Files) {
+			$sName{$_} = $fName{$_};
+			$sName2{$_} = $fName{$_};
+		}
+	}
+	#sort @Files according to %sName2 lexical order
+	@Files = (sort {$sName2{$a} cmp $sName2{$b}} (keys %sName2));
+	if (@Files) {
+		#bam index
+		if ($samT) {
+			foreach my $file (@Files) {
+				unless (-e "$file.bai") {
+					my $cmd = "$samT index $file";
+					print "$cmd\n";
+					system "$cmd";
+				}
+			}
+		}
+		#@chromOrder from 1st bam, if not already set
+		unless (@chromOrder) {
+			if (%bamHeaders) {
+				foreach my $file (keys%bamHeaders) {
+					## @SQ	SN:chr1	LN:249250621
+					my @SQs = grep(/^\@SQ/, @{ $bamHeaders{$file} });
+					foreach my $sq (@SQs) {
+						$sq =~ /\tSN:(.+?)\tLN:(\d+)\n/;
+						my $chrName = $1; my $len = $2;
+						my $chr = $chrName; $chr =~ s/^chr//i;
+						$chromName{"fasta"}{$chr} = $chrName;
+						push(@chromOrder, $chr);
+						$chromLength{$chr} = $len;
+					}
+					last;
+				}
+			}
+		}
+	}
+	## check requirement for genome.fa and genome.fa.fai
+	if (%gatk) {
+		unless ($genom) { die "\n!!!\treference genome.fa required\n"; }
+		unless (-e "$genom.fai") { die "\n!!!\tindex genome.fa.fai required (\"samtools faidx genome.fa\")\n"; }
+	} else {
+		if ($bedTversion == 2) {
+			unless (%chromLength) { die "\n!!!\tindex genome.fa.fai required (to generate chomLength file for bedtools2)\n"; }
+		}
+	}
+}
+## check for "chr" in chrom names, for depth analysis
+if (@chromOrder) {
+	if ($chromName{"fasta"}{$chromOrder[0]} =~ /^chr/i) {
+		$withChr{"all"} = "_wChr.bed";
+		foreach (@Files) { $withChr{$_} = "_wChr.bed"; } 
+	} else {
+		$withChr{"all"} = "_0Chr.bed";
+		foreach (@Files) { $withChr{$_} = "_0Chr.bed"; } 
+	}
 }
 
 
@@ -1186,23 +1346,16 @@ my $outdir = "";
 my $tmpDir = "";
 my $chromLength = "";
 my @tmpFiles = (); ##tmp files to rm when ends
-if ($jobs{"graphSum"}
- || $jobs{"graphAllSampls"}
- || $jobs{"graphBySample"}
- || $jobs{"geneSummary"}
- || $jobs{"geneReport"}
- || $jobs{"covPlot"}
- || $jobs{"genePlot"}
- || $jobs{"interSplot"}
- || $jobs{"covBed"}
- || $jobs{"CNV"}
- || $jobs{"covMut"}) {
+if ($jobs{"output_dir_2_keep"} || $jobs{"keepTmpBed"}) {	# an output dir is always created; if the one specified already exists, another is created within
 	if (exists $opt{outdir}) { 
 		$outdir = $opt{outdir}; 
 		$outdir =~ s/\/$//;
 		if (-d $outdir) {
-			if ($jobs{"CNV"} && $bed_cov_file) { $outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
-			else { $outdir .= "/covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime); }
+			if ($jobs{"CNV"} && $bed_cov_file) {
+				$outdir .= "/CNV_analysis-".strftime('%y-%m-%d-%Hh%M',localtime);
+			} else {
+				$outdir .= "/covAnalysis-".strftime('%y-%m-%d-%Hh%M',localtime);
+			}
 		}
 	} else {
 		if ($jobs{"CNV"} && $bed_cov_file) {
@@ -1226,13 +1379,12 @@ if ($jobs{"graphSum"}
 
 my $depthFilePerChr = {};
 if ($raw_cov_file) {
-
 	print "\n\n####\n\nreading $raw_cov_file\n\n####\n";
 	my $fhIn;
 	if ($raw_cov_file =~ /.gz$/) {
 		use IO::Zlib;
 		$fhIn = new IO::Zlib;
-		$fhIn->open($raw_cov_file, "rb")	
+		$fhIn->open($raw_cov_file, "rb")
 	} else {
 		open($fhIn, "<", $raw_cov_file) or die "\n!!!\tcould not read $raw_cov_file ($!)\n";
 	}
@@ -1279,20 +1431,8 @@ if ($raw_cov_file) {
 		}
 	}
 	close $fhChr; close $fhIn;
-
 } else {
-
-	if ( ($jobs{"graphSum"} 
-		|| $jobs{"graphAllSampls"} 
-		|| $jobs{"graphBySample"} 
-		|| $jobs{"geneSummary"} 
-		|| $jobs{"geneReport"} 
-		|| $jobs{"covPlot"} 
-		|| $jobs{"genePlot"} 
-		|| $jobs{"interSplot"} 
-		|| $jobs{"covBed"} 
-		|| $jobs{"covMut"}) 
-	&& !%gatk && $bedTversion == 2) {
+	if ( $jobs{"with_DephFile_Required"} && !%gatk && $bedTversion == 2) {
 		if (%chromLength) {
 			$chromLength = "$tmpDir/chromLength.txt";		#used by bedtools
 			open (my $fhOut, ">", "$chromLength");
@@ -1300,7 +1440,6 @@ if ($raw_cov_file) {
 			close $fhOut;
 		}
 	}
-
 }
 
 #read sex file, just to check existing sample names
@@ -1314,24 +1453,35 @@ if ($fichier_sexe && scalar(keys%sName2)>0) {
 			foreach my $file (@Files) {
 				if ($smpl eq $sName2{$file}) {
 					$ok = 1; last;
-					}
 				}
-			unless ($ok) { die "\n!!!\tsample $smpl not found in bam files\n"; }
 			}
+			unless ($ok) { die "\n!!!\tsample $smpl not found in bam files\n"; }
 		}
-	close $fh;
 	}
+	close $fh;
+}
 
 if ($jobs{"graphBySample"} || $jobs{"geneReport"} || $jobs{"bedReport"}) { 
 	foreach (@Files) { mkdir("$outdir/cov\_$sName2{$_}"); }
-	}
+}
 
 if ($jobs{"graphAllSampls"} || $jobs{"graphSum"}) { mkdir("$outdir/cov_All"); }
 
-if ($jobs{"keepBed"} && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs{"graphBySample"} && !$jobs{"geneSummary"} && !$jobs{"geneReport"} && !$jobs{"covPlot"} && !$jobs{"genePlot"} && !$jobs{"interSplot"} && !$jobs{"covBed"} && !$jobs{"CNV"} && !$jobs{"covMut"}) {
+if ($jobs{"keepBed"}
+	&& !$jobs{"graphSum"}
+	&& !$jobs{"graphAllSampls"}
+	&& !$jobs{"graphBySample"}
+	&& !$jobs{"geneSummary"}
+	&& !$jobs{"geneReport"}
+	&& !$jobs{"covPlot"}
+	&& !$jobs{"genePlot"}
+	&& !$jobs{"interSplot"}
+	&& !$jobs{"covBed"}
+	&& !$jobs{"CNV"}
+	&& !$jobs{"covMut"}) {
 	unless (exists $opt{outdir}) { $outdir = $keepBedDir; }
 	$bedName = $keepBedName;
-	}
+}
 
 
 
@@ -1346,10 +1496,14 @@ if ($jobs{"keepBed"} && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs
 my($IDinRef,$ALLinRef);
 if (@IDs) {
 	print "\n\n####\n\nselecting lines within $refFile matching provided gene/transcript IDs\n\n####\n";
-	if ($refFmt eq "ucsc") { $IDinRef = DeCovA::refIDs::UCSC2Ids($refFile,\@IDs,\%chromName,$wNonCod); }
-	elsif ($refFmt eq "gtf") { $IDinRef = DeCovA::refIDs::GTF2Ids($refFile,\@IDs,\%chromName,$wNonCod); }
-	elsif ($refFmt eq "gff3") { $IDinRef = DeCovA::refIDs::GFF2Ids($refFile,\@IDs,\%chromName,$wNonCod); }
+	if ($refFmt eq "ucsc") {
+		$IDinRef = DeCovA::refIDs::UCSC2Ids($refFile,\@IDs,\%chromName,$wNonCod);
+	} elsif ($refFmt eq "gtf") {
+		$IDinRef = DeCovA::refIDs::GTF2Ids($refFile,\@IDs,\%chromName,$wNonCod);
+	} elsif ($refFmt eq "gff3") {
+		$IDinRef = DeCovA::refIDs::GFF2Ids($refFile,\@IDs,\%chromName,$wNonCod);
 	}
+}
 
 
 
@@ -1366,7 +1520,7 @@ if ($bedFile) {
 		$expandedBed .= "_w$lenForBed.bed";
 		DeCovA::bedProcessing::addLength2Bed($currentBed,$expandedBed,$lenForBed);
 		$currentBed = $expandedBed;
-		}
+	}
 	if (%reAnnotBed) {
 		print "\n\tre-annotating intervals of $currentBed with $refFile\n";
 		$reAnnotBed{"file"} = "$outdir/$bedName";
@@ -1375,245 +1529,257 @@ if ($bedFile) {
 		if ($IDinRef) {
 			my $ref_0based =  DeCovA::refIDs::refHash2Transcripts($IDinRef,$refFmt);
 			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
-			}
-		else {
+		} else {
 			$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
 			my $ref_0based =  DeCovA::refIDs::refHash2Transcripts($ALLinRef,$refFmt);
 			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
-			}
+		}
 		unless ($currentBed eq $bedFile) { unlink $currentBed; }
 		$currentBed = $reAnnotBed{"file"};
-		}
-	if ( $jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || $jobs{"covPlot"} || $jobs{"genePlot"} || $jobs{"interSplot"} || $jobs{"covBed"} || $jobs{"covMut"} ) {
+	}
+	if ( $jobs{"graphSum"} 
+		|| $jobs{"graphAllSampls"} 
+		|| $jobs{"graphBySample"} 
+		|| $jobs{"geneSummary"} 
+		|| $jobs{"geneReport"} 
+		|| $jobs{"covPlot"} 
+		|| $jobs{"genePlot"} 
+		|| $jobs{"interSplot"} 
+		|| $jobs{"covBed"} 
+		|| $jobs{"covMut"} 
+		|| $jobs{"keepTmpBed"} ) {
 		#transform in 1-based coord; keep longest intervals
 		$bed_Intervals = DeCovA::bedProcessing::readBed($currentBed);
 		#merge overlapping intervals
 		$mergedBed_Intervals = mergeIntervals($bed_Intervals);
 		#print merged bed, for depth analysis
 		DeCovA::bedProcessing::printBed("$tmpDir/original",$mergedBed_Intervals,\@chromOrder);
-		}
+	}
 	#eventually slice bed intervals : split_Bed, rm_Overlap_Bed, cut_Bed
 	my $currentBed2 = DeCovA::bedProcessing::sliceBedIntervals($currentBed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@chromOrder,\%chromName);
-	if ($currentBed2 ne $currentBed && $currentBed ne $bedFile) { unlink $currentBed; }
-	if ($opt{keepBed} && !$jobs{"graphSum"} && !$jobs{"graphAllSampls"} && !$jobs{"graphBySample"} && !$jobs{"geneSummary"} && !$jobs{"geneReport"} && !$jobs{"covPlot"} && !$jobs{"genePlot"} && !$jobs{"interSplot"} && !$jobs{"covBed"} && !$jobs{"CNV"} && !$jobs{"covMut"}) {
-		my $outBed = "$outdir/$bedName"; $outBed =~ s/.bed$//; $outBed .= ".bed";
-		#rename $currentBed2, "$outdir/$bedName" or die "rename failed: $!";
-		use File::Copy qw(move);
-		move($currentBed2, "$outBed") or die "\n!!!\tmove failed: $!";
-		$currentBed2 = "$outBed";
+	if ($currentBed2 ne $bedFile) {
+		if ($currentBed ne $currentBed) { unlink $currentBed; }
+		if ( $opt{keepBed} 
+			&& !$jobs{"graphSum"} 
+			&& !$jobs{"graphAllSampls"} 
+			&& !$jobs{"graphBySample"} 
+			&& !$jobs{"geneSummary"} 
+			&& !$jobs{"geneReport"} 
+			&& !$jobs{"covPlot"} 
+			&& !$jobs{"genePlot"} 
+			&& !$jobs{"interSplot"} 
+			&& !$jobs{"covBed"} 
+			&& !$jobs{"CNV"} 
+			&& !$jobs{"covMut"} ) {
+			my $outBed = "$outdir/$bedName"; $outBed =~ s/.bed$//; $outBed .= ".bed";
+			use File::Copy qw(move);
+			move($currentBed2, "$outBed") or die "\n!!!\tmove failed: $!";
+			$currentBed2 = "$outBed";
 		}
-	$bedFile = $currentBed2;
 	}
+	$bedFile = $currentBed2;
+}
 
 
 ## if file of known mutations provided (in 1-based coordinates)
 my($Mut);
-if ($mutFile) { 
+if ($mutFile) {
 	print "\n## reading $mutFile\n\n"; 
 	$Mut = DeCovA::bedProcessing::readMut($mutFile,\%chromName);		## ${$Mut}{$chr}{$startMut} = $infoMut	; (1-based coord)
-	}
+}
 
 
 ## find and design transcripts:
 my(@hashSub,$geneNM_r,$NMgene_r,$NMchr_r,$NMsens_r,%NMstartCod,%NMendCod,%Regions,$txtRegions_r,%NM_Ex,$txt_NM_Ex_r,$Genes_r,%RegBed,%NMlength,%intron,%UTR,%Cod,%RegMut,$ref_Intervals,$id2Bed);	#	$NMstartCod{"raw"}->{} %{ ${$NMstartCod_r}{"raw"} }
 
-if ($jobs{"graphSum"} || $jobs{"graphAllSampls"} || $jobs{"graphBySample"} || (@IDs && !$bedFile) || $jobs{"genePlot"} || $jobs{"geneSummary"} || $jobs{"geneReport"} || ($jobs{"CNV"} && $CNV_opt{"geneGraph"})) {
+if ( $jobs{"with_gene_coordinates_required"} || (@IDs && !$bedFile) ) {
 
-print "\n\n####\n\nprocessing intervals to analyse\n\n####\n";
+	print "\n\n####\n\nprocessing intervals to analyse\n\n####\n";
 
-use DeCovA::geneRegion;
+	use DeCovA::geneRegion;
 
-## if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
-unless ($IDinRef) {
-	$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$mergedBed_Intervals,\%chromName,$wNonCod);
-	#undef $ALLinRef;
+	## if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
+	unless ($IDinRef) {
+		$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$mergedBed_Intervals,\%chromName,$wNonCod);
+		#undef $ALLinRef;
 	}
 
-## for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
-##and transform in 1-based coordinates
-print "\n\tgetting positions from gene IDs\n";
-print "\t\tfor graph regions\n";
-@hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wUTR,$id2Bed,\@chromOrder,\%chromName);
-#($geneNM_r, $NMgene_r, $NMchr_r, $NMsens_r, $NMstartCod{"raw"}, $NMendCod{"raw"}, $Regions{"raw"}, $NM_Ex{"raw"}, $Genes_r) = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wNonCod,$wUTR,$id2Bed,\@chromOrder);
-#return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
-$geneNM_r = $hashSub[0];		# @{ $geneNM{$gene} } = [$NM1,...]
-$NMgene_r = $hashSub[1];		# $NMgene{$NM} = $gene;
-$NMchr_r = $hashSub[2];			# %NMchr : key = NM, value = chr
-$NMsens_r = $hashSub[3];		# %NMsens : key = NM, value = "+" or "-"
-$NMstartCod{"raw"} = $hashSub[4];		# ${$NMstartCod_r}{"raw"} = $hashSub[4];		# %NMstartCod : key = NM, value = start of coding sequence
-$NMendCod{"raw"} = $hashSub[5];		# ${$NMendCod_r}{"raw"} = %{$hashSub[5]};		# %NMendCod : key = NM, value = end of coding sequence
-$Regions{"raw"} = $hashSub[6];		# $Regions{chr}{NM}{start of region} = end of region
-$NM_Ex{"raw"} = $hashSub[7];		# %NM_Ex{NM}{start of region}{start of exon} = end of exon
-$Genes_r = $hashSub[8]; 
-unless ($bedFile) { 			#-> bed from id's locations
-	$bed_Intervals = $hashSub[9];		# $Bed{$chr}{$start} = $end; 
-	mergeIntervalsInRef($bed_Intervals);
-	}
-=pod
-	foreach my $chr(sort(keys%{$Regions{"raw"}})) {
-		foreach my $NM (sort(keys%{ $Regions{"raw"}{$chr} })) {
-			foreach my $startR (sort{$a<=>$b}keys%{  $Regions{"raw"}{$chr}{$NM} })
-				{ print $chr."\t".$NM."\t".$startR."\t". $Regions{"raw"}{$chr}{$NM}{$startR}."\n"; }
-			}
-		}
-=cut
-## for summary txt file:
-print "\t\tfor txt regions\n";
-if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
-	$bedName = $keepBedName;
-	$id2Bed = "$outdir/$bedName.bed";
-	}
-@hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$splitBedFromId,$mergeBedFromId,$UTRinTxt,$id2Bed,\@chromOrder,\%chromName);
-$txtRegions_r = $hashSub[6];		# as %Regions, but for summary txt file
-$txt_NM_Ex_r = $hashSub[7];		# as %NM_Ex, but for summary txt file
-$ref_Intervals = $hashSub[9];		# as %Bed, but for coordPlot and cov_Bed if no bedfile
-mergeIntervalsInRef($ref_Intervals);
-if ($id2Bed) {
-	$id2Bed = DeCovA::bedProcessing::sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@chromOrder,\%chromName);
-	}
-
-## changes Regions{gene} according to each NM (without -A N)
-if ($AllTranscripts) {
-	print "\n\tchange region intervals according to each transcript\n";
+	## for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
+	##and transform in 1-based coordinates
+	print "\n\tgetting positions from gene IDs\n";
 	print "\t\tfor graph regions\n";
-	DeCovA::geneRegion::NM2GeneRegion($Genes_r,$geneNM_r,$NMchr_r,$Regions{"raw"},$NM_Ex{"raw"});
+	@hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wUTR,$id2Bed,\@chromOrder,\%chromName);
+	#($geneNM_r, $NMgene_r, $NMchr_r, $NMsens_r, $NMstartCod{"raw"}, $NMendCod{"raw"}, $Regions{"raw"}, $NM_Ex{"raw"}, $Genes_r) = Id2Coord($idFile,$len5,$len3,$upstream,$downstream,$splitBedFromId,$mergeBedFromId,$wNonCod,$wUTR,$id2Bed,\@chromOrder);
+	#return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%Bed);
+	$geneNM_r = $hashSub[0];		# @{ $geneNM{$gene} } = [$NM1,...]
+	$NMgene_r = $hashSub[1];		# $NMgene{$NM} = $gene;
+	$NMchr_r = $hashSub[2];			# %NMchr : key = NM, value = chr
+	$NMsens_r = $hashSub[3];		# %NMsens : key = NM, value = "+" or "-"
+	$NMstartCod{"raw"} = $hashSub[4];		# ${$NMstartCod_r}{"raw"} = $hashSub[4];		# %NMstartCod : key = NM, value = start of coding sequence
+	$NMendCod{"raw"} = $hashSub[5];		# ${$NMendCod_r}{"raw"} = %{$hashSub[5]};		# %NMendCod : key = NM, value = end of coding sequence
+	$Regions{"raw"} = $hashSub[6];		# $Regions{chr}{NM}{start of region} = end of region
+	$NM_Ex{"raw"} = $hashSub[7];		# %NM_Ex{NM}{start of region}{start of exon} = end of exon
+	$Genes_r = $hashSub[8]; 
+	unless ($bedFile) { 			#-> bed from id's locations
+		$bed_Intervals = $hashSub[9];		# $Bed{$chr}{$start} = $end; 
+		mergeIntervalsInRef($bed_Intervals);
+		}
+=pod
+		foreach my $chr(sort(keys%{$Regions{"raw"}})) {
+			foreach my $NM (sort(keys%{ $Regions{"raw"}{$chr} })) {
+				foreach my $startR (sort{$a<=>$b}keys%{  $Regions{"raw"}{$chr}{$NM} })
+					{ print $chr."\t".$NM."\t".$startR."\t". $Regions{"raw"}{$chr}{$NM}{$startR}."\n"; }
+				}
+			}
+=cut
+	## for summary txt file:
 	print "\t\tfor txt regions\n";
-	DeCovA::geneRegion::NM2GeneRegion($Genes_r,$geneNM_r,$NMchr_r,$txtRegions_r,$txt_NM_Ex_r);
-
+	if (($jobs{"keepBed"} || $jobs{"covBed"} || $jobs{"CNV"}) && (!$bedFile)) {
+		$bedName = $keepBedName;
+		$id2Bed = "$outdir/$bedName.bed";
+	}
+	@hashSub = DeCovA::refIDs::Id2Coord($IDinRef,$lenTxt5,$lenTxt3,$UpInTxt,$DownInTxt,$splitBedFromId,$mergeBedFromId,$UTRinTxt,$id2Bed,\@chromOrder,\%chromName);
+	$txtRegions_r = $hashSub[6];		# as %Regions, but for summary txt file
+	$txt_NM_Ex_r = $hashSub[7];		# as %NM_Ex, but for summary txt file
+	$ref_Intervals = $hashSub[9];		# as %Bed, but for coordPlot and cov_Bed if no bedfile
+	mergeIntervalsInRef($ref_Intervals);
+	if ($id2Bed) {
+		$id2Bed = DeCovA::bedProcessing::sliceBedIntervals($id2Bed,"$outdir/$bedName",$splitBed,$rmOverlapBed,$cutBed,\%cutB_opt,\@chromOrder,\%chromName);
 	}
 
-## links bed intervals to Regions, eventually changes Regions according to bed (with -L Y)
-if ($Expand) {
-	print "\n\tchange region intervals according to bed\n";
-	if($AllTranscripts) {
-		$RegBed{"raw"} = DeCovA::geneRegion::changeRegionG2($geneNM_r,$Regions{"raw"},$NM_Ex{"raw"},$bed_Intervals);
+	## changes Regions{gene} according to each NM (without -A N)
+	if ($AllTranscripts) {
+		print "\n\tchange region intervals according to each transcript\n";
+		print "\t\tfor graph regions\n";
+		DeCovA::geneRegion::NM2GeneRegion($Genes_r,$geneNM_r,$NMchr_r,$Regions{"raw"},$NM_Ex{"raw"});
+		print "\t\tfor txt regions\n";
+		DeCovA::geneRegion::NM2GeneRegion($Genes_r,$geneNM_r,$NMchr_r,$txtRegions_r,$txt_NM_Ex_r);
+	}
+
+	## links bed intervals to Regions, eventually changes Regions according to bed (with -L Y)
+	if ($Expand) {
+		print "\n\tchange region intervals according to bed\n";
+		if($AllTranscripts) {
+			$RegBed{"raw"} = DeCovA::geneRegion::changeRegionG2($geneNM_r,$Regions{"raw"},$NM_Ex{"raw"},$bed_Intervals);
+		} else {
+			$RegBed{"raw"} = DeCovA::geneRegion::changeRegionN2($Regions{"raw"},$NM_Ex{"raw"},$bed_Intervals);
 		}
-	else {
-		$RegBed{"raw"} = DeCovA::geneRegion::changeRegionN2($Regions{"raw"},$NM_Ex{"raw"},$bed_Intervals);
+	} else {
+		print "\n\tchange bed intervals according to genes\n";
+		$RegBed{"raw"} = DeCovA::geneRegion::linkBed($Regions{"raw"},$bed_Intervals);
+	}
+
+	## eliminates $NM with no corresponding cov bed
+	## this because 1st overlap  between gene coord and bed only took into account the whole transcript, not the exon;
+	## so removes genes if bed interval fall into introns
+	print "\n\teliminates transcripts with no corresponding bed intervals\n";
+	if ($AllTranscripts) {
+		DeCovA::geneRegion::notAnalysedG($geneNM_r,$Genes_r,$Regions{"raw"},$NM_Ex{"raw"},$RegBed{"raw"});
+	} else  {
+		DeCovA::geneRegion::notAnalysedN($Genes_r,$NMgene_r,$Regions{"raw"},$NM_Ex{"raw"},$RegBed{"raw"});
+	}
+
+	## transposition and splicing, for exons of transcripts: 
+	## 1st position of 1st exon = 0, 
+	## for end of exon = x, start of next exon = x
+	print "\n\ttransposition and splicing of transcript exon coordinates\n";
+	@hashSub = DeCovA::geneRegion::transposeReg($spacer,$Regions{"raw"});
+	$spacer = $hashSub[0];
+	%NMlength = %{$hashSub[1]};			#$NMlength{$NM} = $end of region (for start of region = 0)
+	$Regions{"coord0"} = $hashSub[2];	#$Regions{"coord0"}{$NM}{start of region} = $end of region (for start of region = 0)
+		
+	#$NM_Ex{"coord0"}{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
+	#$NMstartCod{"coord0"}{$NM} = $start of coding sequence (for start of region = 0)
+	#$NMendCod{"coord0"}{$NM} = $end of coding sequence (for start of region = 0)
+	if ($AllTranscripts) {
+		foreach my $gene(keys%{ $Regions{"coord0"} }) {
+			foreach my $NM (@{ ${$geneNM_r}{$gene} }) {
+				@hashSub = DeCovA::geneRegion::transposeNM($wUTR,$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $Regions{"raw"}->{${$NMchr_r}{$NM}}{$gene} },\%{ $Regions{"coord0"}->{$gene} },\%{ $NM_Ex{"raw"}->{$NM} }); 
+				$NMstartCod{"coord0"}->{$NM} = $hashSub[0];		#${$NMstartCod_r}{"coord0"}{$NM} = $hashSub[0];
+				$NMendCod{"coord0"}->{$NM} = $hashSub[1];			#${$NMendCod_r}{"coord0"}->{$NM} = $hashSub[1];
+				$NM_Ex{"coord0"}->{$NM} = $hashSub[2];
+			}
 		}
-	}
-else {
-	print "\n\tchange bed intervals according to genes\n";
-	$RegBed{"raw"} = DeCovA::geneRegion::linkBed($Regions{"raw"},$bed_Intervals);
-	}
-
-## eliminates $NM with no corresponding cov bed
-## this because 1st overlap  between gene coord and bed only took into account the whole transcript, not the exon;
-## so removes genes if bed interval fall into introns
-print "\n\teliminates transcripts with no corresponding bed intervals\n";
-if ($AllTranscripts) {
-	DeCovA::geneRegion::notAnalysedG($geneNM_r,$Genes_r,$Regions{"raw"},$NM_Ex{"raw"},$RegBed{"raw"});
-	}
-else  {
-	DeCovA::geneRegion::notAnalysedN($Genes_r,$NMgene_r,$Regions{"raw"},$NM_Ex{"raw"},$RegBed{"raw"});
-	}
-
-## transposition and splicing, for exons of transcripts: 
-## 1st position of 1st exon = 0, 
-## for end of exon = x, start of next exon = x
-print "\n\ttransposition and splicing of transcript exon coordinates\n";
-@hashSub = DeCovA::geneRegion::transposeReg($spacer,$Regions{"raw"});
-$spacer = $hashSub[0];
-%NMlength = %{$hashSub[1]};			#$NMlength{$NM} = $end of region (for start of region = 0)
-$Regions{"coord0"} = $hashSub[2];	#$Regions{"coord0"}{$NM}{start of region} = $end of region (for start of region = 0)
-	
-#$NM_Ex{"coord0"}{NM}{start of region}{start of exon} = end of exon (for start of region = 0)
-#$NMstartCod{"coord0"}{$NM} = $start of coding sequence (for start of region = 0)
-#$NMendCod{"coord0"}{$NM} = $end of coding sequence (for start of region = 0)
-if ($AllTranscripts) {
-	foreach my $gene(keys%{ $Regions{"coord0"} }) {
-		foreach my $NM (@{ ${$geneNM_r}{$gene} }) {
-			@hashSub = DeCovA::geneRegion::transposeNM($wUTR,$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $Regions{"raw"}->{${$NMchr_r}{$NM}}{$gene} },\%{ $Regions{"coord0"}->{$gene} },\%{ $NM_Ex{"raw"}->{$NM} }); 
-			$NMstartCod{"coord0"}->{$NM} = $hashSub[0];		#${$NMstartCod_r}{"coord0"}{$NM} = $hashSub[0];
-			$NMendCod{"coord0"}->{$NM} = $hashSub[1];			#${$NMendCod_r}{"coord0"}->{$NM} = $hashSub[1];
+	} else {
+		foreach my $NM (keys%{ $Regions{"coord0"} }) { 
+			@hashSub = DeCovA::geneRegion::transposeNM($wUTR,$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $Regions{"raw"}->{${$NMchr_r}{$NM}}{$NM} },\%{ $Regions{"coord0"}->{$NM} },\%{ $NM_Ex{"raw"}{$NM} });
+			$NMstartCod{"coord0"}->{$NM} = $hashSub[0];
+			$NMendCod{"coord0"}->{$NM} = $hashSub[1]; 
 			$NM_Ex{"coord0"}->{$NM} = $hashSub[2];
-			}
-		}
-	}
-else {
-	foreach my $NM (keys%{ $Regions{"coord0"} }) { 
-		@hashSub = DeCovA::geneRegion::transposeNM($wUTR,$NMstartCod{"raw"}->{$NM},$NMendCod{"raw"}->{$NM},\%{ $Regions{"raw"}->{${$NMchr_r}{$NM}}{$NM} },\%{ $Regions{"coord0"}->{$NM} },\%{ $NM_Ex{"raw"}{$NM} });
-		$NMstartCod{"coord0"}->{$NM} = $hashSub[0];
-		$NMendCod{"coord0"}->{$NM} = $hashSub[1]; 
-		$NM_Ex{"coord0"}->{$NM} = $hashSub[2];
 		}
 	}
 
-## make arrays for starts of non coding exons, before and after coding exons
-## and arrays for starts of extragenic regions, before and after exons
-print "\n\tUTR-CDS-introns region coordinates in arrays\n";
-if ($AllTranscripts) {
-	@hashSub = DeCovA::geneRegion::designExons1($wUTR,$Genes_r,$geneNM_r,$Regions{"coord0"},$NM_Ex{"coord0"},$NMstartCod{"coord0"},$NMendCod{"coord0"});
+	## make arrays for starts of non coding exons, before and after coding exons
+	## and arrays for starts of extragenic regions, before and after exons
+	print "\n\tUTR-CDS-introns region coordinates in arrays\n";
+	if ($AllTranscripts) {
+		@hashSub = DeCovA::geneRegion::designExons1($wUTR,$Genes_r,$geneNM_r,$Regions{"coord0"},$NM_Ex{"coord0"},$NMstartCod{"coord0"},$NMendCod{"coord0"});
+	} else {
+		@hashSub = DeCovA::geneRegion::designExons2($wUTR,$Regions{"coord0"},$NM_Ex{"coord0"},$NMstartCod{"coord0"},$NMendCod{"coord0"});
 	}
-else {
-	@hashSub = DeCovA::geneRegion::designExons2($wUTR,$Regions{"coord0"},$NM_Ex{"coord0"},$NMstartCod{"coord0"},$NMendCod{"coord0"});
-	}
-#return(\%introns,\%UTR,\%Cod);
-$intron{"coord0"} = $hashSub[0];	# $intron{"coord0"}{$NM}{$startIntron} = $endIntron (for start of region = 0)
-$UTR{"coord0"} = $hashSub[1];		# $UTR{"coord0"}{$NM}{$startUTR} = $endUTR (for start of region = 0)
-$Cod{"coord0"} = $hashSub[2];		# $Cod{"coord0"}{$NM}{$startCod} = $endCod (for start of region = 0)
+	#return(\%introns,\%UTR,\%Cod);
+	$intron{"coord0"} = $hashSub[0];	# $intron{"coord0"}{$NM}{$startIntron} = $endIntron (for start of region = 0)
+	$UTR{"coord0"} = $hashSub[1];		# $UTR{"coord0"}{$NM}{$startUTR} = $endUTR (for start of region = 0)
+	$Cod{"coord0"} = $hashSub[2];		# $Cod{"coord0"}{$NM}{$startCod} = $endCod (for start of region = 0)
 
-if ($mutFile) {
-	# $RegMut{$NM}{$startReg}{$startMut} = $infoMut
-	$RegMut{"raw"} = DeCovA::geneRegion::linkMut($Regions{"raw"}, $Mut);
+	if ($mutFile) {
+		# $RegMut{$NM}{$startReg}{$startMut} = $infoMut
+		$RegMut{"raw"} = DeCovA::geneRegion::linkMut($Regions{"raw"}, $Mut);
 	}
 
-#$RegBed{"coord0"}{$NM}{$startBed00} = $endBed00 (start of Region=0 )
-#$RegMut{"coord0"}{$NM}{$mut00} = $infoMut (start of Region=0 )
-@hashSub = DeCovA::geneRegion::transposeBed($Regions{"raw"},$Regions{"coord0"},$RegBed{"raw"},$RegMut{"raw"});
-$RegBed{"coord0"} = $hashSub[0];
-$RegMut{"coord0"} = $hashSub[1];
+	#$RegBed{"coord0"}{$NM}{$startBed00} = $endBed00 (start of Region=0 )
+	#$RegMut{"coord0"}{$NM}{$mut00} = $infoMut (start of Region=0 )
+	@hashSub = DeCovA::geneRegion::transposeBed($Regions{"raw"},$Regions{"coord0"},$RegBed{"raw"},$RegMut{"raw"});
+	$RegBed{"coord0"} = $hashSub[0];
+	$RegMut{"coord0"} = $hashSub[1];
 
-print "\n\treversing minus transcript coordinates\n";
-foreach my $gene (keys%{$Genes_r}) {
-	my @NMs =  @{ ${$geneNM_r}{$gene} };
-	my $chr = ${$NMchr_r}{$NMs[0]};
-	my $sens = ${$NMsens_r}{$NMs[0]};
-	if ($Rev && $sens eq "-") {
-		if ($AllTranscripts) {
-			@hashSub = DeCovA::geneRegion::ReverseGene1($gene,$NMlength{$gene},\%{ $Regions{"coord0"}->{$gene} },\%{ $RegBed{"coord0"}->{$gene} },\%{ $RegMut{"coord0"}->{$gene} });
-			$Regions{"rev"}->{$gene} = $hashSub[0];
-			$RegBed{"rev"}->{$gene} = $hashSub[1];
-			$RegMut{"rev"}->{$gene} = $hashSub[2];
-			foreach my $NM (@NMs) {
-				@hashSub = DeCovA::geneRegion::ReverseGene2($NM,$NMlength{$gene},\%{ $Regions{"coord0"}->{$gene} },\%{ $NM_Ex{"coord0"}->{$NM} },\%{ $intron{"coord0"}->{$NM} },\%{ $UTR{"coord0"}->{$NM} },\%{ $Cod{"coord0"}->{$NM} });
-				$NM_Ex{"rev"}->{$NM} = $hashSub[0];
-				$intron{"rev"}->{$NM} = $hashSub[1];
-				$UTR{"rev"}->{$NM} = $hashSub[2];
-				$Cod{"rev"}->{$NM} = $hashSub[3];
+	print "\n\treversing minus transcript coordinates\n";
+	foreach my $gene (keys%{$Genes_r}) {
+		my @NMs =  @{ ${$geneNM_r}{$gene} };
+		my $chr = ${$NMchr_r}{$NMs[0]};
+		my $sens = ${$NMsens_r}{$NMs[0]};
+		if ($Rev && $sens eq "-") {
+			if ($AllTranscripts) {
+				@hashSub = DeCovA::geneRegion::ReverseGene1($gene,$NMlength{$gene},\%{ $Regions{"coord0"}->{$gene} },\%{ $RegBed{"coord0"}->{$gene} },\%{ $RegMut{"coord0"}->{$gene} });
+				$Regions{"rev"}->{$gene} = $hashSub[0];
+				$RegBed{"rev"}->{$gene} = $hashSub[1];
+				$RegMut{"rev"}->{$gene} = $hashSub[2];
+				foreach my $NM (@NMs) {
+					@hashSub = DeCovA::geneRegion::ReverseGene2($NM,$NMlength{$gene},\%{ $Regions{"coord0"}->{$gene} },\%{ $NM_Ex{"coord0"}->{$NM} },\%{ $intron{"coord0"}->{$NM} },\%{ $UTR{"coord0"}->{$NM} },\%{ $Cod{"coord0"}->{$NM} });
+					$NM_Ex{"rev"}->{$NM} = $hashSub[0];
+					$intron{"rev"}->{$NM} = $hashSub[1];
+					$UTR{"rev"}->{$NM} = $hashSub[2];
+					$Cod{"rev"}->{$NM} = $hashSub[3];
+				}
+			} else {
+				foreach my $NM (@NMs) {
+					@hashSub = DeCovA::geneRegion::ReverseNMs($NM,$NMlength{$NM},\%{ $Regions{"coord0"}->{$NM} },\%{ $NM_Ex{"coord0"}->{$NM} },\%{ $intron{"coord0"}->{$NM} },\%{ $UTR{"coord0"}->{$NM} },\%{ $Cod{"coord0"}->{$NM} },\%{ $RegBed{"coord0"}->{$NM} },\%{ $RegMut{"coord0"}{$NM} });
+					$Regions{"rev"}->{$NM} = $hashSub[0];
+					$NM_Ex{"rev"}->{$NM} = $hashSub[1];
+					$intron{"rev"}->{$NM} = $hashSub[2];
+					$UTR{"rev"}->{$NM} = $hashSub[3];
+					$Cod{"rev"}->{$NM} = $hashSub[4];
+					$RegBed{"rev"}->{$NM} = $hashSub[5];
+					$RegMut{"rev"}->{$NM} = $hashSub[6];
 				}
 			}
-		else {
-			foreach my $NM (@NMs) {
-				@hashSub = DeCovA::geneRegion::ReverseNMs($NM,$NMlength{$NM},\%{ $Regions{"coord0"}->{$NM} },\%{ $NM_Ex{"coord0"}->{$NM} },\%{ $intron{"coord0"}->{$NM} },\%{ $UTR{"coord0"}->{$NM} },\%{ $Cod{"coord0"}->{$NM} },\%{ $RegBed{"coord0"}->{$NM} },\%{ $RegMut{"coord0"}{$NM} });
-				$Regions{"rev"}->{$NM} = $hashSub[0];
-				$NM_Ex{"rev"}->{$NM} = $hashSub[1];
-				$intron{"rev"}->{$NM} = $hashSub[2];
-				$UTR{"rev"}->{$NM} = $hashSub[3];
-				$Cod{"rev"}->{$NM} = $hashSub[4];
-				$RegBed{"rev"}->{$NM} = $hashSub[5];
-				$RegMut{"rev"}->{$NM} = $hashSub[6];
+		} else {
+			if ($AllTranscripts) {
+				$Regions{"rev"}->{$gene} = $Regions{"coord0"}->{$gene};
+				if (exists $RegBed{"coord0"}->{$gene}) { $RegBed{"rev"}->{$gene} = $RegBed{"coord0"}->{$gene}; }
+				if (exists $RegMut{"coord0"}->{$gene}) { $RegMut{"rev"}->{$gene} = $RegMut{"coord0"}->{$gene}; }
+			} else {
+				foreach my $NM (@NMs) {
+					$Regions{"rev"}->{$NM} = $Regions{"coord0"}->{$NM};
+					if (exists $RegBed{"coord0"}->{$NM}) { $RegBed{"rev"}->{$NM} = $RegBed{"coord0"}->{$NM}; }
+					if (exists $RegMut{"coord0"}->{$NM}) { $RegMut{"rev"}->{$NM} = $RegMut{"coord0"}->{$NM}; }
 				}
 			}
-		}
-	else {
-		if ($AllTranscripts) {
-			$Regions{"rev"}->{$gene} = $Regions{"coord0"}->{$gene};
-			if (exists $RegBed{"coord0"}->{$gene}) { $RegBed{"rev"}->{$gene} = $RegBed{"coord0"}->{$gene}; }
-			if (exists $RegMut{"coord0"}->{$gene}) { $RegMut{"rev"}->{$gene} = $RegMut{"coord0"}->{$gene}; }
-			}
-		else {
 			foreach my $NM (@NMs) {
-				$Regions{"rev"}->{$NM} = $Regions{"coord0"}->{$NM};
-				if (exists $RegBed{"coord0"}->{$NM}) { $RegBed{"rev"}->{$NM} = $RegBed{"coord0"}->{$NM}; }
-				if (exists $RegMut{"coord0"}->{$NM}) { $RegMut{"rev"}->{$NM} = $RegMut{"coord0"}->{$NM}; }
-				}
-			}
-		foreach my $NM (@NMs) {
-			if (exists $NM_Ex{"coord0"}->{$NM}) { $NM_Ex{"rev"}->{$NM} = $NM_Ex{"coord0"}->{$NM}; }
-			if (exists $intron{"coord0"}->{$NM}) { $intron{"rev"}->{$NM} = $intron{"coord0"}->{$NM}; }
-			if (exists $UTR{"coord0"}->{$NM}) { $UTR{"rev"}->{$NM} = $UTR{"coord0"}->{$NM}; }
-			if (exists $Cod{"coord0"}->{$NM}) { $Cod{"rev"}->{$NM} = $Cod{"coord0"}->{$NM}; }
+				if (exists $NM_Ex{"coord0"}->{$NM}) { $NM_Ex{"rev"}->{$NM} = $NM_Ex{"coord0"}->{$NM}; }
+				if (exists $intron{"coord0"}->{$NM}) { $intron{"rev"}->{$NM} = $intron{"coord0"}->{$NM}; }
+				if (exists $UTR{"coord0"}->{$NM}) { $UTR{"rev"}->{$NM} = $UTR{"coord0"}->{$NM}; }
+				if (exists $Cod{"coord0"}->{$NM}) { $Cod{"rev"}->{$NM} = $Cod{"coord0"}->{$NM}; }
 			}
 		}
 	}
@@ -1629,16 +1795,7 @@ foreach my $gene (keys%{$Genes_r}) {
 my(%bam2Use);
 my $depthFile = "$outdir/allsamples_depth.txt";
 use DeCovA::depthProgr;
-if ($jobs{"graphSum"}
- || $jobs{"graphAllSampls"}
- || $jobs{"graphBySample"}
- || $jobs{"geneSummary"}
- || $jobs{"geneReport"}
- || $jobs{"covPlot"}
- || $jobs{"genePlot"}
- || $jobs{"interSplot"}
- || $jobs{"covBed"}
- || $jobs{"covMut"}) {
+if ($jobs{"with_DephFile_Required"} || $jobs{"keepTmpBed"}) {
 
 	print "\n\n####\n\nper base depth analysis\n\n####\n";
 
@@ -1775,7 +1932,7 @@ if ($jobs{"graphSum"}
 			}
 
 		}  else {
-			##perform depth analysis
+			## check chr prefix 
 			foreach my $f (@Files) {
 				$bam2Use{$f} = $f;
 				if (!$withChr{$f} && $samT) {
@@ -1794,14 +1951,28 @@ if ($jobs{"graphSum"}
 				}
 			}
 
-			##depth analysis
-			if (%gatk) {
-				print "\n\tdepth analysis using ".$gatk{"jar"}."\n";
-				($smplIdx, $depthFilePerChr) = DeCovA::depthProgr::gatkCov($intervalName,\@Files,\%sName,\%bam2Use,$depthFile,$tmpDir,$withChr{"all"},$mmq,$mbq,$dedup,$threads,\%gatk,$genom,$jobs{"keepCov"});
-			} else {
-				print "\n\tdepth analysis using $bedT\n";
-				($smplIdx, $depthFilePerChr) = DeCovA::depthProgr::bedToolsCov($intervalName,\@Files,\%sName,\%fName,\%bam2Use,$depthFile,$tmpDir,\%withChr,$chromLength,$bedT,$bedTversion,$jobs{"keepCov"});
+			if ($jobs{"keepTmpBed"}) {
+				use File::Copy qw(copy);
+				my $bed2copy;
+				if (exists $withChr{"all"}) {
+					$bed2copy = $intervalName.$withChr{"all"};
+				} else {
+					$bed2copy = $intervalName."_0Chr.bed";
+				}
+				copy($bed2copy, "$keepTmpBedDir/$keepTmpBedName.bed") or die "\n!!!\tcopy failed: $!";
 			}
+
+			if ($jobs{"with_DephFile_Required"}) {
+				##depth analysis
+				if (%gatk) {
+					print "\n\tdepth analysis using ".$gatk{"jar"}."\n";
+					($smplIdx, $depthFilePerChr) = DeCovA::depthProgr::gatkCov($intervalName,\@Files,\%sName,\%bam2Use,$depthFile,$tmpDir,$withChr{"all"},$mmq,$mbq,$dedup,$threads,\%gatk,$genom,$jobs{"keepCov"});
+				} else {
+					print "\n\tdepth analysis using $bedT\n";
+					($smplIdx, $depthFilePerChr) = DeCovA::depthProgr::bedToolsCov($intervalName,\@Files,\%sName,\%fName,\%bam2Use,$depthFile,$tmpDir,\%withChr,$chromLength,$bedT,$bedTversion,$jobs{"keepCov"});
+				}
+			}
+
 		}
 
 	}
@@ -2478,23 +2649,28 @@ if ($jobs{"CNV"}) {
 ###################
 #rm tmp files
 
-if (-d $tmpDir ) {
-	use File::Path qw(remove_tree);
-	remove_tree( $tmpDir );
-	}
-
-if (!$jobs{"keepBed"}) {
+if (! $jobs{"keepBed"}) {
 #	if ($jobs{"covBed"} && !$bedFile) {
 #		unlink "$outdir/$bedName.bed";
 #		}
 	if ($id2Bed) { unlink $id2Bed; }
 	if ($bedFile && ($lenForBed || %reAnnotBed || $splitBed || $rmOverlapBed || $cutBed) ) { unlink $bedFile; }
-	}
+}
 
 #if ($gatk) {
 #	unlink glob "$outdir/all.cov*";
 #	if ($jobs{"CNV"}) { unlink glob "$outdir/all.norm.cov*"; }
 #	}
+
+if (-d $tmpDir ) {
+	use File::Path qw(remove_tree);
+	remove_tree( $tmpDir );
+}
+
+if ($jobs{"keepTmpBed"} && !$jobs{"output_dir_2_keep"}) {
+	use File::Path qw(remove_tree);
+	remove_tree( $outdir );
+}
 
 
 
