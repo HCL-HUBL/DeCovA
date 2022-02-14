@@ -2471,24 +2471,24 @@ if ($jobs{"covPlot"} || $jobs{"interSplot"}) {
 	if ($jobs{"covPlot"}) {
 		if (!$bedFile || $jobs{"genePlot"}) {
 			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,"all_Genes_Regions",\@Files,\%sName2,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$ref_Intervals,$pThreshold,$totLength,$depthCount,$covBases,$totBases);
-			}
+		}
 		if ($bedFile) {
 			DeCovA::histCov::covPlot($bin,$maxPl,$outPlotDir,$bedName,\@Files,\%fName,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$mergedBed_Intervals,$pThreshold,$totLength,$depthCount,$covBases,$totBases);
-			}
 		}
+	}
 
 	#plots for samples intersection
 	if ($jobs{"interSplot"}) {
 		use DeCovA::covByRegion;
 		if (!$bedFile || $jobs{"genePlot"}) { 
 			DeCovA::histCov::InterS($bin,$maxPl,$maxGr,$outPlotDir,"all_Genes_Regions",\@Files,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$ref_Intervals); 
-			}
+		}
 		if ($bedFile) {
 			DeCovA::histCov::InterS($bin,$maxPl,$maxGr,$outPlotDir,$bedName,\@Files,$smplIdx,\%{ ${$depthFilePerChr}{"raw"} },$mergedBed_Intervals);
-			}
 		}
-
 	}
+
+}
 
 
 
