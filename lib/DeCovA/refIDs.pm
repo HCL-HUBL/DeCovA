@@ -11,45 +11,65 @@ use warnings;
 
 sub UCSC2Ids {
 
-my($refFile,$IDs,$chromName,$wNonCod)=@_;
+	my ($refFile,$IDs,$chromName,$wNonCod) = @_;
 
-my $fhIn;
-if ($refFile =~ /.gz$/) {
-	use IO::Zlib;
-	$fhIn = new IO::Zlib;
-	$fhIn->open($refFile, "rb")
+	my $force_version = 1 ;
+	## reading refFile -> $%allRefs
+	my $fhIn;
+	if ($refFile =~ /.gz$/) {
+		use IO::Zlib;
+		$fhIn = new IO::Zlib;
+		$fhIn->open($refFile, "rb")
+	} else {
+		open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
 	}
-else {
-	open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
-	}
+	print "\treading $refFile\n";
+	my $allRefs = UCSCfile2hash($fhIn,$chromName);
+	close($fhIn);
 
-print "\treading $refFile\n";
-my $allRefs = UCSCfile2hash($fhIn,$chromName);
-close($fhIn);
-
-## selecting IDs from hash:
-my %targets;
-foreach my $id (@{$IDs}) {
-	$id = uc($id);
-	if ($id =~ /^N[MR]_/) { $id =~ s/\.(\d+)$//; }		##no transcript version in refgene
-	if (exists ${$allRefs}{"syn"}{$id}) {
-		foreach my $nm (keys%{ ${$allRefs}{"syn"}{$id} }) {
-			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
-				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+	## selecting IDs from hash:
+	my %targets;
+	foreach my $feature_id (@{$IDs}) {
+		my @ids = (uc($feature_id));
+		if ($ids[0] =~ /\.\d+$/) {
+			my $short_id = $ids[0];
+			$short_id =~ s/\.\d+$//;	## without version nbr; (pb if gene?)
+			push(@ids,$short_id);
+		}
+		my $found_id = 0;
+		#if ($id =~ /^N[MR]_/) { $id =~ s/\.(\d+)$//; }		##no transcript version in refgene
+		for my $i (0..$#ids) {
+			if (exists ${$allRefs}{"syn"}{$ids[$i]}) {
+				foreach my $nm (keys%{ ${$allRefs}{"syn"}{$ids[$i]} }) {
+					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+						%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+					}
 				}
+				$found_id = 1;
+				last;
+			} elsif (($i != 1 || $force_version) && exists ${$allRefs}{"short"}{$ids[$i]}) {
+				foreach my $nm (keys%{ ${$allRefs}{"syn"}{${$allRefs}{"short"}{$ids[$i]}} }) {
+					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+						%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+					}
+				}
+				$found_id = 1;
+				last;
+			} elsif ($i != 1 && exists ${$allRefs}{"gene"}{$ids[$i]}) {
+				foreach my $nm (keys%{ ${$allRefs}{"gene"}{$ids[$i]}{"transcript"} }) {
+					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+						%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+					}
+				}
+				$found_id = 1;
+				last;
 			}
 		}
-	elsif (exists ${$allRefs}{"gene"}{$id}) {
-		foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id}{"transcript"} }) {
-			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
-				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
-				}
-			}
+		unless ($found_id) {
+			die "$feature_id not found in file: $refFile\n";
 		}
-	else { die "$id not found in $refFile file\n"; }
 	}
-
-return(\%targets);
+	return(\%targets);
 
 }
 
@@ -57,56 +77,65 @@ return(\%targets);
 
 sub UCSCfile2hash {
 
-my($fhIn,$chromName) = @_;
+	my ($fhIn,$chromName) = @_;
 
-my(%allRefs,%idx);
-$idx{"ID"} = 1;
-$idx{"chr"} = 2;
-$idx{"strand"} = 3;
-$idx{"cdsStart"} = 6;
-$idx{"cdsEnd"} = 7;
-$idx{"exStart"} = 9;
-$idx{"exEnd"} = 10;
-$idx{"gene"} = 12;
+	my (%allRefs,%idx);
+	$idx{"ID"} = 1;
+	$idx{"chr"} = 2;
+	$idx{"strand"} = 3;
+	$idx{"cdsStart"} = 6;
+	$idx{"cdsEnd"} = 7;
+	$idx{"exStart"} = 9;
+	$idx{"exEnd"} = 10;
+	$idx{"gene"} = 12;
 
-while (my $line = <$fhIn>) {
-	unless($line =~ /^#/) {
-		chomp $line;
-		my @tab = split(/\t/,$line);
-		my $transcript_name = uc($tab[$idx{"ID"}]);
-		my $transcript_id = $transcript_name;
-		my $gene_name = uc($tab[$idx{"gene"}]);
-		my $chr = $tab[$idx{"chr"}];
-		$chr =~ s/^chr//i;
+	while (my $line = <$fhIn>) {
+		unless($line =~ /^#/) {
+			chomp $line;
+			my @tab = split(/\t/,$line);
+			my $transcript_name = uc($tab[$idx{"ID"}]);
+			my $transcript_id = $transcript_name;
+			my $gene_name = uc($tab[$idx{"gene"}]);
+			my $chr = $tab[$idx{"chr"}];
+			$chr =~ s/^chr//i;
 
-		## for transcript synonyms:
-		if (exists $allRefs{"transcript"}{$transcript_name}) {
-			$allRefs{"transcript"}{$transcript_name}{"nbr"}++;
-			$transcript_id = $transcript_name."-".$allRefs{"transcript"}{$transcript_name}{"nbr"};
+			## for transcript synonyms (eg, same transcript id on several chromosomes):
+			if (exists $allRefs{"transcript"}{$transcript_name}) {
+				$allRefs{"transcript"}{$transcript_name}{"nbr"}++;
+				$transcript_id = $transcript_name."-".$allRefs{"transcript"}{$transcript_name}{"nbr"};
 			}
-		$allRefs{"syn"}{$transcript_name}{$transcript_id} = 1;
+			$allRefs{"syn"}{$transcript_name}{$transcript_id} = 1;
 
-		${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
-		$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
-		$allRefs{"transcript"}{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
-		if ($tab[$idx{"cdsStart"}] != $tab[$idx{"cdsEnd"}]) {
-			$allRefs{"transcript"}{$transcript_id}{"CDS_start"} = $tab[$idx{"cdsStart"}] + 1;
-			$allRefs{"transcript"}{$transcript_id}{"CDS_end"} = $tab[$idx{"cdsEnd"}];
+			## to deal with transcript's versions
+			if ($transcript_name =~ /\.\d+$/) {
+				my $short_id = $transcript_name;
+				$short_id =~ s/\.\d+$//;
+				$allRefs{"short"}{$short_id} = $transcript_name;
 			}
-		my @starts = split(/,/, $tab[$idx{"exStart"}]);
-		for my $i (0..$#starts) { $allRefs{"transcript"}{$transcript_id}{"ex_starts"}[$i] = $starts[$i] + 1; }		# -> 1-based
-		@{ $allRefs{"transcript"}{$transcript_id}{"ex_ends"} } = split(/,/, $tab[$idx{"exEnd"}]);
 
-		## for gene synonyms:
-		if ( (exists $allRefs{"gene"}{$gene_name}) && ($chr ne $allRefs{"gene"}{$gene_name}{"chr"}) ) { $gene_name .= "-$chr"; }
-		$allRefs{"gene"}{$gene_name}{"chr"} = $chr;
-		$allRefs{"transcript"}{$transcript_id}{"gene"} = $gene_name;
-		$allRefs{"gene"}{$gene_name}{"transcript"}{$transcript_id} = 1;
+			${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
+			$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
+			$allRefs{"transcript"}{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
+			if ($tab[$idx{"cdsStart"}] != $tab[$idx{"cdsEnd"}]) {
+				$allRefs{"transcript"}{$transcript_id}{"CDS_start"} = $tab[$idx{"cdsStart"}] + 1;
+				$allRefs{"transcript"}{$transcript_id}{"CDS_end"} = $tab[$idx{"cdsEnd"}];
+			}
+			my @starts = split(/,/, $tab[$idx{"exStart"}]);
+			for my $i (0..$#starts) { $allRefs{"transcript"}{$transcript_id}{"ex_starts"}[$i] = $starts[$i] + 1; }		# -> 1-based
+			@{ $allRefs{"transcript"}{$transcript_id}{"ex_ends"} } = split(/,/, $tab[$idx{"exEnd"}]);
+
+			## for gene synonyms:
+			if ( (exists $allRefs{"gene"}{$gene_name}) && ($chr ne $allRefs{"gene"}{$gene_name}{"chr"}) ) {
+				$gene_name .= "-$chr";
+			}
+			$allRefs{"gene"}{$gene_name}{"chr"} = $chr;
+			$allRefs{"transcript"}{$transcript_id}{"gene"} = $gene_name;
+			$allRefs{"gene"}{$gene_name}{"transcript"}{$transcript_id} = 1;
 
 		}
 	}
 
-return(\%allRefs);
+	return(\%allRefs);
 
 }
 
@@ -526,9 +555,9 @@ while (my $line = <$fhIn>) {
 		if ($tab[$idx{"type"}] eq "gene") {
 #GFF attributes
 #ID=gene:ENSG00000188157;Name=AGRN;biotype=protein_coding;description=agrin [Source:HGNC Symbol%3BAcc:329];gene_id=ENSG00000188157;logic_name=ensembl_havana_gene;version=9
-			if ($tab[$idx{"info"}] =~ /ID=gene:(\w+)/) {
+			if ($tab[$idx{"info"}] =~ /ID=gene:([^;]+)/) {
 				$gene_id = $1; $gene_id = uc($gene_id);
-				if ($tab[$idx{"info"}] =~ /(|;)Name=(\w+)/) {
+				if ($tab[$idx{"info"}] =~ /(|;)Name=([^;]+)/) {
 					$gene_name = $2; $gene_name = uc($gene_name);
 					$allRefs{"gene"}{$gene_id}{"2gene_name"} = $gene_name;
 					$allRefs{"gene"}{$gene_name}{"2gene_id"} = $gene_id;
@@ -548,7 +577,7 @@ while (my $line = <$fhIn>) {
 #GFF attributes
 #exon :	Parent=transcript:ENST00000379370;Name=ENSE00002277560;constitutive=0;ensembl_end_phase=0;ensembl_phase=-1;exon_id=ENSE00002277560;rank=1;version=1
 #CDS :	ID=CDS:ENSP00000368678;Parent=transcript:ENST00000379370;protein_id=ENSP00000368678
-			if ($tab[$idx{"info"}] =~ /Parent=transcript:(\w+)/) {
+			if ($tab[$idx{"info"}] =~ /Parent=transcript:([^;]+)/) {
 				$transcript_id = $1; $transcript_id = uc($transcript_id);
 				if ($tab[$idx{"type"}] eq "exon") {
 					$allRefs{"transcript"}{$transcript_id}{"ex_starts"}{$tab[$idx{"start"}]} = 1;
@@ -561,18 +590,18 @@ while (my $line = <$fhIn>) {
 				}
 			}
 		else {
-			if ($tab[$idx{"info"}] =~ /ID=transcript:(\w+)/) {
+			if ($tab[$idx{"info"}] =~ /ID=transcript:([^;]+)/) {
 #ID=transcript:ENST00000379370;Parent=gene:ENSG00000188157;Name=AGRN-001;biotype=protein_coding;ccdsid=CCDS30551.1;havana_transcript=OTTHUMT00000097990;havana_version=2;tag=basic;transcript_id=ENST00000379370;version=2
 				$transcript_id = $1; $transcript_id = uc($transcript_id);
 				my $Id_noExt = $transcript_id;
 				$Id_noExt =~ s/\.(\d+)$//;;
 				$allRefs{"Id_noExt"}{$Id_noExt}{$transcript_id} = 1;
-				if ($tab[$idx{"info"}] =~ /Parent=gene:(\w+)/) {
+				if ($tab[$idx{"info"}] =~ /Parent=gene:([^;]+)/) {
 					$gene_id = $1; $gene_id = uc($gene_id);
 					$allRefs{"transcript"}{$transcript_id}{"gene_id"} = $gene_id;
 					$allRefs{"gene"}{$gene_id}{"transcript"}{$transcript_id} = 1;
 					}
-				if ($tab[$idx{"info"}] =~ /biotype=(\w+)/) {
+				if ($tab[$idx{"info"}] =~ /biotype=([^;]+)/) {
 					$allRefs{"transcript"}{$transcript_id}{"biotype"} = $1;
 					}
 				$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
@@ -975,7 +1004,7 @@ foreach my $NM (keys%{$IDinRef}) {
 		$NM_Ex{$NM}{$start}{$Starts[0]} = $Ends[0];
 		for (my $i=1;$i<scalar(@Starts2);$i++) {
 			if ($Starts2[$i] <= $end) { 
-				$end = $interval{$Starts2[$i]}; 
+				$end = $interval{$Starts2[$i]}; #unless ($Starts[$i]) {print "$NM\n"};
 				$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
 				}
 			else { 
