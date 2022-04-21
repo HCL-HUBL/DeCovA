@@ -252,7 +252,7 @@ parameters:
                 enter \"g\" : foreach region from gonosomes only, depth ratio computed separately for F and M
                 def: no (depth ratio for F and M together)
     --normAllChr : total depth used to norm sample depths = sum on all chr, whatever the sex (def: double the depth for chrX if male, and skip chrY in the sum)
-    --normDepth [mean/tot] : total depth used to norm sample depths = sum of total depths of each region or sum of mean depths of each region (def)
+    --normDepth [mean/tot] : total depth used to norm sample depths = sum of total depths of each region or sum of mean depths of each region (def: mean)
     --graph_byGene : to enable graph for gene affected by a CNV (def: no)
     --graph_byChr : to enable graph by chromosome (def: no)
     --graph_byCNV : to enable graph around each CNV (def: yes)
