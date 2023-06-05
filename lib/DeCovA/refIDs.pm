@@ -5,6 +5,7 @@ use strict;
 use warnings;
 
 
+
 ##############################
 
 #print lines of RefSeq matching each $id of @IDs
@@ -28,7 +29,7 @@ sub UCSC2Ids {
 	close($fhIn);
 
 	## selecting IDs from hash:
-	my %targets;
+	my (%targets, @not_found_ids);
 	foreach my $feature_id (@{$IDs}) {
 		my @ids = (uc($feature_id));
 		if ($ids[0] =~ /\.\d+$/) {
@@ -66,10 +67,14 @@ sub UCSC2Ids {
 			}
 		}
 		unless ($found_id) {
-			die "$feature_id not found in file: $refFile\n";
+			push(@not_found_ids, $feature_id);
 		}
 	}
-	return(\%targets);
+	if (@not_found_ids) {
+		die "\n!! some ids not found in file: $refFile\n\t".join("\n\t",@not_found_ids)."\n";
+	} else {
+		return(\%targets);
+	}
 
 }
 
@@ -141,143 +146,129 @@ sub UCSCfile2hash {
 
 ##############################
 
+=pod
+
+GTF (General Transfer Format) is identical to GFF version 2
+tab-separated fields:
+1	seqname - name of the chromosome or scaffold
+2	source - name of the program that generated this feature, or the data source (database or project name)
+3	feature - feature type name, e.g. Gene, Variation, Similarity
+4	start - Start position of the feature, with sequence numbering starting at 1.
+5	end - End position of the feature, with sequence numbering starting at 1.
+6	score - A floating point value.
+7	strand - defined as + (forward) or - (reverse).
+8	frame - One of '0', '1' or '2'. '0' indicates that the first base of the feature is the first base of a codon, '1' that the second base is the first base of a codon, and so on..
+9	attribute - A semicolon-separated list of tag-value pairs, providing additional information about each feature.
+
+features:
+ex: Ensembl Ensembl_Homo_sapiens.GRCh37.87.gtf.gz
+	CDS
+	Selenocysteine
+	exon
+	five_prime_utr
+	gene
+	start_codon
+	stop_codon
+	three_prime_utr
+	transcript
+
+ex: refseq GRCh37_latest_genomic.gtf.gz
+	CDS
+	exon
+	gene
+	start_codon
+	stop_codon
+
+ex: Ensembl Ensembl_Homo_sapiens.GRCh37.87.gtf.gz
+
+1       ensembl_havana  gene    955503  991496  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding";
+1       ensembl_havana  transcript      955503  991496  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
+1       ensembl_havana  exon    955503  955753  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "1"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; exon_id "ENSE00002277560"; exon_version "1"; tag "basic";
+1       ensembl_havana  CDS     955553  955753  .       +       0       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "1"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; protein_id "ENSP00000368678"; protein_version "2"; tag "basic";
+1       ensembl_havana  start_codon     955553  955555  .       +       0       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "1"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
+1       ensembl_havana  exon    957581  957842  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; exon_id "ENSE00001673004"; exon_version "1"; tag "basic";
+
+...
+
+1       ensembl_havana  exon    990204  991496  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "36"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; exon_id "ENSE00001883271"; exon_version "1"; tag "basic";
+1       ensembl_havana  CDS     990204  990358  .       +       2       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "36"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; protein_id "ENSP00000368678"; protein_version "2"; tag "basic";
+1       ensembl_havana  stop_codon      990359  990361  .       +       0       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "36"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
+1       ensembl_havana  five_prime_utr  955503  955552  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
+1       ensembl_havana  three_prime_utr 990362  991496  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
+
+ex: refseq GRCh37_latest_genomic.gtf.gz
+
+NC_000001.10	BestRefSeq	gene	955500	991496	.	+	.	gene_id "AGRN"; db_xref "GeneID:375790"; db_xref "HGNC:HGNC:329"; db_xref "MIM:103320"; description "agrin"; gbkey "Gene"; gene "AGRN"; gene_biotype "protein_coding"; gene_synonym "AGRIN"; gene_synonym "CMS8"; gene_synonym "CMSPPD"; 
+NC_000001.10	BestRefSeq	exon	955500	955753	.	+	.	gene_id "AGRN"; transcript_id "NM_001305275.2"; db_xref "GeneID:375790"; gbkey "mRNA"; gene "AGRN"; product "agrin, transcript variant 1"; exon_number "1"; 
+NC_000001.10	BestRefSeq	exon	957581	957842	.	+	.	gene_id "AGRN"; transcript_id "NM_001305275.2"; db_xref "GeneID:375790"; gbkey "mRNA"; gene "AGRN"; product "agrin, transcript variant 1"; exon_number "2"; 
+...
+NC_000001.10	BestRefSeq	CDS	955553	955753	.	+	0	gene_id "AGRN"; transcript_id "NM_001305275.2"; db_xref "GeneID:375790"; gbkey "CDS"; gene "AGRN"; note "isoform 1 precursor is encoded by transcript variant 1"; product "agrin isoform 1 precursor"; protein_id "NP_001292204.1"; exon_number "1"; 
+NC_000001.10	BestRefSeq	CDS	957581	957842	.	+	0	gene_id "AGRN"; transcript_id "NM_001305275.2"; db_xref "GeneID:375790"; gbkey "CDS"; gene "AGRN"; note "isoform 1 precursor is encoded by transcript variant 1"; product "agrin isoform 1 precursor"; protein_id "NP_001292204.1"; exon_number "2"; 
+...
+NC_000001.10	BestRefSeq	start_codon	955553	955555	.	+	0	gene_id "AGRN"; transcript_id "NM_001305275.2"; db_xref "GeneID:375790"; gbkey "CDS"; gene "AGRN"; note "isoform 1 precursor is encoded by transcript variant 1"; product "agrin isoform 1 precursor"; protein_id "NP_001292204.1"; exon_number "1"; 
+NC_000001.10	BestRefSeq	stop_codon	990359	990361	.	+	0	gene_id "AGRN"; transcript_id "NM_001305275.2"; db_xref "GeneID:375790"; gbkey "CDS"; gene "AGRN"; note "isoform 1 precursor is encoded by transcript variant 1"; product "agrin isoform 1 precursor"; protein_id "NP_001292204.1"; exon_number "39"; 
+
+
+=cut
+
 sub GTF2Ids {
 
-my($refFile,$IDs,$chromName,$wNonCod)=@_;
+	my ($refFile,$IDs,$chromName,$wNonCod) = @_;
 
-## reading $refFile, in hash %allRefs:
-
-# GTF (General Transfer Format) is identical to GFF version 2
-#tab-separated fields:
-#1	seqname - name of the chromosome or scaffold
-#2	source - name of the program that generated this feature, or the data source (database or project name)
-#3	feature - feature type name, e.g. Gene, Variation, Similarity
-#4	start - Start position of the feature, with sequence numbering starting at 1.
-#5	end - End position of the feature, with sequence numbering starting at 1.
-#6	score - A floating point value.
-#7	strand - defined as + (forward) or - (reverse).
-#8	frame - One of '0', '1' or '2'. '0' indicates that the first base of the feature is the first base of a codon, '1' that the second base is the first base of a codon, and so on..
-#9	attribute - A semicolon-separated list of tag-value pairs, providing additional information about each feature.
-
-#features:
-#	CDS
-#	Selenocysteine
-#	exon
-#	five_prime_utr
-#	gene
-#	start_codon
-#	stop_codon
-#	three_prime_utr
-#	transcript
-
-#transcript_biotypes:
-#	unprocessed_pseudogene
-#	IG_J_pseudogene
-#	miRNA
-#	pseudogene
-#	sense_intronic
-#	lincRNA
-#	TR_V_pseudogene
-#	protein_coding
-#	transcribed_processed_pseudogene
-#	TR_J_pseudogene
-#	processed_transcript
-#	Mt_tRNA
-#	rRNA
-#	transcribed_unprocessed_pseudogene
-#	non_stop_decay
-#	IG_V_pseudogene
-#	polymorphic_pseudogene
-#	nonsense_mediated_decay
-#	IG_C_pseudogene
-#	TR_C_gene
-#	misc_RNA
-#	TR_D_gene
-#	processed_pseudogene
-#	IG_C_gene
-#	Mt_rRNA
-#	snRNA
-#	TR_J_gene
-#	unitary_pseudogene
-#	translated_processed_pseudogene
-#	retained_intron
-#	TR_V_gene
-#	3prime_overlapping_ncrna
-#	snoRNA
-#	IG_D_gene
-#	IG_J_gene
-#	sense_overlapping
-#	antisense
-#	IG_V_gene
-
-
-#ex:
-
-#1       ensembl_havana  gene    955503  991496  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding";
-#1       ensembl_havana  transcript      955503  991496  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
-#1       ensembl_havana  exon    955503  955753  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "1"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; exon_id "ENSE00002277560"; exon_version "1"; tag "basic";
-#1       ensembl_havana  CDS     955553  955753  .       +       0       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "1"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; protein_id "ENSP00000368678"; protein_version "2"; tag "basic";
-#1       ensembl_havana  start_codon     955553  955555  .       +       0       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "1"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
-#1       ensembl_havana  exon    957581  957842  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; exon_id "ENSE00001673004"; exon_version "1"; tag "basic";
-
-#...
-
-#1       ensembl_havana  exon    990204  991496  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "36"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; exon_id "ENSE00001883271"; exon_version "1"; tag "basic";
-#1       ensembl_havana  CDS     990204  990358  .       +       2       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "36"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; protein_id "ENSP00000368678"; protein_version "2"; tag "basic";
-#1       ensembl_havana  stop_codon      990359  990361  .       +       0       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; exon_number "36"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
-#1       ensembl_havana  five_prime_utr  955503  955552  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
-#1       ensembl_havana  three_prime_utr 990362  991496  .       +       .       gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
-
-print "\treading $refFile\n";
-my $fhIn;
-if ($refFile =~ /.gz$/) {
-	use IO::Zlib;
-	$fhIn = new IO::Zlib;
-	$fhIn->open($refFile, "rb")
+	my $fhIn;
+	if ($refFile =~ /.gz$/) {
+		use IO::Zlib;
+		$fhIn = new IO::Zlib;
+		$fhIn->open($refFile, "rb")
+	} else {
+		open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
 	}
-else {
-	open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
-	}
-my $allRefs = GTFfile2hash($fhIn,$chromName);
-close($fhIn);
+	print "\treading $refFile\n";
+	my $allRefs = GTFfile2hash($fhIn,$chromName);
+	close($fhIn);
 
-## selecting IDs from hash:
-my %targets;
-foreach my $id (@{$IDs}) {
-	$id = uc($id);
-	if (exists ${$allRefs}{"transcript"}{$id}) { %{ $targets{$id} } = %{ ${$allRefs}{"transcript"}{$id} }; }
-	elsif (exists ${$allRefs}{"gene"}{$id}) {
-		foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id} }) {
-			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
-				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+	## selecting IDs from hash:
+	my (%targets, @not_found_ids);
+	foreach my $id (@{$IDs}) {
+		$id = uc($id);
+		if (exists ${$allRefs}{"transcript"}{$id}) {
+			%{ $targets{$id} } = %{ ${$allRefs}{"transcript"}{$id} };
+		} elsif (exists ${$allRefs}{"gene"}{$id}) {
+			foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id} }) {
+				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 				}
 			}
-		}
-	elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
-		foreach my $nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
-			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
-				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+		} elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
+			foreach my $nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
+				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 				}
 			}
+		} else {
+			push(@not_found_ids, $id);
 		}
-	else { die "$id not found in $refFile file\n"; }
 	}
-foreach my $id (keys%targets) {
-	delete $targets{$id}{"ex_starts"};
-	@{ $targets{$id}{"ex_starts"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_starts"} };
-	delete $targets{$id}{"ex_ends"};
-	@{ $targets{$id}{"ex_ends"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_ends"} };
-	if (exists $targets{$id}{"CDS_starts"}) {
-		delete $targets{$id}{"CDS_starts"};
-		my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_starts"} };
-		$targets{$id}{"CDS_start"} = $pos[0];
-		delete $targets{$id}{"CDS_ends"};
-		@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_ends"} };
-		$targets{$id}{"CDS_end"} = $pos[-1];
-		}
+	if (@not_found_ids) {
+		die "\n!! some ids not found in file: $refFile\n\t".join("\n\t",@not_found_ids)."\n";
 	}
 
-return(\%targets);
+	foreach my $id (keys%targets) {
+		delete $targets{$id}{"ex_starts"};
+		@{ $targets{$id}{"ex_starts"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_starts"} };
+		delete $targets{$id}{"ex_ends"};
+		@{ $targets{$id}{"ex_ends"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_ends"} };
+		if (exists $targets{$id}{"CDS_starts"}) {
+			delete $targets{$id}{"CDS_starts"};
+			my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_starts"} };
+			$targets{$id}{"CDS_start"} = $pos[0];
+			delete $targets{$id}{"CDS_ends"};
+			@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_ends"} };
+			$targets{$id}{"CDS_end"} = $pos[-1];
+			}
+		}
+
+	return(\%targets);
 
 }
 
@@ -285,249 +276,242 @@ return(\%targets);
 
 sub GTFfile2hash {
 
-my($fhIn,$chromName) = @_;
+	my($fhIn,$chromName) = @_;
 
-my(%allRefs,%idx);
-$idx{"chr"} = 0;
-$idx{"type"} = 2;
-$idx{"start"} = 3;
-$idx{"end"} = 4;
-$idx{"strand"} = 6;
-$idx{"info"} = 8;
-while (my $line = <$fhIn>) {
-	unless($line =~ /^#/) {
-		chomp $line;
-		my @tab = split(/\t/,$line);
-		my $chr = $tab[$idx{"chr"}];
-		$chr =~ s/^chr//i;
-		${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
-		my($gene_id,$transcript_id,$gene_name,$biotype);
-		if ($tab[$idx{"type"}] eq "transcript") {
-			my @infos = split(/;/, $tab[$idx{"info"}]);
-#GTF transcript attributes:
-#gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
-			foreach (@infos) {
-				$_ =~ s/^\s+//;
-				if ($_ =~ /^(gene_id )/) { $gene_id = $_; $gene_id =~ s/^$1//; $gene_id =~ s/"//g; $gene_id = uc($gene_id); }
-				elsif ($_ =~ /^(gene_name )/) { $gene_name = $_; $gene_name =~ s/^$1//; $gene_name =~ s/"//g; $gene_name = uc($gene_name); }
-				elsif ($_ =~ /^(transcript_id )/) { $transcript_id = $_; $transcript_id =~ s/^$1//; $transcript_id =~ s/"//g; $transcript_id = uc($transcript_id); }
-				elsif ($_ =~ /^(transcript_biotype )/) { $biotype = $_; $biotype =~ s/^$1//; $biotype =~ s/"//g; }
+	my(%allRefs,%idx);
+	$idx{"chr"} = 0;
+	$idx{"type"} = 2;
+	$idx{"start"} = 3;
+	$idx{"end"} = 4;
+	$idx{"strand"} = 6;
+	$idx{"info"} = 8;
+	while (my $line = <$fhIn>) {
+		unless($line =~ /^#/) {
+			chomp $line;
+			my @tab = split(/\t/,$line);
+			my $chr = $tab[$idx{"chr"}];
+			$chr =~ s/^chr//i;
+			${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
+			my ($gene_id,$transcript_id,$gene_name,$biotype);
+=pod
+feature 'transcript' not found in refseq gtf ; nor biotype or gene_name info
+			if ($tab[$idx{"type"}] eq "transcript") {
+				my @infos = split(/;/, $tab[$idx{"info"}]);
+				#GTF transcript attributes:
+				#gene_id "ENSG00000188157"; gene_version "9"; transcript_id "ENST00000379370"; transcript_version "2"; gene_name "AGRN"; gene_source "ensembl_havana"; gene_biotype "protein_coding"; transcript_name "AGRN-001"; transcript_source "ensembl_havana"; transcript_biotype "protein_coding"; tag "CCDS"; ccds_id "CCDS30551"; havana_transcript "OTTHUMT00000097990"; havana_transcript_version "2"; tag "basic";
+				foreach (@infos) {
+					$_ =~ s/^\s+//;
+					if ($_ =~ /^(gene_id )/) {
+						$gene_id = $_; $gene_id =~ s/^$1//; $gene_id =~ s/"//g; $gene_id = uc($gene_id);
+					} elsif ($_ =~ /^(gene_name )/) {
+						$gene_name = $_; $gene_name =~ s/^$1//; $gene_name =~ s/"//g; $gene_name = uc($gene_name);
+					} elsif ($_ =~ /^(transcript_id )/) {
+						$transcript_id = $_; $transcript_id =~ s/^$1//; $transcript_id =~ s/"//g; $transcript_id = uc($transcript_id);
+					} elsif ($_ =~ /^(transcript_biotype )/) {
+						$biotype = $_; $biotype =~ s/^$1//; $biotype =~ s/"//g;
+					}
 				}
-			#if (exists $allRefs{"transcript"}{$transcript_id}) {
-			#	print "$transcript_id...$chr...$gene_name\n";
-			#	}
-			$allRefs{"transcript"}{$transcript_id}{"gene"} = $gene_name;
-			$allRefs{"transcript"}{$transcript_id}{"biotype"} = $biotype;
-			$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
-			$allRefs{"transcript"}{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
-			my $Id_noExt = $transcript_id;
-			$Id_noExt =~ s/\.(\d+)$//;
-			$allRefs{"Id_noExt"}{$Id_noExt}{$transcript_id} = 1;
-			$allRefs{"gene"}{$gene_name}{$transcript_id} = 1;
-			$allRefs{"gene"}{$gene_id}{$transcript_id} = 1;
-			}
-		elsif ($tab[$idx{"type"}] =~ /^(exon|CDS)$/) {
-			my @infos = split(/;/, $tab[$idx{"info"}]);
-			foreach (@infos) {
-				$_ =~ s/^\s+//;
-				if ($_ =~ /^(transcript_id )/) { $transcript_id = $_; $transcript_id =~ s/^$1//; $transcript_id =~ s/"//g; $transcript_id = uc($transcript_id); last; }
+				#if (exists $allRefs{"transcript"}{$transcript_id}) {
+				#	print "$transcript_id...$chr...$gene_name\n";
+				#}
+				$allRefs{"transcript"}{$transcript_id}{"gene"} = $gene_name;
+				$allRefs{"transcript"}{$transcript_id}{"biotype"} = $biotype;
+				$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
+				$allRefs{"transcript"}{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
+				my $Id_noExt = $transcript_id;
+				$Id_noExt =~ s/\.(\d+)$//;
+				$allRefs{"Id_noExt"}{$Id_noExt}{$transcript_id} = 1;
+				$allRefs{"gene"}{$gene_name}{$transcript_id} = 1;
+				$allRefs{"gene"}{$gene_id}{$transcript_id} = 1;
+=cut
+			if ($tab[$idx{"type"}] =~ /^(exon|CDS)$/i) {
+				if ($tab[$idx{"info"}] =~ /gene_id\s*\"?([^\";]+)/i) {
+					$gene_id = uc($1);
 				}
-#GTF:	chr	source	feature	start	end	score	strand	frame	attribute
-#Ref:	bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
-			if ($tab[$idx{"type"}] eq "exon") {
-				$allRefs{"transcript"}{$transcript_id}{"ex_starts"}{$tab[$idx{"start"}]} = 1;
-				$allRefs{"transcript"}{$transcript_id}{"ex_ends"}{$tab[$idx{"end"}]} = 1;
+				if ($tab[$idx{"info"}] =~ /gene_name\s*\"?([^\";]+)/i) {
+					$gene_name = uc($1);
 				}
-			else {
-				$allRefs{"transcript"}{$transcript_id}{"CDS_starts"}{$tab[$idx{"start"}]} = 1;
-				$allRefs{"transcript"}{$transcript_id}{"CDS_ends"}{$tab[$idx{"end"}]} = 1;
+				if ($tab[$idx{"info"}] =~ /transcript_id\s*\"?([^\";]+)/i) {
+					$transcript_id = uc($1);
+				}
+				#if ($_ =~ /transcript_biotype\s*\"?([^\";]+)/i) {
+				#	$biotype = $1;
+				#}
+				if ($transcript_id && $gene_id) {
+					if (! exists $allRefs{"transcript"}{$transcript_id}) {
+						unless ($gene_name) { $gene_name = $gene_id }
+						$allRefs{"transcript"}{$transcript_id}{"gene"} = $gene_name;
+						#unless ($biotype) { $biotype = "" }
+						#	print STDERR "$transcript_id...$chr...$gene_name\n";
+						#$allRefs{"transcript"}{$transcript_id}{"biotype"} = $biotype;
+						$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
+						$allRefs{"transcript"}{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
+						my $Id_noExt = $transcript_id;
+						$Id_noExt =~ s/\.(\d+)$//;
+						$allRefs{"Id_noExt"}{$Id_noExt}{$transcript_id} = 1;
+						$allRefs{"gene"}{$gene_name}{$transcript_id} = 1;
+						$allRefs{"gene"}{$gene_id}{$transcript_id} = 1;
+					}
+					#GTF:	chr	source	feature	start	end	score	strand	frame	attribute
+					#Ref:	bin	name	chrom	strand	txStart	txEnd	cdsStart	cdsEnd	exonCount	exonStarts	exonEnds	score	name2	cdsStartStat	cdsEndStat	exonFrames
+					if ($tab[$idx{"type"}] eq "exon") {
+						$allRefs{"transcript"}{$transcript_id}{"ex_starts"}{$tab[$idx{"start"}]} = 1;
+						$allRefs{"transcript"}{$transcript_id}{"ex_ends"}{$tab[$idx{"end"}]} = 1;
+					} else {
+						$allRefs{"transcript"}{$transcript_id}{"CDS_starts"}{$tab[$idx{"start"}]} = 1;
+						$allRefs{"transcript"}{$transcript_id}{"CDS_ends"}{$tab[$idx{"end"}]} = 1;
+					}
 				}
 			}
 
 		}
 	}
 
-return(\%allRefs);
+	return(\%allRefs);
 
 }
 
 
 ##############################
+=pod
+GFF (General Feature Format)  version 3
+tab-separated fields:
+1	seqid - name of the chromosome or scaffold
+2	source - name of the program that generated this feature, or the data source (database or project name)
+3	type - type of feature. Must be a term or accession from the SOFA sequence ontology
+4	start - Start position of the feature, with sequence numbering starting at 1.
+5	end - End position of the feature, with sequence numbering starting at 1.
+6	score - A floating point value.
+7	strand - defined as + (forward) or - (reverse).
+8	phase - One of '0', '1' or '2'. '0' indicates that the first base of the feature is the first base of a codon, '1' that the second base is the first base of a codon, and so on..
+9	attributes - A semicolon-separated list of tag-value pairs, providing additional information about each feature. Some of these tags are predefined, e.g. ID, Name, Alias, Parent
+
+#types:
+
+ex: Ensembl Ensembl_Homo_sapiens.GRCh37.87.gtf.gz
+	CDS
+	C_gene_segment
+	D_gene_segment
+	J_gene_segment
+	V_gene_segment
+	biological_region
+	chromosome
+	exon
+	five_prime_UTR
+	gene
+	lnc_RNA
+	mRNA
+	miRNA
+	ncRNA
+	ncRNA_gene
+	pseudogene
+	pseudogenic_transcript
+	rRNA
+	scRNA
+	snRNA
+	snoRNA
+	supercontig
+	tRNA
+	three_prime_UTR
+	transcript
+	vaultRNA_primary_transcript
+
+ex: Ensembl Ensembl_Homo_sapiens.GRCh37.87.gtf.gz
+
+1	ensembl_havana	gene	955503	991496	.	+	.	ID=gene:ENSG00000188157;Name=AGRN;biotype=protein_coding;description=agrin [Source:HGNC Symbol%3BAcc:329];gene_id=ENSG00000188157;logic_name=ensembl_havana_gene;version=9
+1	ensembl_havana	mRNA	955503	991496	.	+	.	ID=transcript:ENST00000379370;Parent=gene:ENSG00000188157;Name=AGRN-001;biotype=protein_coding;ccdsid=CCDS30551.1;havana_transcript=OTTHUMT00000097990;havana_version=2;tag=basic;transcript_id=ENST00000379370;version=2
+1	havana	processed_transcript	969486	976105	.	+	.	ID=transcript:ENST00000477585;Parent=gene:ENSG00000188157;Name=AGRN-002;biotype=processed_transcript;havana_transcript=OTTHUMT00000097991;havana_version=1;transcript_id=ENST00000477585;version=1
+...
+1	ensembl_havana	mRNA	955503	991496	.	+	.	ID=transcript:ENST00000379370;Parent=gene:ENSG00000188157;Name=AGRN-001;biotype=protein_coding;ccdsid=CCDS30551.1;havana_transcript=OTTHUMT00000097990;havana_version=2;tag=basic;transcript_id=ENST00000379370;version=2
+1	ensembl_havana	five_prime_UTR	955503	955552	.	+	.	Parent=transcript:ENST00000379370
+1	ensembl_havana	exon	955503	955753	.	+	.	Parent=transcript:ENST00000379370;Name=ENSE00002277560;constitutive=0;ensembl_end_phase=0;ensembl_phase=-1;exon_id=ENSE00002277560;rank=1;version=1
+1	ensembl_havana	CDS	955553	955753	.	+	0	ID=CDS:ENSP00000368678;Parent=transcript:ENST00000379370;protein_id=ENSP00000368678
+
+ex: refseq GRCh37_latest_genomic.gff.gz
+
+NC_000001.10	BestRefSeq	gene	955500	991496	.	+	.	ID=gene-AGRN;Dbxref=GeneID:375790,HGNC:HGNC:329,MIM:103320;Name=AGRN;description=agrin;gbkey=Gene;gene=AGRN;gene_biotype=protein_coding;gene_synonym=AGRIN,CMS8,CMSPPD
+NC_000001.10	BestRefSeq	mRNA	955500	991496	.	+	.	ID=rna-NM_001305275.2;Parent=gene-AGRN;Dbxref=GeneID:375790,Genbank:NM_001305275.2,HGNC:HGNC:329,MIM:103320;Name=NM_001305275.2;gbkey=mRNA;gene=AGRN;product=agrin%2C transcript variant 1;transcript_id=NM_001305275.2
+NC_000001.10	BestRefSeq	exon	955500	955753	.	+	.	ID=exon-NM_001305275.2-1;Parent=rna-NM_001305275.2;Dbxref=GeneID:375790,Genbank:NM_001305275.2,HGNC:HGNC:329,MIM:103320;gbkey=mRNA;gene=AGRN;product=agrin%2C transcript variant 1;transcript_id=NM_001305275.2
+NC_000001.10	BestRefSeq	exon	957581	957842	.	+	.	ID=exon-NM_001305275.2-2;Parent=rna-NM_001305275.2;Dbxref=GeneID:375790,Genbank:NM_001305275.2,HGNC:HGNC:329,MIM:103320;gbkey=mRNA;gene=AGRN;product=agrin%2C transcript variant 1;transcript_id=NM_001305275.2
+...
+NC_000001.10	BestRefSeq	CDS	955553	955753	.	+	0	ID=cds-NP_001292204.1;Parent=rna-NM_001305275.2;Dbxref=GeneID:375790,Genbank:NP_001292204.1,HGNC:HGNC:329,MIM:103320;Name=NP_001292204.1;Note=isoform 1 precursor is encoded by transcript variant 1;gbkey=CDS;gene=AGRN;product=agrin isoform 1 precursor;protein_id=NP_001292204.1
+NC_000001.10	BestRefSeq	CDS	957581	957842	.	+	0	ID=cds-NP_001292204.1;Parent=rna-NM_001305275.2;Dbxref=GeneID:375790,Genbank:NP_001292204.1,HGNC:HGNC:329,MIM:103320;Name=NP_001292204.1;Note=isoform 1 precursor is encoded by transcript variant 1;gbkey=CDS;gene=AGRN;product=agrin isoform 1 precursor;protein_id=NP_001292204.1
+...
+NC_000001.10	BestRefSeq	mRNA	955500	991496	.	+	.	ID=rna-NM_198576.4;Parent=gene-AGRN;Dbxref=GeneID:375790,Genbank:NM_198576.4,HGNC:HGNC:329,MIM:103320;Name=NM_198576.4;gbkey=mRNA;gene=AGRN;product=agrin%2C transcript variant 2;tag=MANE Select;transcript_id=NM_198576.4
+
+=cut
 
 sub GFF2Ids {
 
-my($refFile,$IDs,$chromName,$wNonCod)=@_;
+	my ($refFile,$IDs,$chromName,$wNonCod) = @_;
 
-# GFF (General Feature Format)  version 3
-#tab-separated fields:
-#1	seqid - name of the chromosome or scaffold
-#2	source - name of the program that generated this feature, or the data source (database or project name)
-#3	type - type of feature. Must be a term or accession from the SOFA sequence ontology
-#4	start - Start position of the feature, with sequence numbering starting at 1.
-#5	end - End position of the feature, with sequence numbering starting at 1.
-#6	score - A floating point value.
-#7	strand - defined as + (forward) or - (reverse).
-#8	phase - One of '0', '1' or '2'. '0' indicates that the first base of the feature is the first base of a codon, '1' that the second base is the first base of a codon, and so on..
-#9	attributes - A semicolon-separated list of tag-value pairs, providing additional information about each feature. Some of these tags are predefined, e.g. ID, Name, Alias, Parent
-
-#types:
-#	CDS
-#	C_gene_segment
-#	D_gene_segment
-#	J_gene_segment
-#	V_gene_segment
-#	biological_region
-#	chromosome
-#	exon
-#	five_prime_UTR
-#	gene
-#	lnc_RNA
-#	mRNA
-#	miRNA
-#	ncRNA
-#	ncRNA_gene
-#	pseudogene
-#	pseudogenic_transcript
-#	rRNA
-#	scRNA
-#	snRNA
-#	snoRNA
-#	supercontig
-#	tRNA
-#	three_prime_UTR
-#	transcript
-#	vaultRNA_primary_transcript
-
-#biotypes:
-#	processed_transcript
-#	Mt_rRNA
-#	rRNA
-#	retained_intron
-#	polymorphic_pseudogene
-#	processed_pseudogene
-#	IG_C_pseudogene
-#	snRNA
-#	transcribed_processed_pseudogene
-#	antisense
-#	sense_intronic
-#	TR_J_gene
-#	TR_D_gene
-#	TR_C_gene
-#	3prime_overlapping_ncrna
-#	non_stop_decay
-#	protein_coding
-#	IG_V_pseudogene
-#	unitary_pseudogene
-#	Mt_tRNA
-#	pseudogene
-#	snoRNA
-#	translated_processed_pseudogene
-#	IG_C_gene
-#	misc_RNA
-#	sense_overlapping
-#	unprocessed_pseudogene
-#	transcribed_unprocessed_pseudogene
-#	TR_J_pseudogene
-#	IG_J_gene
-#	nonsense_mediated_decay
-#	TR_V_gene
-#	lincRNA
-#	miRNA
-#	IG_V_gene
-#	IG_J_pseudogene
-#	IG_D_gene
-#	TR_V_pseudogene
-
-#ex:
-#1       ensembl_havana  gene    955503  991496  .       +       .       ID=gene:ENSG00000188157;Name=AGRN;biotype=protein_coding;description=agrin [Source:HGNC Symbol%3BAcc:329];gene_id=ENSG00000188157;logic_name=ensembl_havana_gene;version=9
-#1       ensembl_havana  mRNA    955503  991496  .       +       .       ID=transcript:ENST00000379370;Parent=gene:ENSG00000188157;Name=AGRN-001;biotype=protein_coding;ccdsid=CCDS30551.1;havana_transcript=OTTHUMT00000097990;havana_version=2;tag=basic;transcript_id=ENST00000379370;version=2
-#1       ensembl_havana  five_prime_UTR  955503  955552  .       +       .       Parent=transcript:ENST00000379370
-#1       ensembl_havana  exon    955503  955753  .       +       .       Parent=transcript:ENST00000379370;Name=ENSE00002277560;constitutive=0;ensembl_end_phase=0;ensembl_phase=-1;exon_id=ENSE00002277560;rank=1;version=1
-#1       ensembl_havana  CDS     955553  955753  .       +       0       ID=CDS:ENSP00000368678;Parent=transcript:ENST00000379370;protein_id=ENSP00000368678
-#1       ensembl_havana  exon    957581  957842  .       +       .       Parent=transcript:ENST00000379370;Name=ENSE00001673004;constitutive=0;ensembl_end_phase=1;ensembl_phase=0;exon_id=ENSE00001673004;rank=2;version=1
-#1       ensembl_havana  CDS     957581  957842  .       +       0       ID=CDS:ENSP00000368678;Parent=transcript:ENST00000379370;protein_id=ENSP00000368678
-
-#...
-
-#1       ensembl_havana  exon    989828  989931  .       +       .       Parent=transcript:ENST00000379370;Name=ENSE00003619422;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00003619422;rank=35;version=1
-#1       ensembl_havana  CDS     989828  989931  .       +       1       ID=CDS:ENSP00000368678;Parent=transcript:ENST00000379370;protein_id=ENSP00000368678
-#1       ensembl_havana  CDS     990204  990361  .       +       2       ID=CDS:ENSP00000368678;Parent=transcript:ENST00000379370;protein_id=ENSP00000368678
-#1       ensembl_havana  exon    990204  991496  .       +       .       Parent=transcript:ENST00000379370;Name=ENSE00001883271;constitutive=0;ensembl_end_phase=-1;ensembl_phase=1;exon_id=ENSE00001883271;rank=36;version=1
-#1       ensembl_havana  three_prime_UTR 990362  991496  .       +       .       Parent=transcript:ENST00000379370
-
-#1       havana  processed_transcript    969486  976105  .       +       .       ID=transcript:ENST00000477585;Parent=gene:ENSG00000188157;Name=AGRN-002;biotype=processed_transcript;havana_transcript=OTTHUMT00000097991;havana_version=1;transcript_id=ENST00000477585;version=1
-
-#12	ensembl	miRNA_gene	105721684	105721770	.	-	.	ID=gene:ENSG00000264749;Name=AC011313.1;biotype=miRNA;gene_id=ENSG00000264749;logic_name=ncrna;version=1
-#12	ensembl	miRNA	105721684	105721770	.	-	.	ID=transcript:ENST00000584487;Parent=gene:ENSG00000264749;Name=AC011313.1-201;biotype=miRNA;tag=basic;transcript_id=ENST00000584487;version=1
-
-#10	havana	lincRNA	73813052	73813795	.	-	.	ID=transcript:ENST00000609403;Parent=gene:ENSG00000272988;Name=RP11-150D20.5-001;biotype=lincRNA;havana_transcript=OTTHUMT00000473110;havana_version=1;tag=basic;transcript_id=ENST00000609403;version=1
-
-print "\treading $refFile\n";
-my $fhIn;
-if ($refFile =~ /.gz$/) {
-	use IO::Zlib;
-	$fhIn = new IO::Zlib;
-	$fhIn->open($refFile, "rb")
+	my $fhIn;
+	if ($refFile =~ /.gz$/) {
+		use IO::Zlib;
+		$fhIn = new IO::Zlib;
+		$fhIn->open($refFile, "rb")
+	} else {
+		open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
 	}
-else {
-	open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
-	}
-my $allRefs = GFFfile2hash($fhIn,$chromName);
-close($fhIn);
+	print "\treading $refFile\n";
+	my $allRefs = GFFfile2hash($fhIn,$chromName);
+	close($fhIn);
 
-## selecting IDs from hash:
-my %targets;
-foreach my $id (@{$IDs}) {
-	$id = uc($id);
-	if (exists ${$allRefs}{"transcript"}{$id}) { %{ $targets{$id} } = %{ ${$allRefs}{"transcript"}{$id} }; }
-	elsif (exists ${$allRefs}{"gene"}{$id}) {
-		if (exists ${$allRefs}{"gene"}{$id}{"2gene_id"}) {
-			my $gene_id = ${$allRefs}{"gene"}{$id}{"2gene_id"};
-			foreach my $nm (keys%{ ${$allRefs}{"gene"}{$gene_id}{"transcript"} }) {
-				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
-					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+	## selecting IDs from hash:
+	my (%targets, @not_found_ids);
+	foreach my $id (@{$IDs}) {
+		$id = uc($id);
+		if (exists ${$allRefs}{"transcript"}{$id}) { %{ $targets{$id} } = %{ ${$allRefs}{"transcript"}{$id} }; }
+		elsif (exists ${$allRefs}{"gene"}{$id}) {
+			if (exists ${$allRefs}{"gene"}{$id}{"2gene_id"}) {
+				my $gene_id = ${$allRefs}{"gene"}{$id}{"2gene_id"};
+				foreach my $nm (keys%{ ${$allRefs}{"gene"}{$gene_id}{"transcript"} }) {
+					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+						%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+					}
+				}
+			} else {
+				foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id}{"transcript"} }) {
+					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+						%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 					}
 				}
 			}
-		else {
-			foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id}{"transcript"} }) {
+		} elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
+			foreach my $nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
 				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
 					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
-					}
 				}
 			}
+		} else {
+			push(@not_found_ids, $id);
 		}
-	elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
-		foreach my $nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
-			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
-				%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
-				}
+	}
+	if (@not_found_ids) {
+		die "\n!! some ids not found in file: $refFile\n\t".join("\n\t",@not_found_ids)."\n";
+	}
+
+	foreach my $id (keys%targets) {
+		delete $targets{$id}{"ex_starts"};
+		@{ $targets{$id}{"ex_starts"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_starts"} };
+		delete $targets{$id}{"ex_ends"};
+		@{ $targets{$id}{"ex_ends"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_ends"} };
+		if (exists $targets{$id}{"CDS_starts"}) {
+			delete $targets{$id}{"CDS_starts"};
+			my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_starts"} };
+			$targets{$id}{"CDS_start"} = $pos[0];
+			delete $targets{$id}{"CDS_ends"};
+			@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_ends"} };
+			$targets{$id}{"CDS_end"} = $pos[-1];
+			}
+		if (exists $targets{$id}{"gene_id"}) {
+			my $gene_id = $targets{$id}{"gene_id"};
+			if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) { $targets{$id}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}; }
+			else { $targets{$id}{"gene"} = $gene_id; }
 			}
 		}
-	else { die "can't find $id in $refFile file\n"; }
-	}
 
-foreach my $id (keys%targets) {
-	delete $targets{$id}{"ex_starts"};
-	@{ $targets{$id}{"ex_starts"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_starts"} };
-	delete $targets{$id}{"ex_ends"};
-	@{ $targets{$id}{"ex_ends"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_ends"} };
-	if (exists $targets{$id}{"CDS_starts"}) {
-		delete $targets{$id}{"CDS_starts"};
-		my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_starts"} };
-		$targets{$id}{"CDS_start"} = $pos[0];
-		delete $targets{$id}{"CDS_ends"};
-		@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_ends"} };
-		$targets{$id}{"CDS_end"} = $pos[-1];
-		}
-	if (exists $targets{$id}{"gene_id"}) {
-		my $gene_id = $targets{$id}{"gene_id"};
-		if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) { $targets{$id}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}; }
-		else { $targets{$id}{"gene"} = $gene_id; }
-		}
-	}
-
-return(\%targets);
+	return(\%targets);
 
 }
 
@@ -535,83 +519,86 @@ return(\%targets);
 
 sub GFFfile2hash {
 
-my($fhIn,$chromName) = @_;
+	my($fhIn,$chromName) = @_;
 
-my(%allRefs,%idx);
-$idx{"chr"} = 0;
-$idx{"type"} = 2;
-$idx{"start"} = 3;
-$idx{"end"} = 4;
-$idx{"strand"} = 6;
-$idx{"info"} = 8;
-while (my $line = <$fhIn>) {
-	if ($line !~ /^#/) {
-		chomp $line;
-		my @tab = split(/\t/,$line);
-		my $chr = $tab[$idx{"chr"}];
-		$chr =~ s/^chr//i;
-		${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
-		my($gene_id,$transcript_id,$gene_name);
-		if ($tab[$idx{"type"}] eq "gene") {
-#GFF attributes
-#ID=gene:ENSG00000188157;Name=AGRN;biotype=protein_coding;description=agrin [Source:HGNC Symbol%3BAcc:329];gene_id=ENSG00000188157;logic_name=ensembl_havana_gene;version=9
-			if ($tab[$idx{"info"}] =~ /ID=gene:([^;]+)/) {
-				$gene_id = $1; $gene_id = uc($gene_id);
-				if ($tab[$idx{"info"}] =~ /(|;)Name=([^;]+)/) {
-					$gene_name = $2; $gene_name = uc($gene_name);
+	my(%allRefs,%idx);
+	$idx{"chr"} = 0;
+	$idx{"type"} = 2;
+	$idx{"start"} = 3;
+	$idx{"end"} = 4;
+	$idx{"strand"} = 6;
+	$idx{"info"} = 8;
+	while (my $line = <$fhIn>) {
+		if ($line !~ /^#/) {
+			chomp $line;
+			my @tab = split(/\t/,$line);
+			my $chr = $tab[$idx{"chr"}];
+			$chr =~ s/^chr//i;
+			${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
+			my ($gene_id,$transcript_id,$gene_name);
+			if ($tab[$idx{"type"}] eq "gene") {
+				#GFF attributes
+				#ID=gene:ENSG00000188157;Name=AGRN;biotype=protein_coding;description=agrin [Source:HGNC Symbol%3BAcc:329];gene_id=ENSG00000188157;logic_name=ensembl_havana_gene;version=9
+				#ID=gene-AGRN;Dbxref=GeneID:375790,HGNC:HGNC:329,MIM:103320;Name=AGRN;description=agrin;gbkey=Gene;gene=AGRN;gene_biotype=protein_coding;gene_synonym=AGRIN,CMS8,CMSPPD
+				if ($tab[$idx{"info"}] =~ /ID=gene[:-]([^;]+)/i) { $gene_id = uc($1) }
+				if ($tab[$idx{"info"}] =~ /(?:^|;)Name=([^;]+)/i) { $gene_name = uc($1) }
+				if ($gene_id && !$gene_name) { $gene_name = $gene_id }
+				if ($gene_name && !$gene_id) { $gene_id = $gene_name }
+				if ($gene_id) {
 					$allRefs{"gene"}{$gene_id}{"2gene_name"} = $gene_name;
 					$allRefs{"gene"}{$gene_name}{"2gene_id"} = $gene_id;
+				}
+	#		} elsif ($tab[$idx{"type"}] =~ /^mRNA$/) {
+	#1       ensembl_havana  mRNA    955503  991496  .       +       .       ID=transcript:ENST00000379370;Parent=gene:ENSG00000188157;Name=AGRN-001;biotype=protein_coding;ccdsid=CCDS30551.1;havana_transcript=OTTHUMT00000097990;havana_version=2;tag=basic;transcript_id=ENST00000379370;version=2
+	#			if ($tab[$idx{"info"}] =~ /ID=transcript:(\w+);/) {
+	#				$transcript_id = $1; $transcript_id = uc($transcript_id);
+	#				if (exists $allRefs{"transcript"}{$transcript_id}) {
+	#					print "$transcript_id...$chr...$gene_name\n";
+	#					}
+	#				}
+	#			}
+			} elsif ($tab[$idx{"type"}] =~ /^(exon|CDS)$/) {
+				#GFF attributes
+				#exon :	Parent=transcript:ENST00000379370;Name=ENSE00002277560;constitutive=0;ensembl_end_phase=0;ensembl_phase=-1;exon_id=ENSE00002277560;rank=1;version=1
+				#CDS :	ID=CDS:ENSP00000368678;Parent=transcript:ENST00000379370;protein_id=ENSP00000368678
+				#exon :	ID=exon-NM_001305275.2-1;Parent=rna-NM_001305275.2;Dbxref=GeneID:375790,Genbank:NM_001305275.2,HGNC:HGNC:329,MIM:103320;gbkey=mRNA;gene=AGRN;product=agrin%2C transcript variant 1;transcript_id=NM_001305275.2
+				#CDS :	ID=exon-NM_001305275.2-1;Parent=rna-NM_001305275.2;Dbxref=GeneID:375790,Genbank:NM_001305275.2,HGNC:HGNC:329,MIM:103320;gbkey=mRNA;gene=AGRN;product=agrin%2C transcript variant 1;transcript_id=NM_001305275.2
+				if ($tab[$idx{"info"}] =~ /Parent=(?:transcript|rna)[:-]([^;]+)/i) {
+					$transcript_id = uc($1);
+					if ($transcript_id) {
+						if ($tab[$idx{"type"}] eq "exon") {
+							$allRefs{"transcript"}{$transcript_id}{"ex_starts"}{$tab[$idx{"start"}]} = 1;
+							$allRefs{"transcript"}{$transcript_id}{"ex_ends"}{$tab[$idx{"end"}]} = 1;
+						} else {
+							$allRefs{"transcript"}{$transcript_id}{"CDS_starts"}{$tab[$idx{"start"}]} = 1;
+							$allRefs{"transcript"}{$transcript_id}{"CDS_ends"}{$tab[$idx{"end"}]} = 1;
+						}
 					}
 				}
-			}
-#		elsif ($tab[$idx{"type"}] =~ /^mRNA$/) {
-#1       ensembl_havana  mRNA    955503  991496  .       +       .       ID=transcript:ENST00000379370;Parent=gene:ENSG00000188157;Name=AGRN-001;biotype=protein_coding;ccdsid=CCDS30551.1;havana_transcript=OTTHUMT00000097990;havana_version=2;tag=basic;transcript_id=ENST00000379370;version=2
-#			if ($tab[$idx{"info"}] =~ /ID=transcript:(\w+);/) {
-#				$transcript_id = $1; $transcript_id = uc($transcript_id);
-#				if (exists $allRefs{"transcript"}{$transcript_id}) {
-#					print "$transcript_id...$chr...$gene_name\n";
-#					}
-#				}
-#			}
-		elsif ($tab[$idx{"type"}] =~ /^(exon|CDS)$/) {
-#GFF attributes
-#exon :	Parent=transcript:ENST00000379370;Name=ENSE00002277560;constitutive=0;ensembl_end_phase=0;ensembl_phase=-1;exon_id=ENSE00002277560;rank=1;version=1
-#CDS :	ID=CDS:ENSP00000368678;Parent=transcript:ENST00000379370;protein_id=ENSP00000368678
-			if ($tab[$idx{"info"}] =~ /Parent=transcript:([^;]+)/) {
-				$transcript_id = $1; $transcript_id = uc($transcript_id);
-				if ($tab[$idx{"type"}] eq "exon") {
-					$allRefs{"transcript"}{$transcript_id}{"ex_starts"}{$tab[$idx{"start"}]} = 1;
-					$allRefs{"transcript"}{$transcript_id}{"ex_ends"}{$tab[$idx{"end"}]} = 1;
+			} else {
+				if ($tab[$idx{"info"}] =~ /ID=(?:transcript|rna)[:-]([^;]+)/i) {
+					#ID=transcript:ENST00000379370;Parent=gene:ENSG00000188157;Name=AGRN-001;biotype=protein_coding;ccdsid=CCDS30551.1;havana_transcript=OTTHUMT00000097990;havana_version=2;tag=basic;transcript_id=ENST00000379370;version=2
+					#ID=rna-NM_001305275.2;Parent=gene-AGRN;Dbxref=GeneID:375790,Genbank:NM_001305275.2,HGNC:HGNC:329,MIM:103320;Name=NM_001305275.2;gbkey=mRNA;gene=AGRN;product=agrin%2C transcript variant 1;transcript_id=NM_001305275.2
+					$transcript_id = uc($1);
+					if ($tab[$idx{"info"}] =~ /Parent=gene[:-]([^;]+)/i) {
+						$gene_id = uc($1);
+						$allRefs{"transcript"}{$transcript_id}{"gene_id"} = $gene_id;
+						$allRefs{"gene"}{$gene_id}{"transcript"}{$transcript_id} = 1;
 					}
-				else {
-					$allRefs{"transcript"}{$transcript_id}{"CDS_starts"}{$tab[$idx{"start"}]} = 1;
-					$allRefs{"transcript"}{$transcript_id}{"CDS_ends"}{$tab[$idx{"end"}]} = 1;
-					}
-				}
-			}
-		else {
-			if ($tab[$idx{"info"}] =~ /ID=transcript:([^;]+)/) {
-#ID=transcript:ENST00000379370;Parent=gene:ENSG00000188157;Name=AGRN-001;biotype=protein_coding;ccdsid=CCDS30551.1;havana_transcript=OTTHUMT00000097990;havana_version=2;tag=basic;transcript_id=ENST00000379370;version=2
-				$transcript_id = $1; $transcript_id = uc($transcript_id);
-				my $Id_noExt = $transcript_id;
-				$Id_noExt =~ s/\.(\d+)$//;;
-				$allRefs{"Id_noExt"}{$Id_noExt}{$transcript_id} = 1;
-				if ($tab[$idx{"info"}] =~ /Parent=gene:([^;]+)/) {
-					$gene_id = $1; $gene_id = uc($gene_id);
-					$allRefs{"transcript"}{$transcript_id}{"gene_id"} = $gene_id;
-					$allRefs{"gene"}{$gene_id}{"transcript"}{$transcript_id} = 1;
-					}
-				if ($tab[$idx{"info"}] =~ /biotype=([^;]+)/) {
-					$allRefs{"transcript"}{$transcript_id}{"biotype"} = $1;
-					}
-				$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
-				$allRefs{"transcript"}{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
+					#if ($tab[$idx{"info"}] =~ /biotype=([^;]+)/) {
+					#	$allRefs{"transcript"}{$transcript_id}{"biotype"} = $1;
+					#}
+					$allRefs{"transcript"}{$transcript_id}{"chr"} = $chr;
+					$allRefs{"transcript"}{$transcript_id}{"strand"} = $tab[$idx{"strand"}];
+					my $Id_noExt = $transcript_id;
+					$Id_noExt =~ s/\.(\d+)$//;
+					$allRefs{"Id_noExt"}{$Id_noExt}{$transcript_id} = 1;
 				}
 			}
 
 		}
 	}
-return(\%allRefs);
+	return(\%allRefs);
 
 }
 
@@ -620,119 +607,121 @@ return(\%allRefs);
 
 sub bed2IDs {
 
-my($allRefs,$refFile,$refFmt,$interval_r,$chromName,$wNonCod) = @_;
-#my %interval ->	#$Bed{$chr}{$start} = $end , in 1-based
+	my ($allRefs, $refFile, $refFmt, $interval_r, $chromName, $wNonCod) = @_;
+	#my %interval ->	#$Bed{$chr}{$start} = $end , in 1-based
 
-print "\n\tlooking for genes/transcripts overlapping bed file intervals\n";
+	print "\n\tlooking for genes/transcripts overlapping bed file intervals\n";
 
-#@{ $RefCoord{$chr}{$start}{$end} } = [$NM1,$NM2,...]
-my($fhIn,%RefCoord);
-if (!$allRefs) {
-	print "\t\treading $refFile\n";
-	if ($refFile =~ /.gz$/) {
-		use IO::Zlib;
-		$fhIn = new IO::Zlib;
-		$fhIn->open($refFile, "rb")
-		}
-	else {
-		open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
+	#@{ $RefCoord{$chr}{$start}{$end} } = [$NM1,$NM2,...]
+	my ($fhIn, %RefCoord);
+	if (!$allRefs) {
+		print "\t\treading $refFile\n";
+		if ($refFile =~ /.gz$/) {
+			use IO::Zlib;
+			$fhIn = new IO::Zlib;
+			$fhIn->open($refFile, "rb")
+		} else {
+			open($fhIn, "<", $refFile) or die "\n!! could not read $refFile ($!)\n";
 		}
 	}
-if ($refFmt eq "ucsc") {
-	unless ($allRefs) { $allRefs = UCSCfile2hash($fhIn,$chromName); }
-	foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
-			push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{${$allRefs}{"transcript"}{$nm}{"ex_starts"}[0]}{${$allRefs}{"transcript"}{$nm}{"ex_ends"}[-1]} }, $nm);
+	if ($refFmt eq "ucsc") {
+		unless ($allRefs) { $allRefs = UCSCfile2hash($fhIn,$chromName); }
+		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
+			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+				push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{${$allRefs}{"transcript"}{$nm}{"ex_starts"}[0]}{${$allRefs}{"transcript"}{$nm}{"ex_ends"}[-1]} }, $nm);
+			}
+		}
+	} elsif ($refFmt eq "gtf") {
+		unless ($allRefs) { $allRefs = GTFfile2hash($fhIn,$chromName); }
+		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
+			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+				my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
+				delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
+				@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
+				my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
+				delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
+				@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
+				push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
+			}
+		}
+	} elsif ($refFmt eq "gff3") {
+		unless ($allRefs) { $allRefs = GFFfile2hash($fhIn,$chromName); }
+		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
+			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+				my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
+				delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
+				@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
+				my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
+				delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
+				@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
+				push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
 			}
 		}
 	}
-elsif ($refFmt eq "gtf") {
-	unless ($allRefs) { $allRefs = GTFfile2hash($fhIn,$chromName); }
-	foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
-			my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-			delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
-			@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
-			my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-			delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
-			@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
-			push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
-			}
-		}
-	}
-elsif ($refFmt eq "gff3") {
-	unless ($allRefs) { $allRefs = GFFfile2hash($fhIn,$chromName); }
-	foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-		if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
-			my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-			delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
-			@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
-			my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-			delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
-			@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
-			push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
-			}
-		}
-	}
-if ($fhIn) { close($fhIn); }
+	if ($fhIn) { close($fhIn); }
 
-my %targets;
-foreach my $chr (sort(keys%{$interval_r})) {
-	my @bedStarts = sort{$a<=>$b}keys%{ ${$interval_r}{$chr} };
-	my @refStarts = sort{$a<=>$b}keys%{ $RefCoord{$chr} };
-	my $c = 0;		#idx of @refStarts
-	my @RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
-	foreach my $bedstart(@bedStarts) {
-		while ( ($c < $#refStarts) && ($bedstart > $RefEnds[0]) ) { 
-			$c++; 
-			@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
+	my %targets;
+	foreach my $chr (sort(keys%{$interval_r})) {
+		my @bedStarts = sort{$a<=>$b}keys%{ ${$interval_r}{$chr} };
+		my @refStarts = sort{$a<=>$b}keys%{ $RefCoord{$chr} };
+		my $c = 0;		#idx of @refStarts
+		my @RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
+		foreach my $bedstart(@bedStarts) {
+			while ( ($c < $#refStarts) && ($bedstart > $RefEnds[0]) ) { 
+				$c++; 
+				@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c]} };
 			}
-		my $c2 = $c;
-		while (($c2 < $#refStarts) && (${$interval_r}{$chr}{$bedstart} >= $refStarts[$c2])) {
-			foreach my $end (@RefEnds) {
-				if ($bedstart <= $end) { 
-					foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end} }) {
-						%{ $targets{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
+			my $c2 = $c;
+			while (($c2 < $#refStarts) && (${$interval_r}{$chr}{$bedstart} >= $refStarts[$c2])) {
+				foreach my $end (@RefEnds) {
+					if ($bedstart <= $end) {
+						foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end} }) {
+							%{ $targets{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
 						}
+					} else {
+						last;
 					}
-				else { last; }
 				}
-			$c2++;
-			@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c2]} };
+				$c2++;
+				@RefEnds = sort{$b<=>$a}keys%{ $RefCoord{$chr}{$refStarts[$c2]} };
 			}
-		if (${$interval_r}{$chr}{$bedstart} >= $refStarts[$c2]) {
-			foreach my $end (@RefEnds) {
-				if ($bedstart <= $end) {
-					foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end} }) {
-						%{ $targets{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
+			if (${$interval_r}{$chr}{$bedstart} >= $refStarts[$c2]) {
+				foreach my $end (@RefEnds) {
+					if ($bedstart <= $end) {
+						foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end} }) {
+							%{ $targets{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
 						}
+					} else {
+						last;
 					}
-				else { last; }
 				}
 			}
 		}
 	}
-if ($refFmt eq "gtf" || $refFmt eq "gff3") {
-	foreach my $id (keys%targets) {
-		if (exists $targets{$id}{"CDS_starts"}) {
-			my @pos = sort{$a<=>$b}keys%{ $targets{$id}{"CDS_starts"} };
-			delete $targets{$id}{"CDS_starts"};
-			$targets{$id}{"CDS_start"}= $pos[0];
-			@pos = sort{$a<=>$b}keys%{ $targets{$id}{"CDS_ends"} };
-			delete $targets{$id}{"CDS_ends"};
-			$targets{$id}{"CDS_end"} = $pos[-1];
+	if ($refFmt eq "gtf" || $refFmt eq "gff3") {
+		foreach my $id (keys%targets) {
+			if (exists $targets{$id}{"CDS_starts"}) {
+				my @pos = sort{$a<=>$b}keys%{ $targets{$id}{"CDS_starts"} };
+				delete $targets{$id}{"CDS_starts"};
+				$targets{$id}{"CDS_start"}= $pos[0];
+				@pos = sort{$a<=>$b}keys%{ $targets{$id}{"CDS_ends"} };
+				delete $targets{$id}{"CDS_ends"};
+				$targets{$id}{"CDS_end"} = $pos[-1];
 			}
-		if ($refFmt eq "gff3") {
-			if (exists $targets{$id}{"gene_id"}) {
-				my $gene_id = $targets{$id}{"gene_id"};
-				if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) { $targets{$id}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}; }
-				else { $targets{$id}{"gene"} = $gene_id; }
+			if ($refFmt eq "gff3") {
+				if (exists $targets{$id}{"gene_id"}) {
+					my $gene_id = $targets{$id}{"gene_id"};
+					if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) {
+						$targets{$id}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"};
+					} else {
+						$targets{$id}{"gene"} = $gene_id;
+					}
 				}
 			}
 		}
 	}
 
-return(\%targets);
+	return(\%targets);
 
 }
 
@@ -741,32 +730,29 @@ return(\%targets);
 
 sub ref2Hash {
 
-my($refFile,$refFmt,$chromName) = @_;
+	my ($refFile, $refFmt, $chromName) = @_;
 
-print "\t\treading $refFile\n";
+	print "\t\treading $refFile\n";
 
-my($fhIn,$allRefs);
-if ($refFile =~ /.gz$/) {
-	use IO::Zlib;
-	$fhIn = new IO::Zlib;
-	$fhIn->open($refFile, "rb")
-	}
-else {
-	open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
+	my ($fhIn, $allRefs);
+	if ($refFile =~ /.gz$/) {
+		use IO::Zlib;
+		$fhIn = new IO::Zlib;
+		$fhIn->open($refFile, "rb")
+	} else {
+		open($fhIn, "<", $refFile) or die "could not read $refFile ($!)\n";
 	}
 
-if ($refFmt eq "ucsc") {
-	$allRefs = UCSCfile2hash($fhIn,$chromName);
+	if ($refFmt eq "ucsc") {
+		$allRefs = UCSCfile2hash($fhIn, $chromName);
+	} elsif ($refFmt eq "gtf") {
+		$allRefs = GTFfile2hash($fhIn, $chromName);
+	} elsif ($refFmt eq "gff3") {
+		$allRefs = GFFfile2hash($fhIn, $chromName);
 	}
-elsif ($refFmt eq "gtf") {
-	$allRefs = GTFfile2hash($fhIn,$chromName);
-	}
-elsif ($refFmt eq "gff3") {
-	$allRefs = GFFfile2hash($fhIn,$chromName);
-	}
-close($fhIn);
+	close($fhIn);
 
-return($allRefs);
+	return($allRefs);
 
 }
 
@@ -774,76 +760,77 @@ return($allRefs);
 
 sub refHash2Transcripts {
 
-##put back in 0-based : easier to compare with bed file!
+	##put back in 0-based : easier to compare with bed file!
 
-my($allRefs,$refFmt) = @_;
+	my ($allRefs,$refFmt) = @_;
 
-my(%targets);
-if ($refFmt eq "ucsc") {
-	foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-		%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
-		delete $targets{$nm}{"ex_starts"};
-		foreach (@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} }) { push(@{ $targets{$nm}{"ex_starts"} }, ($_-1)); }
-		if (exists $targets{$nm}{"CDS_start"}) { $targets{$nm}{"CDS_start"} -= 1; }
-#		else {
-#			$targets{$nm}{"CDS_start"} = $targets{$nm}{"ex_ends"}[-1];
-#			$targets{$nm}{"CDS_end"} = $targets{$nm}{"ex_ends"}[-1];
-#			}
+	my %targets;
+	if ($refFmt eq "ucsc") {
+		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
+			%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+			delete $targets{$nm}{"ex_starts"};
+			foreach (@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} }) { push(@{ $targets{$nm}{"ex_starts"} }, ($_-1)); }
+			if (exists $targets{$nm}{"CDS_start"}) { $targets{$nm}{"CDS_start"} -= 1; }
+	#		else {
+	#			$targets{$nm}{"CDS_start"} = $targets{$nm}{"ex_ends"}[-1];
+	#			$targets{$nm}{"CDS_end"} = $targets{$nm}{"ex_ends"}[-1];
+	#		}
+		}
+	} elsif ($refFmt eq "gtf") {
+		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
+			%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+			my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
+			delete $targets{$nm}{"ex_starts"};
+			foreach (@ex_starts) { push(@{ $targets{$nm}{"ex_starts"} }, ($_-1)); }
+			my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
+			delete $targets{$nm}{"ex_ends"};
+			@{ $targets{$nm}{"ex_ends"} } = @ex_ends;
+			if (exists $targets{$nm}{"CDS_starts"}) {
+				my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_starts"} };
+				delete $targets{$nm}{"CDS_starts"};
+				$targets{$nm}{"CDS_start"} = $pos[0]-1;
+				@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_ends"} };
+				delete $targets{$nm}{"CDS_ends"};
+				$targets{$nm}{"CDS_end"} = $pos[-1];
+			}
+	#		else {
+	#			$targets{$nm}{"CDS_start"} = $ex_ends[-1];
+	#			$targets{$nm}{"CDS_end"} = $ex_ends[-1];
+	#		}
+		}
+	} elsif ($refFmt eq "gff3") {
+		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
+			%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
+			my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
+			delete $targets{$nm}{"ex_starts"};
+			foreach (@ex_starts) { push(@{ $targets{$nm}{"ex_starts"} }, ($_-1)); }
+			my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
+			delete $targets{$nm}{"ex_ends"};
+			@{ $targets{$nm}{"ex_ends"} } = @ex_ends;
+			if (exists $targets{$nm}{"CDS_starts"}) {
+				delete $targets{$nm}{"CDS_starts"};
+				my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_starts"} };
+				$targets{$nm}{"CDS_start"} = $pos[0]-1;
+				delete $targets{$nm}{"CDS_ends"};
+				@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_ends"} };
+				$targets{$nm}{"CDS_end"} = $pos[-1];
+			}
+	#		else {
+	#			$targets{$nm}{"CDS_start"} = $ex_ends[-1];
+	#			$targets{$nm}{"CDS_end"} = $ex_ends[-1];
+	#		}
+			if (exists ${$allRefs}{"transcript"}{$nm}{"gene_id"}) {
+				my $gene_id = ${$allRefs}{"transcript"}{$nm}{"gene_id"};
+				if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) {
+					$targets{$nm}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"};
+				} else {
+					$targets{$nm}{"gene"} = $gene_id;
+				}
+			}
 		}
 	}
-elsif ($refFmt eq "gtf") {
-	foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-		%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
-		my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-		delete $targets{$nm}{"ex_starts"};
-		foreach (@ex_starts) { push(@{ $targets{$nm}{"ex_starts"} }, ($_-1)); }
-		my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-		delete $targets{$nm}{"ex_ends"};
-		@{ $targets{$nm}{"ex_ends"} } = @ex_ends;
-		if (exists $targets{$nm}{"CDS_starts"}) {
-			my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_starts"} };
-			delete $targets{$nm}{"CDS_starts"};
-			$targets{$nm}{"CDS_start"} = $pos[0]-1;
-			@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_ends"} };
-			delete $targets{$nm}{"CDS_ends"};
-			$targets{$nm}{"CDS_end"} = $pos[-1];
-			}
-#		else {
-#			$targets{$nm}{"CDS_start"} = $ex_ends[-1];
-#			$targets{$nm}{"CDS_end"} = $ex_ends[-1];
-#			}
-		}
-	}
-elsif ($refFmt eq "gff3") {
-	foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-		%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
-		my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-		delete $targets{$nm}{"ex_starts"};
-		foreach (@ex_starts) { push(@{ $targets{$nm}{"ex_starts"} }, ($_-1)); }
-		my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-		delete $targets{$nm}{"ex_ends"};
-		@{ $targets{$nm}{"ex_ends"} } = @ex_ends;
-		if (exists $targets{$nm}{"CDS_starts"}) {
-			delete $targets{$nm}{"CDS_starts"};
-			my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_starts"} };
-			$targets{$nm}{"CDS_start"} = $pos[0]-1;
-			delete $targets{$nm}{"CDS_ends"};
-			@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_ends"} };
-			$targets{$nm}{"CDS_end"} = $pos[-1];
-			}
-#		else {
-#			$targets{$nm}{"CDS_start"} = $ex_ends[-1];
-#			$targets{$nm}{"CDS_end"} = $ex_ends[-1];
-#			}
-		if (exists ${$allRefs}{"transcript"}{$nm}{"gene_id"}) {
-			my $gene_id = ${$allRefs}{"transcript"}{$nm}{"gene_id"};
-			if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) { $targets{$nm}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}; }
-			else { $targets{$nm}{"gene"} = $gene_id; }
-			}
-		}
-	}
 
-return(\%targets);
+	return(\%targets);
 
 }
 
@@ -1147,27 +1134,21 @@ foreach (keys%geneNM) {
 	@{ $geneNM{$_} } = sort@{ $geneNM{$_} };
 	}
 return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%hashBed);
+
 }
 
 ####
 sub printID2BedMerge {
-my($fh,$chr,$start,$end,$infoRef) = @_;
-my $info = "";
-foreach my $gene (sort(keys%{$infoRef})) {
-	$info .= "$gene:";
-	foreach my $NM (sort(keys%{ ${$infoRef}{$gene} })) {
-		$info .= "$NM:";
-		foreach my $ex (@{ ${$infoRef}{$gene}{$NM} }) {
-			$info .= "$ex-";
-			}
-		chop $info;
-		$info .= ",";
+	my ($fh, $chr, $start, $end, $infoRef) = @_;
+	my @infos = ();
+	foreach my $gene (sort(keys%{$infoRef})) {
+		my @nms =  ();
+		foreach my $NM (sort(keys%{ ${$infoRef}{$gene} })) {
+			push(@nms, "$NM:".join("-",@{ ${$infoRef}{$gene}{$NM} }) );
 		}
-	chop $info;
-	$info .= ";";
+		push(@infos, "$gene:".join(",",@nms) );
 	}
-chop $info;
-print $fh "$chr\t$start\t$end\t$info\n";
+	print $fh "$chr\t$start\t$end\t".join(";",@infos)."\n";
 }
 
 
