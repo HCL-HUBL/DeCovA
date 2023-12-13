@@ -617,60 +617,62 @@ sub cut_Bed {
 	open(my $fhOut, ">", "$newBed") || die "\n!! can't create file $newBed\n";
 	open(my $fhBed, "<", "$bedFile") || die "\n!! can't open file $bedFile\n";
 	while (my $line = <$fhBed>) {
-		chomp $line;
-		my @tab = split(/\t/,$line);
-		my $line2;
-		if ( ($tab[2]-$tab[1]) >= ${$c_opt}{"maxL"} ) {
-			my $start = $tab[1];
-			my $end = $tab[2];
-			my $div = int(($end-$start) / $cutL);
-			my $mod = ($end-$start) % $cutL;
-			my $info = "";
-			for (my $i = 3; $i < scalar@tab; $i++) { $info .= $tab[$i]."\t"; }
-			chop $info;
-			my$i = 0;
-			if (${$c_opt}{"keepLast"} && ($mod<${$c_opt}{"minL"})) {
-				while ($i < ($div-1)) {
-					$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+(($i+1)*$cutL))."\t";
-					if ($info) { $line2 .= $info; }
-					else { chop $line2; }
+		if ( ($line =~ /^\w+\t\d+\t\d+/) && ($line !~ /^#/) ) {
+			chomp $line;
+			my @tab = split(/\t/,$line);
+			my $line2;
+			if ( ($tab[2]-$tab[1]) >= ${$c_opt}{"maxL"} ) {
+				my $start = $tab[1];
+				my $end = $tab[2];
+				my $div = int(($end-$start) / $cutL);
+				my $mod = ($end-$start) % $cutL;
+				my $info = "";
+				for (my $i = 3; $i < scalar@tab; $i++) { $info .= $tab[$i]."\t"; }
+				chop $info;
+				my$i = 0;
+				if (${$c_opt}{"keepLast"} && ($mod<${$c_opt}{"minL"})) {
+					while ($i < ($div-1)) {
+						$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+(($i+1)*$cutL))."\t";
+						if ($info) { $line2 .= $info; }
+						else { chop $line2; }
+						print $fhOut $line2."\n";
+						$i++;
+					}
+					if (${$c_opt}{"keepLast"} eq "merge") {
+						$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".$end."\t";
+						if ($info) { $line2 .= $info; }
+						else { chop $line2; }
+					} else {
+						my $lastI = $end-($start+($i*$cutL));
+						$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+($i*$cutL)+int($lastI/2))."\t";
+						if ($info) { $line2 .= $info; }
+						else { chop $line2; }
+						print $fhOut $line2."\n";
+						$line2 = $tab[0]."\t".($start+($i*$cutL)+int($lastI/2))."\t".$end."\t";
+						if ($info) { $line2 .= $info; }
+						else { chop $line2; }
+					}
 					print $fhOut $line2."\n";
-					$i++;
-				}
-				if (${$c_opt}{"keepLast"} eq "merge") {
-					$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".$end."\t";
-					if ($info) { $line2 .= $info; }
-					else { chop $line2; }
 				} else {
-					my $lastI = $end-($start+($i*$cutL));
-					$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+($i*$cutL)+int($lastI/2))."\t";
-					if ($info) { $line2 .= $info; }
-					else { chop $line2; }
-					print $fhOut $line2."\n";
-					$line2 = $tab[0]."\t".($start+($i*$cutL)+int($lastI/2))."\t".$end."\t";
-					if ($info) { $line2 .= $info; }
-					else { chop $line2; }
+					while ($i < $div) {
+						$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+(($i+1)*$cutL))."\t";
+						if ($info) { $line2 .= $info; }
+						else { chop $line2; }
+						print $fhOut $line2."\n";
+						$i++;
+					}
+					if ($mod >= ${$c_opt}{"minL"}) {
+						$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".$end."\t";
+						if ($info) { $line2 .= $info; }
+						else { chop $line2; }
+						print $fhOut $line2."\n";
+					}
 				}
-				print $fhOut $line2."\n";
 			} else {
-				while ($i < $div) {
-					$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".($start+(($i+1)*$cutL))."\t";
-					if ($info) { $line2 .= $info; }
-					else { chop $line2; }
-					print $fhOut $line2."\n";
-					$i++;
-				}
-				if ($mod >= ${$c_opt}{"minL"}) {
-					$line2 = $tab[0]."\t".($start+($i*$cutL))."\t".$end."\t";
-					if ($info) { $line2 .= $info; }
-					else { chop $line2; }
-					print $fhOut $line2."\n";
-				}
+				foreach my $i (@tab) { $line2 .= $i."\t"; }
+				chop $line2;
+				print $fhOut $line2."\n";
 			}
-		} else {
-			foreach my $i (@tab) { $line2 .= $i."\t"; }
-			chop $line2;
-			print $fhOut $line2."\n";
 		}
 	}
 	close($fhBed);

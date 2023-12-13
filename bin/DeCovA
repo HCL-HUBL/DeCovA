@@ -43,6 +43,7 @@ GetOptions (\%opt,
 	"fList|F=s",
 	"dir|d=s@",
 	"suffix|s=s",
+	"smpl_in_name",
 	"ref|r=s",
 	"fmt=s",
 	"bed|b=s",
@@ -155,6 +156,7 @@ inputs:
     -F / --fList [file]: file with such a list of bam files (one bam per line)
     -d / --dir [dir]: directory(ies) where to find bam files (comma separated, or set several times)
     -s / --suffix [str]: suffix to add before opening bam files
+    --smpl_file_name     : extract smpl name from bam file name, not from read_group header
     -r / --ref [file]: gene annotation file (can be .gz)
     --fmt [gtf/gff3/ucsc] : gene annotation file format (ucsc <=> UCSC refGene) ; if not provided, determined from extension (txt => UCSC refGene)
     -b / --bed [file]: bed file, used to analyse depth coverage
@@ -348,6 +350,11 @@ if (@Files) {
 	}
 }
 print "\n";
+
+my $get_smpl_name_from_RG_line = 1;
+if (exists $opt{"smpl_file_name"}) {
+	$get_smpl_name_from_RG_line = 0;
+}
 
 my $refFile = "";
 if (exists $opt{"ref"}) { 
@@ -1258,7 +1265,7 @@ if ( $jobs{"with_DephFile_Required"} && !$raw_cov_file ) {
 
 	##find sample names in bam
 	##sName: name of sample in bam file ; sName2: not redundant name of sample (cat with ID if several exists)
-	if ($samT) {
+	if ($samT && $get_smpl_name_from_RG_line) {
 		my %allID;
 		foreach my $f (@Files) {
 			# @RG	ID:id	SM:sample	LB:lb	PL:Illumina	PU:pu
