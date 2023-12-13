@@ -43,7 +43,7 @@ GetOptions (\%opt,
 	"fList|F=s",
 	"dir|d=s@",
 	"suffix|s=s",
-	"smpl_in_name",
+	"smpl_file_name",
 	"ref|r=s",
 	"fmt=s",
 	"bed|b=s",
@@ -156,7 +156,7 @@ inputs:
     -F / --fList [file]: file with such a list of bam files (one bam per line)
     -d / --dir [dir]: directory(ies) where to find bam files (comma separated, or set several times)
     -s / --suffix [str]: suffix to add before opening bam files
-    --smpl_file_name     : extract smpl name from bam file name, not from read_group header
+    --smpl_file_name : extract smpl name from bam file name, not from read_group header
     -r / --ref [file]: gene annotation file (can be .gz)
     --fmt [gtf/gff3/ucsc] : gene annotation file format (ucsc <=> UCSC refGene) ; if not provided, determined from extension (txt => UCSC refGene)
     -b / --bed [file]: bed file, used to analyse depth coverage
