@@ -213,7 +213,7 @@ NC_000001.10	BestRefSeq	stop_codon	990359	990361	.	+	0	gene_id "AGRN"; transcrip
 
 sub GTF2Ids {
 
-	my ($refFile,$IDs,$chromName,$wNonCod) = @_;
+	my ($refFile, $IDs, $chromName, $wNonCod) = @_;
 
 	my $fhIn;
 	if ($refFile =~ /.gz$/) {
@@ -235,13 +235,13 @@ sub GTF2Ids {
 			%{ $targets{$id} } = %{ ${$allRefs}{"transcript"}{$id} };
 		} elsif (exists ${$allRefs}{"gene"}{$id}) {
 			foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id} }) {
-				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 				}
 			}
 		} elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
 			foreach my $nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
-				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 				}
 			}
@@ -253,21 +253,6 @@ sub GTF2Ids {
 		die "\n!! some ids not found in file: $refFile\n\t".join("\n\t",@not_found_ids)."\n";
 	}
 
-	foreach my $id (keys%targets) {
-		delete $targets{$id}{"ex_starts"};
-		@{ $targets{$id}{"ex_starts"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_starts"} };
-		delete $targets{$id}{"ex_ends"};
-		@{ $targets{$id}{"ex_ends"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_ends"} };
-		if (exists $targets{$id}{"CDS_starts"}) {
-			delete $targets{$id}{"CDS_starts"};
-			my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_starts"} };
-			$targets{$id}{"CDS_start"} = $pos[0];
-			delete $targets{$id}{"CDS_ends"};
-			@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_ends"} };
-			$targets{$id}{"CDS_end"} = $pos[-1];
-			}
-		}
-
 	return(\%targets);
 
 }
@@ -276,9 +261,9 @@ sub GTF2Ids {
 
 sub GTFfile2hash {
 
-	my($fhIn,$chromName) = @_;
+	my ($fhIn, $chromName) = @_;
 
-	my(%allRefs,%idx);
+	my (%allRefs, %idx);
 	$idx{"chr"} = 0;
 	$idx{"type"} = 2;
 	$idx{"start"} = 3;
@@ -292,7 +277,7 @@ sub GTFfile2hash {
 			my $chr = $tab[$idx{"chr"}];
 			$chr =~ s/^chr//i;
 			${$chromName}{"refId"}{$chr} = $tab[$idx{"chr"}];
-			my ($gene_id,$transcript_id,$gene_name,$biotype);
+			my ($gene_id, $transcript_id, $gene_name, $biotype);
 =pod
 feature 'transcript' not found in refseq gtf ; nor biotype or gene_name info
 			if ($tab[$idx{"type"}] eq "transcript") {
@@ -364,6 +349,23 @@ feature 'transcript' not found in refseq gtf ; nor biotype or gene_name info
 				}
 			}
 
+		}
+	}
+	# order exon ends
+	foreach my $nm (keys%{ $allRefs{"transcript"} }) {
+		my @pos = sort{$a<=>$b}keys%{ $allRefs{"transcript"}{$nm}{"ex_starts"} };
+		delete $allRefs{"transcript"}{$nm}{"ex_starts"}; # need to delete because changing the type , hash -> array
+		@{ $allRefs{"transcript"}{$nm}{"ex_starts"} } = @pos;
+		@pos = sort{$a<=>$b}keys%{ $allRefs{"transcript"}{$nm}{"ex_ends"} };
+		delete $allRefs{"transcript"}{$nm}{"ex_ends"};
+		@{ $allRefs{"transcript"}{$nm}{"ex_ends"} } = @pos;
+		if (exists $allRefs{"transcript"}{$nm}{"CDS_starts"}) {
+			@pos = sort{$a<=>$b}keys%{ $allRefs{"transcript"}{$nm}{"CDS_starts"} };
+			delete $allRefs{"transcript"}{$nm}{"CDS_starts"};
+			$allRefs{"transcript"}{$nm}{"CDS_start"} = $pos[0];
+			@pos = sort{$a<=>$b}keys%{ $allRefs{"transcript"}{$nm}{"CDS_ends"} };
+			delete $allRefs{"transcript"}{$nm}{"CDS_ends"};
+			$allRefs{"transcript"}{$nm}{"CDS_end"} = $pos[-1];
 		}
 	}
 
@@ -466,20 +468,20 @@ sub GFF2Ids {
 			if (exists ${$allRefs}{"gene"}{$id}{"2gene_id"}) {
 				my $gene_id = ${$allRefs}{"gene"}{$id}{"2gene_id"};
 				foreach my $nm (keys%{ ${$allRefs}{"gene"}{$gene_id}{"transcript"} }) {
-					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 						%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 					}
 				}
 			} else {
 				foreach my $nm (keys%{ ${$allRefs}{"gene"}{$id}{"transcript"} }) {
-					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+					if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 						%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 					}
 				}
 			}
 		} elsif (exists ${$allRefs}{"Id_noExt"}{$id}) {
 			foreach my $nm (keys%{ ${$allRefs}{"Id_noExt"}{$id} }) {
-				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
+				if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
 					%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
 				}
 			}
@@ -490,26 +492,6 @@ sub GFF2Ids {
 	if (@not_found_ids) {
 		die "\n!! some ids not found in file: $refFile\n\t".join("\n\t",@not_found_ids)."\n";
 	}
-
-	foreach my $id (keys%targets) {
-		delete $targets{$id}{"ex_starts"};
-		@{ $targets{$id}{"ex_starts"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_starts"} };
-		delete $targets{$id}{"ex_ends"};
-		@{ $targets{$id}{"ex_ends"} } = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"ex_ends"} };
-		if (exists $targets{$id}{"CDS_starts"}) {
-			delete $targets{$id}{"CDS_starts"};
-			my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_starts"} };
-			$targets{$id}{"CDS_start"} = $pos[0];
-			delete $targets{$id}{"CDS_ends"};
-			@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$id}{"CDS_ends"} };
-			$targets{$id}{"CDS_end"} = $pos[-1];
-			}
-		if (exists $targets{$id}{"gene_id"}) {
-			my $gene_id = $targets{$id}{"gene_id"};
-			if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) { $targets{$id}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}; }
-			else { $targets{$id}{"gene"} = $gene_id; }
-			}
-		}
 
 	return(\%targets);
 
@@ -598,6 +580,32 @@ sub GFFfile2hash {
 
 		}
 	}
+	# order exon ends
+	foreach my $nm (keys%{ $allRefs{"transcript"} }) {
+		my @pos = sort{$a<=>$b}keys%{ $allRefs{"transcript"}{$nm}{"ex_starts"} };
+		delete $allRefs{"transcript"}{$nm}{"ex_starts"};
+		@{ $allRefs{"transcript"}{$nm}{"ex_starts"} } = @pos;
+		@pos = sort{$a<=>$b}keys%{ $allRefs{"transcript"}{$nm}{"ex_ends"} };
+		delete $allRefs{"transcript"}{$nm}{"ex_ends"};
+		@{ $allRefs{"transcript"}{$nm}{"ex_ends"} } = @pos;
+		if (exists $allRefs{"transcript"}{$nm}{"CDS_starts"}) {
+			@pos = sort{$a<=>$b}keys%{ $allRefs{"transcript"}{$nm}{"CDS_starts"} };
+			delete $allRefs{"transcript"}{$nm}{"CDS_starts"};
+			$allRefs{"transcript"}{$nm}{"CDS_start"} = $pos[0];
+			@pos = sort{$a<=>$b}keys%{ $allRefs{"transcript"}{$nm}{"CDS_ends"} };
+			delete $allRefs{"transcript"}{$nm}{"CDS_ends"};
+			$allRefs{"transcript"}{$nm}{"CDS_end"} = $pos[-1];
+		}
+		if (exists $allRefs{"transcript"}{$nm}{"gene_id"}) {
+			my $gene_id = $allRefs{"transcript"}{$nm}{"gene_id"};
+			if (exists $allRefs{"transcript"}{$nm}{"gene"}{$gene_id}{"2gene_name"}) {
+				$allRefs{"transcript"}{$nm}{"gene"} = $allRefs{"transcript"}{$nm}{"gene"}{$gene_id}{"2gene_name"};
+			} else {
+				$allRefs{"transcript"}{$nm}{"gene"} = $gene_id;
+			}
+		}
+	}
+
 	return(\%allRefs);
 
 }
@@ -614,8 +622,9 @@ sub bed2IDs {
 
 	#@{ $RefCoord{$chr}{$start}{$end} } = [$NM1,$NM2,...]
 	my ($fhIn, %RefCoord);
-	if (!$allRefs) {
+	unless ($allRefs) {
 		print "\t\treading $refFile\n";
+		my $fhIn;
 		if ($refFile =~ /.gz$/) {
 			use IO::Zlib;
 			$fhIn = new IO::Zlib;
@@ -623,42 +632,21 @@ sub bed2IDs {
 		} else {
 			open($fhIn, "<", $refFile) or die "\n!! could not read $refFile ($!)\n";
 		}
+		if ($refFmt eq "ucsc") {
+			$allRefs = UCSCfile2hash($fhIn,$chromName);
+		} elsif ($refFmt eq "gtf") {
+			$allRefs = GTFfile2hash($fhIn,$chromName);
+		} elsif ($refFmt eq "gff3") {
+			$allRefs = GFFfile2hash($fhIn,$chromName);
+		}
+		close($fhIn);
 	}
-	if ($refFmt eq "ucsc") {
-		unless ($allRefs) { $allRefs = UCSCfile2hash($fhIn,$chromName); }
-		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
-				push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{${$allRefs}{"transcript"}{$nm}{"ex_starts"}[0]}{${$allRefs}{"transcript"}{$nm}{"ex_ends"}[-1]} }, $nm);
-			}
-		}
-	} elsif ($refFmt eq "gtf") {
-		unless ($allRefs) { $allRefs = GTFfile2hash($fhIn,$chromName); }
-		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
-				my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-				delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
-				@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
-				my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-				delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
-				@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
-				push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
-			}
-		}
-	} elsif ($refFmt eq "gff3") {
-		unless ($allRefs) { $allRefs = GFFfile2hash($fhIn,$chromName); }
-		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-			if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_starts"}) {
-				my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-				delete ${$allRefs}{"transcript"}{$nm}{"ex_starts"};
-				@{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} } = @ex_starts;
-				my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-				delete ${$allRefs}{"transcript"}{$nm}{"ex_ends"};
-				@{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} } = @ex_ends;
-				push(@{ $RefCoord{${$allRefs}{"transcript"}{$nm}{"chr"}}{$ex_starts[0]}{$ex_ends[-1]} }, $nm);
-			}
+
+	foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
+		if ($wNonCod || exists ${$allRefs}{"transcript"}{$nm}{"CDS_start"}) {
+			push(@{ $RefCoord{ ${$allRefs}{"transcript"}{$nm}{"chr"} }{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"}[0] }{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"}[-1] } }, $nm);
 		}
 	}
-	if ($fhIn) { close($fhIn); }
 
 	my %targets;
 	foreach my $chr (sort(keys%{$interval_r})) {
@@ -693,28 +681,6 @@ sub bed2IDs {
 						}
 					} else {
 						last;
-					}
-				}
-			}
-		}
-	}
-	if ($refFmt eq "gtf" || $refFmt eq "gff3") {
-		foreach my $id (keys%targets) {
-			if (exists $targets{$id}{"CDS_starts"}) {
-				my @pos = sort{$a<=>$b}keys%{ $targets{$id}{"CDS_starts"} };
-				delete $targets{$id}{"CDS_starts"};
-				$targets{$id}{"CDS_start"}= $pos[0];
-				@pos = sort{$a<=>$b}keys%{ $targets{$id}{"CDS_ends"} };
-				delete $targets{$id}{"CDS_ends"};
-				$targets{$id}{"CDS_end"} = $pos[-1];
-			}
-			if ($refFmt eq "gff3") {
-				if (exists $targets{$id}{"gene_id"}) {
-					my $gene_id = $targets{$id}{"gene_id"};
-					if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) {
-						$targets{$id}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"};
-					} else {
-						$targets{$id}{"gene"} = $gene_id;
 					}
 				}
 			}
@@ -776,57 +742,13 @@ sub refHash2Transcripts {
 	#			$targets{$nm}{"CDS_end"} = $targets{$nm}{"ex_ends"}[-1];
 	#		}
 		}
-	} elsif ($refFmt eq "gtf") {
+	} else {
 		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
 			%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
-			my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-			delete $targets{$nm}{"ex_starts"};
-			foreach (@ex_starts) { push(@{ $targets{$nm}{"ex_starts"} }, ($_-1)); }
-			my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-			delete $targets{$nm}{"ex_ends"};
-			@{ $targets{$nm}{"ex_ends"} } = @ex_ends;
-			if (exists $targets{$nm}{"CDS_starts"}) {
-				my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_starts"} };
-				delete $targets{$nm}{"CDS_starts"};
-				$targets{$nm}{"CDS_start"} = $pos[0]-1;
-				@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_ends"} };
-				delete $targets{$nm}{"CDS_ends"};
-				$targets{$nm}{"CDS_end"} = $pos[-1];
-			}
 	#		else {
 	#			$targets{$nm}{"CDS_start"} = $ex_ends[-1];
 	#			$targets{$nm}{"CDS_end"} = $ex_ends[-1];
 	#		}
-		}
-	} elsif ($refFmt eq "gff3") {
-		foreach my $nm (keys%{ ${$allRefs}{"transcript"} }) {
-			%{ $targets{$nm} } = %{ ${$allRefs}{"transcript"}{$nm} };
-			my @ex_starts = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_starts"} };
-			delete $targets{$nm}{"ex_starts"};
-			foreach (@ex_starts) { push(@{ $targets{$nm}{"ex_starts"} }, ($_-1)); }
-			my @ex_ends = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"ex_ends"} };
-			delete $targets{$nm}{"ex_ends"};
-			@{ $targets{$nm}{"ex_ends"} } = @ex_ends;
-			if (exists $targets{$nm}{"CDS_starts"}) {
-				delete $targets{$nm}{"CDS_starts"};
-				my @pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_starts"} };
-				$targets{$nm}{"CDS_start"} = $pos[0]-1;
-				delete $targets{$nm}{"CDS_ends"};
-				@pos = sort{$a<=>$b}keys%{ ${$allRefs}{"transcript"}{$nm}{"CDS_ends"} };
-				$targets{$nm}{"CDS_end"} = $pos[-1];
-			}
-	#		else {
-	#			$targets{$nm}{"CDS_start"} = $ex_ends[-1];
-	#			$targets{$nm}{"CDS_end"} = $ex_ends[-1];
-	#		}
-			if (exists ${$allRefs}{"transcript"}{$nm}{"gene_id"}) {
-				my $gene_id = ${$allRefs}{"transcript"}{$nm}{"gene_id"};
-				if (exists ${$allRefs}{"gene"}{$gene_id}{"2gene_name"}) {
-					$targets{$nm}{"gene"} = ${$allRefs}{"gene"}{$gene_id}{"2gene_name"};
-				} else {
-					$targets{$nm}{"gene"} = $gene_id;
-				}
-			}
 		}
 	}
 
@@ -843,297 +765,304 @@ sub refHash2Transcripts {
 
 sub Id2Coord {
 
-my($IDinRef,$len5,$len3,$upstream,$downstream,$noOverlap,$mergeBedFromId,$wUTR,$id2Bed,$chromOrder_r,$chromName_r) = @_;
+	my ($IDinRef,$len5,$len3,$upstream,$downstream,$noOverlap,$mergeBedFromId,$wUTR,$id2Bed,$chromOrder_r,$chromName_r) = @_;
 
-my(%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%hashBed,%printBed);
+	my (%NMgene,%geneNM,%NMchr,%NMsens,%NMstartCod,%NMendCod,%NM_Ex,%Regions,%gOK,%hashBed,%printBed);
 
-foreach my $NM (keys%{$IDinRef}) {
-	my $chr = ${$IDinRef}{$NM}{"chr"};
-	my $gene = ${$IDinRef}{$NM}{"gene"};
+	foreach my $NM (keys%{$IDinRef}) {
+		my $chr = ${$IDinRef}{$NM}{"chr"};
+		my $gene = ${$IDinRef}{$NM}{"gene"};
 
-	## if same gene name on different chr? add -chr. at the end of this gene
-#	if ( (exists $geneNM{$gene}) && ($chr ne $NMchr{$geneNM{$gene}[0]}) ) { $gene .= "-$chr"; }
-	##if same transcript on different chr ? skip this one
-#	if (exists $NMchr{$NM}) {
-#		if ($chr =~ /^$NMchr{$NM}.+/) { $ok = 0; }
-#		unless ($NMchr{$NM} =~ /$chr.+/) { $ok = 0; }
-#		}
+		## if same gene name on different chr? add -chr. at the end of this gene
+	#	if ( (exists $geneNM{$gene}) && ($chr ne $NMchr{$geneNM{$gene}[0]}) ) { $gene .= "-$chr"; }
+		##if same transcript on different chr ? skip this one
+	#	if (exists $NMchr{$NM}) {
+	#		if ($chr =~ /^$NMchr{$NM}.+/) { $ok = 0; }
+	#		unless ($NMchr{$NM} =~ /$chr.+/) { $ok = 0; }
+	#	}
 
-	$NMgene{$NM} = $gene;
-	push(@{ $geneNM{$gene} }, $NM);
-	$NMchr{$NM} = $chr;
-	$NMsens{$NM} = ${$IDinRef}{$NM}{"strand"};
-	my @Starts = @{ ${$IDinRef}{$NM}{"ex_starts"} };
-	my @Ends = @{ ${$IDinRef}{$NM}{"ex_ends"} };
-	if (exists ${$IDinRef}{$NM}{"CDS_start"}) {
-		$NMstartCod{$NM} = ${$IDinRef}{$NM}{"CDS_start"};
-		$NMendCod{$NM} = ${$IDinRef}{$NM}{"CDS_end"};
+		$NMgene{$NM} = $gene;
+		push(@{ $geneNM{$gene} }, $NM);
+		$NMchr{$NM} = $chr;
+		$NMsens{$NM} = ${$IDinRef}{$NM}{"strand"};
+		my @Starts = @{ ${$IDinRef}{$NM}{"ex_starts"} };
+		my @Ends = @{ ${$IDinRef}{$NM}{"ex_ends"} };
+		if (exists ${$IDinRef}{$NM}{"CDS_start"}) {
+			$NMstartCod{$NM} = ${$IDinRef}{$NM}{"CDS_start"};
+			$NMendCod{$NM} = ${$IDinRef}{$NM}{"CDS_end"};
+		} else {
+			if (!$wUTR) { next; }		#next if non coding transcript and $wUTR not wanted
+			$NMstartCod{$NM} = $Ends[-1];
+			$NMendCod{$NM} = $Ends[-1];
 		}
-	else {
-		if (!$wUTR) { next; }		#next if non coding transcript and $wUTR not wanted
-		$NMstartCod{$NM} = $Ends[-1];
-		$NMendCod{$NM} = $Ends[-1];
+
+		my(%interval,$firstCodingEx,$lastCodingEx,$minLen,$plusLen,$exonNb); # %interval in 1-based coord
+		if ($NMsens{$NM} eq "+") {
+			$minLen = $len5; $plusLen = $len3;
+		} else {
+			$minLen = $len3; $plusLen = $len5;
 		}
 
-	my(%interval,$firstCodingEx,$lastCodingEx,$minLen,$plusLen,$exonNb); # %interval in 1-based coord
-	if ($NMsens{$NM} eq "+") { $minLen = $len5; $plusLen = $len3; }
-	else { $minLen = $len3; $plusLen = $len5; }
+		#expand exons +/-length:
+		if ($wUTR) {
 
-	#expand exons +/-length:
-	if ($wUTR) {
-
-		##intervals
-		if ($upstream) { $interval{($Starts[0]-$upstream)} = $Ends[0]+$plusLen; }
-		else { $interval{($Starts[0]-$minLen)} = $Ends[0]+$plusLen; }
-		for (my $i=1;$i<$#Starts;$i++) {
-			$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
+			##intervals
+			if ($upstream) {
+				$interval{($Starts[0]-$upstream)} = $Ends[0]+$plusLen;
+			} else {
+				$interval{($Starts[0]-$minLen)} = $Ends[0]+$plusLen;
 			}
-		if ($downstream) { $interval{($Starts[-1]-$minLen)} = $Ends[-1]+$downstream; }
-		else { $interval{($Starts[-1]-$minLen)} = $Ends[-1]+$plusLen; }
+			for (my $i=1;$i<$#Starts;$i++) {
+				$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
+			}
+			if ($downstream) {
+				$interval{($Starts[-1]-$minLen)} = $Ends[-1]+$downstream;
+			} else {
+				$interval{($Starts[-1]-$minLen)} = $Ends[-1]+$plusLen;
+			}
 
-		##bed
-		if ($id2Bed) {
-			if ($NMsens{$NM} eq "+" && $upstream) {
-				$printBed{$chr}{($Starts[0]-1-$upstream)}{($Starts[0]-1-$minLen)}{$gene}{$NM} = "upstream";
+			##bed
+			if ($id2Bed) {
+				if ($NMsens{$NM} eq "+" && $upstream) {
+					$printBed{$chr}{($Starts[0]-1-$upstream)}{($Starts[0]-1-$minLen)}{$gene}{$NM} = "upstream";
+				} elsif ($NMsens{$NM} eq "-" && $downstream) {
+					$printBed{$chr}{($Starts[0]-1-$downstream)}{($Starts[0]-1-$minLen)}{$gene}{$NM} = "downstream";
 				}
-			elsif ($NMsens{$NM} eq "-" && $downstream) {
-				$printBed{$chr}{($Starts[0]-1-$downstream)}{($Starts[0]-1-$minLen)}{$gene}{$NM} = "downstream";
+				for (my $i=0;$i<scalar(@Starts);$i++) {
+					if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-1-$minLen)) {
+						my $ecart  = ($Starts[$i+1]-1-$Ends[$i]) / 2;
+						$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
+						$Starts[$i+1] = int($Starts[$i+1]-1-$ecart+$minLen);
+					}
+					if ($NMsens{$NM} eq "+") {
+						$exonNb = ($i+1);
+					} else {
+						$exonNb = (scalar(@Starts)-$i);
+					}
+					$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+					if (($Ends[$i] < $NMstartCod{$NM}) || (($Starts[$i]-1) > $NMendCod{$NM})) {
+						$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} .= ".NC";
+					}
 				}
+				if ($NMsens{$NM} eq "+" && $downstream) {
+					$printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$downstream)}{$gene}{$NM} = "downstream";
+				} elsif ($NMsens{$NM} eq "-" && $upstream) {
+					$printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$upstream)}{$gene}{$NM} = "upstream";
+				}
+			}
+			
+		} else {
+
+			##intervals
 			for (my $i=0;$i<scalar(@Starts);$i++) {
-				if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-1-$minLen)) {
-					my $ecart  = ($Starts[$i+1]-1-$Ends[$i]) / 2;
-					$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
-					$Starts[$i+1] = int($Starts[$i+1]-1-$ecart+$minLen);
-					}
-				if ($NMsens{$NM} eq "+") { $exonNb = ($i+1); }
-				else { $exonNb = (scalar(@Starts)-$i); }
-				$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-				if (($Ends[$i] < $NMstartCod{$NM}) || (($Starts[$i]-1) > $NMendCod{$NM})) {
-					$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} .= ".NC";
-					}
-				}
-			if ($NMsens{$NM} eq "+" && $downstream) {
-				$printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$downstream)}{$gene}{$NM} = "downstream";
-				}
-			elsif ($NMsens{$NM} eq "-" && $upstream) {
-				$printBed{$chr}{($Ends[-1]+$plusLen)}{($Ends[-1]+$upstream)}{$gene}{$NM} = "upstream";
-				}
-			}
-		}
-
-	else {
-
-		##intervals
-		for (my $i=0;$i<scalar(@Starts);$i++) {
-			if ($Ends[$i] < $NMstartCod{$NM}) { next; }
-			elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
-				$firstCodingEx = $i;
-				if ($Ends[$i] > $NMendCod{$NM}) {
-					$interval{($NMstartCod{$NM}-$minLen)} = $NMendCod{$NM}+$plusLen;
-					}
-				else {
-					$interval{($NMstartCod{$NM}-$minLen)} = $Ends[$i]+$plusLen;
-					}
-				}
-			elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
-				if ($Ends[$i] < $NMendCod{$NM}) {
-					$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
-					}
-				else {
-					$lastCodingEx = $i;
-					$interval{($Starts[$i]-$minLen)} = $NMendCod{$NM}+$plusLen;
-					}
-				}
-			else { last; }
-			}
-
-		##bed
-		if ($id2Bed) {
-			for (my $i=0;$i<scalar(@Starts);$i++) {
-				if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-1-$minLen)) {
-					my $ecart  = ($Starts[$i+1]-1-$Ends[$i]) / 2;
-					$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
-					$Starts[$i+1] = int($Starts[$i+1]-1-$ecart+$minLen);
-					}
-				if ($NMsens{$NM} eq "+") { $exonNb = ($i+1); }
-				else { $exonNb = (scalar(@Starts)-$i); }
-				if ($Ends[$i] < $NMstartCod{$NM}) { next; }
-				elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
+				if ($Ends[$i] < $NMstartCod{$NM}) {
+					next;
+				} elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
 					$firstCodingEx = $i;
 					if ($Ends[$i] > $NMendCod{$NM}) {
-						$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-						}
-					else {
-						$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-						}
+						$interval{($NMstartCod{$NM}-$minLen)} = $NMendCod{$NM}+$plusLen;
+					} else {
+						$interval{($NMstartCod{$NM}-$minLen)} = $Ends[$i]+$plusLen;
 					}
-				elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
+				} elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
 					if ($Ends[$i] < $NMendCod{$NM}) {
-						$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-						}
-					else {
+						$interval{($Starts[$i]-$minLen)} = $Ends[$i]+$plusLen;
+					} else {
 						$lastCodingEx = $i;
-						$printBed{$chr}{($Starts[$i]-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
-						}
+						$interval{($Starts[$i]-$minLen)} = $NMendCod{$NM}+$plusLen;
 					}
-				else { last; }
+				} else {
+					last;
+				}
+			}
+
+			##bed
+			if ($id2Bed) {
+				for (my $i=0;$i<scalar(@Starts);$i++) {
+					if ($noOverlap && $Starts[$i+1] && ($Ends[$i]+$plusLen) > ($Starts[$i+1]-1-$minLen)) {
+						my $ecart  = ($Starts[$i+1]-1-$Ends[$i]) / 2;
+						$Ends[$i] = int($Ends[$i]+$ecart-$plusLen);
+						$Starts[$i+1] = int($Starts[$i+1]-1-$ecart+$minLen);
+					}
+					if ($NMsens{$NM} eq "+") {
+						$exonNb = ($i+1);
+					} else {
+						$exonNb = (scalar(@Starts)-$i);
+					}
+					if ($Ends[$i] < $NMstartCod{$NM}) {
+						next;
+					} elsif ( ($Ends[$i] >= $NMstartCod{$NM}) && ($Starts[$i] <= $NMstartCod{$NM}) ) {
+						$firstCodingEx = $i;
+						if ($Ends[$i] > $NMendCod{$NM}) {
+							$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+						} else {
+							$printBed{$chr}{($NMstartCod{$NM}-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+						}
+					} elsif ( ($Starts[$i] > $NMstartCod{$NM}) && ($Starts[$i] <= $NMendCod{$NM}) ) {
+						if ($Ends[$i] < $NMendCod{$NM}) {
+							$printBed{$chr}{($Starts[$i]-1-$minLen)}{($Ends[$i]+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+						} else {
+							$lastCodingEx = $i;
+							$printBed{$chr}{($Starts[$i]-1-$minLen)}{($NMendCod{$NM}+$plusLen)}{$gene}{$NM} = "exon$exonNb";
+						}
+					} else {
+						last;
+					}
 				}
 			}
 		}
 
-	#eventually merges overlapping intervals of regions
-	#associates real exons to intervals
-	my @Starts2 = sort{$a<=>$b}(keys%interval);
-	my %interval2;
-	my $start = $Starts2[0];
-	my $end = $interval{$start};
-	if ($wUTR) {
-		$NM_Ex{$NM}{$start}{$Starts[0]} = $Ends[0];
-		for (my $i=1;$i<scalar(@Starts2);$i++) {
-			if ($Starts2[$i] <= $end) { 
-				$end = $interval{$Starts2[$i]}; #unless ($Starts[$i]) {print "$NM\n"};
-				$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
-				}
-			else { 
-				$interval2{$start} = $end;
-				$start = $Starts2[$i];
-				$end = $interval{$start};
-				$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
+		#eventually merges overlapping intervals of regions
+		#associates real exons to intervals
+		my @Starts2 = sort{$a<=>$b}(keys%interval);
+		my %interval2;
+		my $start = $Starts2[0];
+		my $end = $interval{$start};
+		if ($wUTR) {
+			$NM_Ex{$NM}{$start}{$Starts[0]} = $Ends[0];
+			for (my $i=1;$i<scalar(@Starts2);$i++) {
+				if ($Starts2[$i] <= $end) { 
+					$end = $interval{$Starts2[$i]}; #unless ($Starts[$i]) {print "$NM\n"};
+					$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
+				} else { 
+					$interval2{$start} = $end;
+					$start = $Starts2[$i];
+					$end = $interval{$start};
+					$NM_Ex{$NM}{$start}{$Starts[$i]} = $Ends[$i];
 				}
 			}
-		$interval2{$start} = $end;
-		$NM_Ex{$NM}{$start}{$Starts[-1]} = $Ends[-1];
+			$interval2{$start} = $end;
+			$NM_Ex{$NM}{$start}{$Starts[-1]} = $Ends[-1];
+		} else {
+			$NM_Ex{$NM}{$start}{$NMstartCod{$NM}} = $Ends[$firstCodingEx];
+			for (my $i=1;$i<scalar(@Starts2);$i++) {
+				if ($Starts2[$i] <= $end) { 
+					$end = $interval{$Starts2[$i]}; 
+					$NM_Ex{$NM}{$start}{$Starts[$i+$firstCodingEx]} = $Ends[$i+$firstCodingEx];
+				} else { 
+					$interval2{$start} = $end;
+					$start = $Starts2[$i];
+					$end = $interval{$start};
+					$NM_Ex{$NM}{$start}{$Starts[$i+$firstCodingEx]} = $Ends[$i+$firstCodingEx];
+				}
+			}
+			$interval2{$start} = $end;
+			if ($lastCodingEx) {
+				$NM_Ex{$NM}{$start}{$Starts[$lastCodingEx]} = $NMendCod{$NM};
+			}
+			#else { print "$NM\t $firstCodingEx\n"; exit;}
 		}
-	else {
-		$NM_Ex{$NM}{$start}{$NMstartCod{$NM}} = $Ends[$firstCodingEx];
-		for (my $i=1;$i<scalar(@Starts2);$i++) {
-			if ($Starts2[$i] <= $end) { 
-				$end = $interval{$Starts2[$i]}; 
-				$NM_Ex{$NM}{$start}{$Starts[$i+$firstCodingEx]} = $Ends[$i+$firstCodingEx];
+		%{ $Regions{$chr}{$NM} } = %interval2;
+		foreach (keys%interval2) {
+			if ( exists $hashBed{$chr}{$_} ) {
+				if ( $interval2{$_} > $hashBed{$chr}{$_}) {
+					$hashBed{$chr}{$_} = $interval2{$_};
 				}
-			else { 
-				$interval2{$start} = $end;
-				$start = $Starts2[$i];
-				$end = $interval{$start};
-				$NM_Ex{$NM}{$start}{$Starts[$i+$firstCodingEx]} = $Ends[$i+$firstCodingEx];
-				}
-			}
-		$interval2{$start} = $end;
-		if ($lastCodingEx) {
-			$NM_Ex{$NM}{$start}{$Starts[$lastCodingEx]} = $NMendCod{$NM};
-			}
-		#else { print "$NM\t $firstCodingEx\n"; exit;}
-		}
-	%{ $Regions{$chr}{$NM} } = %interval2;
-	foreach (keys%interval2) {
-		if ( exists $hashBed{$chr}{$_} ) {
-			if ( $interval2{$_} > $hashBed{$chr}{$_}) {
+			} else {
 				$hashBed{$chr}{$_} = $interval2{$_};
-				}
-			}
-		else {
-			$hashBed{$chr}{$_} = $interval2{$_};
 			}
 		}
 	}
 
 
-if ($id2Bed) {
-	my @allChrom = ();
-	if (@{$chromOrder_r}) {
-		foreach my $chr (@{$chromOrder_r}) {
-			if (exists $printBed{$chr}) { push(@allChrom,$chr); }
+	if ($id2Bed) {
+		my @allChrom = ();
+		if (@{$chromOrder_r}) {
+			foreach my $chr (@{$chromOrder_r}) {
+				if (exists $printBed{$chr}) { push(@allChrom,$chr); }
 			}
-		}
-	else {
-		foreach my $chr (sort(keys%printBed)) { push(@allChrom,$chr); }
+		} else {
+			foreach my $chr (sort(keys%printBed)) { push(@allChrom,$chr); }
 		}
 
-	if (exists ${$chromName_r}{"fasta"}) { %{ ${$chromName_r}{"bed"} } = %{ ${$chromName_r}{"fasta"} }; }
-	else { %{ ${$chromName_r}{"bed"} } = %{ ${$chromName_r}{"refId"} }; }
+		if (exists ${$chromName_r}{"fasta"}) {
+			%{ ${$chromName_r}{"bed"} } = %{ ${$chromName_r}{"fasta"} };
+		} else {
+			%{ ${$chromName_r}{"bed"} } = %{ ${$chromName_r}{"refId"} };
+		}
 
-	open(my $fh, ">", "$id2Bed") || die "can't create $id2Bed ($!)\n";
-	if ($mergeBedFromId) {
-		foreach my $chr (@allChrom) {
-			#exons with same start
-			my %printBed2 = ();
-			foreach my $start (keys%{ $printBed{$chr} }) {
-				my @ends = sort{$a<=>$b}keys%{ $printBed{$chr}{$start} };
-				$printBed2{$start}{"end"} = $ends[-1];
-				foreach my $end (keys%{ $printBed{$chr}{$start} }) {
-					foreach my $gene (keys%{ $printBed{$chr}{$start}{$end} }) {
-						foreach my $NM (keys%{ $printBed{$chr}{$start}{$end}{$gene} }) {
-							push(@{ $printBed2{$start}{"info"}{$gene}{$NM} }, $printBed{$chr}{$start}{$end}{$gene}{$NM});
+		open(my $fh, ">", "$id2Bed") || die "can't create $id2Bed ($!)\n";
+		if ($mergeBedFromId) {
+			foreach my $chr (@allChrom) {
+				#exons with same start
+				my %printBed2 = ();
+				foreach my $start (keys%{ $printBed{$chr} }) {
+					my @ends = sort{$a<=>$b}keys%{ $printBed{$chr}{$start} };
+					$printBed2{$start}{"end"} = $ends[-1];
+					foreach my $end (keys%{ $printBed{$chr}{$start} }) {
+						foreach my $gene (keys%{ $printBed{$chr}{$start}{$end} }) {
+							foreach my $NM (keys%{ $printBed{$chr}{$start}{$end}{$gene} }) {
+								push(@{ $printBed2{$start}{"info"}{$gene}{$NM} }, $printBed{$chr}{$start}{$end}{$gene}{$NM});
 							}
 						}
 					}	
 				}
-			#overlapping exons
-			my @Starts = sort{$a<=>$b}(keys%printBed2);
-			my $start = $Starts[0];
-			my $end = $printBed2{$start}{"end"};
-			my %printBed3 = ();
-			foreach my $gene (keys%{ $printBed2{$start}{"info"} }) {
-				foreach my $NM (keys%{ $printBed2{$start}{"info"}{$gene} }) {
-					push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$start}{"info"}{$gene}{$NM} });
+				#overlapping exons
+				my @Starts = sort{$a<=>$b}(keys%printBed2);
+				my $start = $Starts[0];
+				my $end = $printBed2{$start}{"end"};
+				my %printBed3 = ();
+				foreach my $gene (keys%{ $printBed2{$start}{"info"} }) {
+					foreach my $NM (keys%{ $printBed2{$start}{"info"}{$gene} }) {
+						push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$start}{"info"}{$gene}{$NM} });
 					}
 				}
-			for (my $i=1;$i<scalar(@Starts);$i++) {
-				if ($Starts[$i] <= $end) {
-					foreach my $gene (keys%{ $printBed2{$Starts[$i]}{"info"} }) {
-						foreach my $NM (keys%{ $printBed2{$Starts[$i]}{"info"}{$gene} }) {
-							push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$Starts[$i]}{"info"}{$gene}{$NM} });
+				for (my $i=1;$i<scalar(@Starts);$i++) {
+					if ($Starts[$i] <= $end) {
+						foreach my $gene (keys%{ $printBed2{$Starts[$i]}{"info"} }) {
+							foreach my $NM (keys%{ $printBed2{$Starts[$i]}{"info"}{$gene} }) {
+								push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$Starts[$i]}{"info"}{$gene}{$NM} });
 							}
 						}
-					if ($printBed2{$Starts[$i]}{"end"} > $end)
-						{ $end = $printBed2{$Starts[$i]}{"end"}; }
-					else { next; }
-					}
-				else {
-					printID2BedMerge($fh,${$chromName_r}{"bed"}{$chr},$start,$end,\%printBed3);
-					%printBed3 = ();
-					foreach my $gene (keys%{ $printBed2{$Starts[$i]}{"info"} }) {
-						foreach my $NM (keys%{ $printBed2{$Starts[$i]}{"info"}{$gene} }) {
-							push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$Starts[$i]}{"info"}{$gene}{$NM} });
+						if ($printBed2{$Starts[$i]}{"end"} > $end) {
+							$end = $printBed2{$Starts[$i]}{"end"};
+						} else {
+							next;
+						}
+					} else {
+						printID2BedMerge($fh,${$chromName_r}{"bed"}{$chr},$start,$end,\%printBed3);
+						%printBed3 = ();
+						foreach my $gene (keys%{ $printBed2{$Starts[$i]}{"info"} }) {
+							foreach my $NM (keys%{ $printBed2{$Starts[$i]}{"info"}{$gene} }) {
+								push(@{ $printBed3{$gene}{$NM} }, @{ $printBed2{$Starts[$i]}{"info"}{$gene}{$NM} });
 							}
 						}
-					$start = $Starts[$i];
-					$end = $printBed2{$start}{"end"};
+						$start = $Starts[$i];
+						$end = $printBed2{$start}{"end"};
 					}
 				}
-			printID2BedMerge($fh,${$chromName_r}{"bed"}{$chr},$start,$end,\%printBed3);
+				printID2BedMerge($fh,${$chromName_r}{"bed"}{$chr},$start,$end,\%printBed3);
 			}
-		}
-
-	else {
-		foreach my $chr (@allChrom) {
-			foreach my $start (sort{$a<=>$b}keys%{ $printBed{$chr} }) {
-				foreach my $end (sort{$a<=>$b}keys%{ $printBed{$chr}{$start} }) {
-					my $info="";
-					foreach my $gene (sort(keys%{ $printBed{$chr}{$start}{$end} })) {
-						$info .= "$gene:";
-						foreach my $NM (sort(keys%{ $printBed{$chr}{$start}{$end}{$gene} })) {
-							$info .= "$NM:".$printBed{$chr}{$start}{$end}{$gene}{$NM}.",";
+	
+		} else {
+			foreach my $chr (@allChrom) {
+				foreach my $start (sort{$a<=>$b}keys%{ $printBed{$chr} }) {
+					foreach my $end (sort{$a<=>$b}keys%{ $printBed{$chr}{$start} }) {
+						my $info="";
+						foreach my $gene (sort(keys%{ $printBed{$chr}{$start}{$end} })) {
+							$info .= "$gene:";
+							foreach my $NM (sort(keys%{ $printBed{$chr}{$start}{$end}{$gene} })) {
+								$info .= "$NM:".$printBed{$chr}{$start}{$end}{$gene}{$NM}.",";
 							}
+							chop $info;
+							$info .= ";";
+						}
 						chop $info;
-						$info .= ";";
-						}
-					chop $info;
-					print $fh ${$chromName_r}{"bed"}{$chr}."\t$start\t$end\t$info\n";
+						print $fh ${$chromName_r}{"bed"}{$chr}."\t$start\t$end\t$info\n";
 					}	
 				}
 			}
 		}
 
-	close $fh;
+		close $fh;
 	}
 
-my %Genes;
-foreach (keys%geneNM) { 
-	$Genes{$_} = 1;
-	@{ $geneNM{$_} } = sort@{ $geneNM{$_} };
+	my %Genes;
+	foreach (keys%geneNM) { 
+		$Genes{$_} = 1;
+		@{ $geneNM{$_} } = sort@{ $geneNM{$_} };
 	}
-return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%hashBed);
+	return (\%geneNM,\%NMgene,\%NMchr,\%NMsens,\%NMstartCod,\%NMendCod,\%Regions,\%NM_Ex,\%Genes,\%hashBed);
 
 }
 

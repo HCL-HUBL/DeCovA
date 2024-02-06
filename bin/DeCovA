@@ -2504,6 +2504,7 @@ if ($jobs{"covPlot"} || $jobs{"interSplot"}) {
 #Job 6: CNVs
 
 my($cnv_Patients_r,$cnv_Results_r);
+
 if ($jobs{"CNV"}) {
 
 	use DeCovA::CNV_tool;
@@ -2511,10 +2512,10 @@ if ($jobs{"CNV"}) {
 	print "\n\n####\n\nCNV analysis\n\n####\n\n";
 
 	if ($bed_cov_file) {
+
 		DeCovA::CNV_tool::CNV_reAnalyse($bed_cov_file,$outdir,$fichier_sexe,\%CNV_opt);
-		}
-	
-	else {
+
+	} else {
 	
 		mkdir "$outdir/CNV_analysis";
 
@@ -2530,7 +2531,7 @@ if ($jobs{"CNV"}) {
 			print "\n\tgetting genes/transcripts overlapping bed CNV results\n";
 			unless ($ALLinRef) {
 				$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
-				}
+			}
 			my(%CNV_IDs,%CNV_bed,%CNV_Genes);
 			open (my $fh, ">", "$outdir/allCNVs.bed") || die "\n!!!\tcan't create file $outdir/allCNVs.bed ($!)\n";
 			##cnv_Results{$Chrom}{Start}{End} = "DEL/DUP	foldRatio"
@@ -2543,14 +2544,13 @@ if ($jobs{"CNV"}) {
 							if (exists $CNV_bed{$file}{$chr}{($start+1)}) {
 								if ($end > $CNV_bed{$file}{$chr}{($start+1)}) {
 									$CNV_bed{$file}{$chr}{($start+1)} = $end;
-									}
 								}
-							else {
+							} else {
 								$CNV_bed{$file}{$chr}{($start+1)} = $end;
-								}
 							}
 						}
 					}
+				}
 				my $href = mergeIntervals(\%{ $CNV_bed{$file} });
 				%{ $CNV_bed{$file} } = %{$href};
 				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$wNonCod);
@@ -2559,21 +2559,21 @@ if ($jobs{"CNV"}) {
 					my $chr = ${CNV_IDs}{$file}{$_}{"chr"};
 					if (exists $Regions{"raw"}->{$chr}{$gene}) {
 						$CNV_Genes{$file}{$gene} = 1;
-						}
 					}
 				}
+			}
 			close $fh;
 			$CNV_bed{"allFiles"} = DeCovA::bedProcessing::readBed("$outdir/allCNVs.bed");
 			unlink "$outdir/allCNVs.bed";
-			mergeIntervalsInRef($CNV_bed{"allFiles"});
+			mergeIntervalsInRef($CNV_bed{"allFiles"});			
 			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName,$wNonCod);
 			foreach (keys%{ ${CNV_IDs}{"allFiles"} }) {
 				my $gene = ${CNV_IDs}{"allFiles"}{$_}{"gene"};
 				my $chr = ${CNV_IDs}{"allFiles"}{$_}{"chr"};
 				if (exists $Regions{"raw"}->{$chr}{$gene}) {
 					$CNV_Genes{"allFiles"}{$gene} = 1;
-					}
 				}
+			}
 
 			## change cov file with $Patients{$file}{"Ref_Profondeur_Patient"}
 			my %covIdx2File;	#$covIdx{$file} = $i;
@@ -2592,9 +2592,9 @@ if ($jobs{"CNV"}) {
 					chop $line2;
 					print $fhOut $line2."\n";
 					$l++;
-					}
-				close $fhIn; close $fhOut;
 				}
+				close $fhIn; close $fhOut;
+			}
 
 			## compute as in graphs by genes
 			my(%CNV_NMdepth,%CNV_maxCov);
@@ -2613,13 +2613,14 @@ if ($jobs{"CNV"}) {
 					## %NMdepth: key = $file, value = %(key = $NM, value = %( key = $ex, value = @(cov foreach ordered bp of exon) ) )
 					## @{ $CNV_NMdepth{$gene}->{$file}{$eachReg} } = [ depth foreach ordered bp of Reg ]
 					$CNV_NMdepth{$gene}->{$file} = DeCovA::covByRegion::depthLine(\%{ $Regions{"raw"}->{$chr}{$gene} },\%{ $allDepth_r->{$file} });
-					}
+				}
 
-				if ($maxGr) { $CNV_maxCov{$gene} = $maxGr; }
-				else {
+				if ($maxGr) {
+					$CNV_maxCov{$gene} = $maxGr;
+				} else {
 					@hashSub = DeCovA::covByRegion::maxCov(\@Files,$CNV_NMdepth{$gene},\%{ $Regions{"rev"}->{$gene} }); 
 					$CNV_maxCov{$gene} = $hashSub[0];
-					}
+				}
 
 				##reverse depth coord if sens "-"
 				if ($Rev && ($sens eq "-")) {
@@ -2629,11 +2630,11 @@ if ($jobs{"CNV"}) {
 						my %tmp;
 						foreach my $ex (sort{$a<=>$b}(keys%{ $CNV_NMdepth{$gene}->{$file} })) {
 							@{ $tmp{($nEx-$ex)} } = reverse@{ $CNV_NMdepth{$gene}->{$file}{$ex} };
-							}
-						%{ $CNV_NMdepth{$gene}->{$file} } = %tmp;
 						}
+						%{ $CNV_NMdepth{$gene}->{$file} } = %tmp;
 					}
 				}
+			}
 
 			## print graphs
 			foreach my $file (@Files) {
@@ -2643,14 +2644,14 @@ if ($jobs{"CNV"}) {
 					my $chr = ${$NMchr_r}{$NMs[0]};
 					my $sens = ${$NMsens_r}{$NMs[0]};
 					DeCovA::geneGraph::CNVgraphByGene($file,$suff,"$outdir/CNV_analysis/$sName2{$file}",$gene,$sens,$maxGr,$Rev,$chr,$CNV_maxCov{$gene},$pThreshold,$NMlength{$gene},\@Files,\%sName2,$Regions{"raw"},$Regions{"rev"},\@NMs,$NM_Ex{"rev"},$RegBed{"rev"},$intron{"rev"},$UTR{"rev"},$Cod{"rev"},$CNV_NMdepth{$gene});
-					}
 				}
-
 			}
 
 		}
-	
+
 	}
+	
+}
 
 
 ###################
