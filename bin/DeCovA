@@ -1500,15 +1500,16 @@ if ($jobs{"keepBed"}
 
 
 ## if ID list provided : parse lines of RefSeq matching each $id of @ID in $IDinRef ref hash
-my($IDinRef,$ALLinRef);
+my $IDinRef = {};
+my $ALLinRef = {};
 if (@IDs) {
 	print "\n\n####\n\nselecting lines within $refFile matching provided gene/transcript IDs\n\n####\n";
 	if ($refFmt eq "ucsc") {
-		$IDinRef = DeCovA::refIDs::UCSC2Ids($refFile,\@IDs,\%chromName,$wNonCod);
+		DeCovA::refIDs::UCSC2Ids($IDinRef, $ALLinRef, $refFile, \@IDs, \%chromName, $wNonCod);
 	} elsif ($refFmt eq "gtf") {
-		$IDinRef = DeCovA::refIDs::GTF2Ids($refFile,\@IDs,\%chromName,$wNonCod);
+		DeCovA::refIDs::GTF2Ids($IDinRef, $ALLinRef, $refFile, \@IDs, \%chromName, $wNonCod);
 	} elsif ($refFmt eq "gff3") {
-		$IDinRef = DeCovA::refIDs::GFF2Ids($refFile,\@IDs,\%chromName,$wNonCod);
+		DeCovA::refIDs::GFF2Ids($IDinRef, $ALLinRef, $refFile, \@IDs, \%chromName, $wNonCod);
 	}
 }
 
@@ -1537,9 +1538,9 @@ if ($bedFile) {
 			my $ref_0based =  DeCovA::refIDs::refHash2Transcripts($IDinRef,$refFmt);
 			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
 		} else {
-			$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
+			DeCovA::refIDs::ref2Hash($ALLinRef, $refFile, $refFmt, \%chromName);
 			my $ref_0based =  DeCovA::refIDs::refHash2Transcripts($ALLinRef,$refFmt);
-			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
+			DeCovA::bedProcessing::reAnnotBed3($currentBed, \%reAnnotBed, $ref_0based, \@chromOrder, \%chromName, $wNonCod);
 		}
 		unless ($currentBed eq $bedFile) { unlink $currentBed; }
 		$currentBed = $reAnnotBed{"file"};
@@ -1608,7 +1609,6 @@ if ( $jobs{"with_gene_coordinates_required"} || (@IDs && !$bedFile) ) {
 	## if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
 	unless ($IDinRef) {
 		$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$mergedBed_Intervals,\%chromName,$wNonCod);
-		#undef $ALLinRef;
 	}
 
 	## for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
@@ -2529,8 +2529,8 @@ if ($jobs{"CNV"}) {
 
 			## get transcripts and genes overlapping bed CNV results
 			print "\n\tgetting genes/transcripts overlapping bed CNV results\n";
-			unless ($ALLinRef) {
-				$ALLinRef = DeCovA::refIDs::ref2Hash($refFile,$refFmt,\%chromName);
+			unless (%{$ALLinRef}) {
+				DeCovA::refIDs::ref2Hash($ALLinRef, $refFile, $refFmt, \%chromName);
 			}
 			my(%CNV_IDs,%CNV_bed,%CNV_Genes);
 			open (my $fh, ">", "$outdir/allCNVs.bed") || die "\n!!!\tcan't create file $outdir/allCNVs.bed ($!)\n";
@@ -2551,9 +2551,11 @@ if ($jobs{"CNV"}) {
 						}
 					}
 				}
-				my $href = mergeIntervals(\%{ $CNV_bed{$file} });
-				%{ $CNV_bed{$file} } = %{$href};
-				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$wNonCod);
+				#my $href = mergeIntervals(\%{ $CNV_bed{$file} });
+				#%{ $CNV_bed{$file} } = %{$href};
+				#$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$wNonCod);
+				mergeIntervalsInRef($CNV_bed{$file});
+				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef, $refFile, $refFmt, $CNV_bed{$file}, \%chromName, $wNonCod);
 				foreach (keys%{ ${CNV_IDs}{$file} }) {
 					my $gene = ${CNV_IDs}{$file}{$_}{"gene"};
 					my $chr = ${CNV_IDs}{$file}{$_}{"chr"};
@@ -2566,7 +2568,7 @@ if ($jobs{"CNV"}) {
 			$CNV_bed{"allFiles"} = DeCovA::bedProcessing::readBed("$outdir/allCNVs.bed");
 			unlink "$outdir/allCNVs.bed";
 			mergeIntervalsInRef($CNV_bed{"allFiles"});			
-			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$CNV_bed{"allFiles"},\%chromName,$wNonCod);
+			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef, $refFile, $refFmt, $CNV_bed{"allFiles"}, \%chromName, $wNonCod);
 			foreach (keys%{ ${CNV_IDs}{"allFiles"} }) {
 				my $gene = ${CNV_IDs}{"allFiles"}{$_}{"gene"};
 				my $chr = ${CNV_IDs}{"allFiles"}{$_}{"chr"};
@@ -2748,7 +2750,7 @@ foreach my $chr (keys%{$intervals}) {
 			}
 		}
 	$interval2{$start} = $end;
-	%{ ${$intervals}{$chr} } = %interval2;
+	${$intervals}{$chr} = \%interval2;
 	}
 }
 
