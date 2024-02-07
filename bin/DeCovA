@@ -1534,11 +1534,13 @@ if ($bedFile) {
 		$reAnnotBed{"file"} = "$outdir/$bedName";
 		$reAnnotBed{"file"} =~ s/.bed$//;
 		$reAnnotBed{"file"} .= "_ann.bed";
-		if ($IDinRef) {
+		if (%{$IDinRef}) {
 			my $ref_0based =  DeCovA::refIDs::refHash2Transcripts($IDinRef,$refFmt);
 			DeCovA::bedProcessing::reAnnotBed3($currentBed,\%reAnnotBed,$ref_0based,\@chromOrder,\%chromName,$wNonCod);
 		} else {
-			DeCovA::refIDs::ref2Hash($ALLinRef, $refFile, $refFmt, \%chromName);
+			unless (%{$ALLinRef}) {
+				DeCovA::refIDs::ref2Hash($ALLinRef, $refFile, $refFmt, \%chromName);
+			}
 			my $ref_0based =  DeCovA::refIDs::refHash2Transcripts($ALLinRef,$refFmt);
 			DeCovA::bedProcessing::reAnnotBed3($currentBed, \%reAnnotBed, $ref_0based, \@chromOrder, \%chromName, $wNonCod);
 		}
@@ -1607,8 +1609,8 @@ if ( $jobs{"with_gene_coordinates_required"} || (@IDs && !$bedFile) ) {
 	use DeCovA::geneRegion;
 
 	## if no list of genes/transcripts provided, finds transcripts overlapping at least partially with bed intervals
-	unless ($IDinRef) {
-		$IDinRef = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,$mergedBed_Intervals,\%chromName,$wNonCod);
+	unless (%{$IDinRef}) {
+		DeCovA::refIDs::bed2IDs($IDinRef, $ALLinRef, $refFile, $refFmt, $mergedBed_Intervals, \%chromName, $wNonCod);
 	}
 
 	## for list of genes/transcripts, extract foreach NM_id starts and ends of each coding exons
@@ -2555,7 +2557,8 @@ if ($jobs{"CNV"}) {
 				#%{ $CNV_bed{$file} } = %{$href};
 				#$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef,$refFile,$refFmt,\%{ $CNV_bed{$file} },\%chromName,$wNonCod);
 				mergeIntervalsInRef($CNV_bed{$file});
-				$CNV_IDs{$file} = DeCovA::refIDs::bed2IDs($ALLinRef, $refFile, $refFmt, $CNV_bed{$file}, \%chromName, $wNonCod);
+				$CNV_IDs{$file} = {};
+				DeCovA::refIDs::bed2IDs($CNV_IDs{$file}, $ALLinRef, $refFile, $refFmt, $CNV_bed{$file}, \%chromName, $wNonCod);
 				foreach (keys%{ ${CNV_IDs}{$file} }) {
 					my $gene = ${CNV_IDs}{$file}{$_}{"gene"};
 					my $chr = ${CNV_IDs}{$file}{$_}{"chr"};
@@ -2567,8 +2570,9 @@ if ($jobs{"CNV"}) {
 			close $fh;
 			$CNV_bed{"allFiles"} = DeCovA::bedProcessing::readBed("$outdir/allCNVs.bed");
 			unlink "$outdir/allCNVs.bed";
-			mergeIntervalsInRef($CNV_bed{"allFiles"});			
-			$CNV_IDs{"allFiles"} = DeCovA::refIDs::bed2IDs($ALLinRef, $refFile, $refFmt, $CNV_bed{"allFiles"}, \%chromName, $wNonCod);
+			mergeIntervalsInRef($CNV_bed{"allFiles"});
+			$CNV_IDs{"allFiles"} = {};
+			DeCovA::refIDs::bed2IDs($CNV_IDs{"allFiles"}, $ALLinRef, $refFile, $refFmt, $CNV_bed{"allFiles"}, \%chromName, $wNonCod);
 			foreach (keys%{ ${CNV_IDs}{"allFiles"} }) {
 				my $gene = ${CNV_IDs}{"allFiles"}{$_}{"gene"};
 				my $chr = ${CNV_IDs}{"allFiles"}{$_}{"chr"};

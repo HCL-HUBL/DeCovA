@@ -605,7 +605,7 @@ sub GFFfile2hash {
 
 sub bed2IDs {
 
-	my ($allRefs, $refFile, $refFmt, $interval_r, $chromName, $wNonCod) = @_;
+	my ($targets, $allRefs, $refFile, $refFmt, $interval_r, $chromName, $wNonCod) = @_;
 	#my %interval ->	#$Bed{$chr}{$start} = $end , in 1-based
 
 	print "\n\tlooking for genes/transcripts overlapping bed file intervals\n";
@@ -638,7 +638,6 @@ sub bed2IDs {
 		}
 	}
 
-	my %targets;
 	foreach my $chr (sort(keys%{$interval_r})) {
 		my @bedStarts = sort{$a<=>$b}keys%{ ${$interval_r}{$chr} };
 		my @refStarts = sort{$a<=>$b}keys%{ $RefCoord{$chr} };
@@ -654,7 +653,7 @@ sub bed2IDs {
 				foreach my $end (@RefEnds) {
 					if ($bedstart <= $end) {
 						foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end} }) {
-							%{ $targets{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
+							%{ ${$targets}{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
 						}
 					} else {
 						last;
@@ -667,7 +666,7 @@ sub bed2IDs {
 				foreach my $end (@RefEnds) {
 					if ($bedstart <= $end) {
 						foreach (@{ $RefCoord{$chr}{$refStarts[$c2]}{$end} }) {
-							%{ $targets{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
+							%{ ${$targets}{$_} } = %{ ${$allRefs}{"transcript"}{$_} };
 						}
 					} else {
 						last;
@@ -676,8 +675,6 @@ sub bed2IDs {
 			}
 		}
 	}
-
-	return(\%targets);
 
 }
 
